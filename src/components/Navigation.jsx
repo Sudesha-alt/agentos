@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import Logo from "./Logo";
 import { EASE } from "../lib/motion";
@@ -57,6 +58,12 @@ export default function Navigation() {
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
+            <Link
+              to="/login"
+              className="inline-flex items-center gap-2 rounded-full border border-hairline bg-transparent px-4 py-2 text-[12.5px] text-ink-dim transition-colors hover:border-hairline-strong hover:text-ink"
+            >
+              Sign in
+            </Link>
             <a
               href="#access"
               className="btn-trace inline-flex items-center gap-2 rounded-full border border-hairline-strong bg-surface px-4 py-2 text-[12.5px] text-ink transition-colors hover:border-indigo/50"
@@ -123,6 +130,13 @@ export default function Navigation() {
                 ))}
               </ul>
               <div className="mt-auto pb-10">
+                <Link
+                  to="/login"
+                  onClick={() => setMenuOpen(false)}
+                  className="mb-3 inline-flex w-full items-center justify-center gap-2 rounded-full border border-hairline bg-transparent px-4 py-3 text-sm text-ink-dim transition-colors hover:text-ink"
+                >
+                  Sign in
+                </Link>
                 <a
                   href="#access"
                   onClick={() => setMenuOpen(false)}

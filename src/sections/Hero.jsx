@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 import { EASE } from "../lib/motion";
 import HeroPipeline from "../components/HeroPipeline";
 
@@ -54,6 +55,12 @@ export default function Hero() {
           transition={{ duration: 0.7, ease: EASE, delay: 0.65 }}
           className="mt-9 flex flex-col items-center gap-3 sm:flex-row sm:gap-5"
         >
+          <Link
+            to="/login"
+            className="inline-flex items-center gap-2 rounded-full border border-hairline bg-transparent px-5 py-2.5 text-[13.5px] text-ink-dim transition-colors hover:border-hairline-strong hover:text-ink"
+          >
+            Open dashboard
+          </Link>
           <a
             href="#access"
             className="btn-trace group relative inline-flex items-center gap-3 rounded-full border border-hairline-strong bg-surface px-5 py-2.5 text-[13.5px] text-ink shadow-[0_0_0_1px_rgba(255,255,255,0.02)] transition-all duration-200 hover:border-indigo/60 hover:shadow-glow-indigo"

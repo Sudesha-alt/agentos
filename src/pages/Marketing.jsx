@@ -34,14 +34,20 @@ export default function Marketing() {
       <footer className="relative z-[2] border-t border-hairline bg-canvas/90 px-5 py-8 sm:px-8">
         <div className="mx-auto flex max-w-7xl flex-col justify-between gap-3 font-mono text-[11px] uppercase tracking-[0.18em] text-ink-mute sm:flex-row">
           <span>Agentos · Workflow intelligence layer</span>
-          <span>
+          <div className="flex items-center gap-4">
+            <a
+              href="/login"
+              className="hover:text-ink transition-colors"
+            >
+              Sign in
+            </a>
             <a
               href="/login"
               className="hover:text-ink transition-colors"
             >
               Open app →
             </a>
-          </span>
+          </div>
         </div>
       </footer>
     </motion.div>
