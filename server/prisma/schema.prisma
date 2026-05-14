@@ -1,0 +1,119 @@
+// Phase 1 — Pipeline schema.
+// Layer 2 RAG now stores vectors in the SQL-managed `vector_store` table via
+// Supabase RPC functions. That table intentionally lives outside Prisma because
+// Prisma still cannot model pgvector cleanly enough for the similarity-search
+// operators this project uses.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+model Ticket {
+  id             String       @id @default(cuid())
+  jiraTicketId   String       @unique
+  jiraKey        String
+  rawPayload     Json
+  normalizedData Json
+  status         TicketStatus
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  pipeline       Pipeline?
+}
+
+model Pipeline {
+  id           String             @id @default(cuid())
+  ticketId     String             @unique
+  ticket       Ticket             @relation(fields: [ticketId], references: [id])
+  currentStage PipelineStage
+  status       PipelineStatus
+  startedAt    DateTime           @default(now())
+  completedAt  DateTime?
+  stages       PipelineStageLog[]
+  overrides    HumanOverride[]
+  auditLogs    AuditLog[]
+}
+
+model PipelineStageLog {
+  id               String        @id @default(cuid())
+  pipelineId       String
+  pipeline         Pipeline      @relation(fields: [pipelineId], references: [id])
+  stage            PipelineStage
+  status           StageStatus
+  input            Json
+  output           Json?
+  validationResult Json?
+  confidenceScore  Float?
+  tokenCount       Int?
+  costUsd          Float?
+  startedAt        DateTime      @default(now())
+  completedAt      DateTime?
+  error            String?
+
+  @@index([pipelineId, stage])
+}
+
+model HumanOverride {
+  id              String        @id @default(cuid())
+  pipelineId      String
+  pipeline        Pipeline      @relation(fields: [pipelineId], references: [id])
+  stage           PipelineStage
+  originalOutput  Json
+  correctedOutput Json
+  reason          String?
+  overriddenBy    String
+  overriddenAt    DateTime      @default(now())
+
+  @@index([pipelineId, stage])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  pipelineId String
+  pipeline   Pipeline @relation(fields: [pipelineId], references: [id])
+  event      String
+  metadata   Json
+  timestamp  DateTime @default(now())
+
+  @@index([pipelineId, timestamp])
+}
+
+enum TicketStatus {
+  RECEIVED
+  PROCESSING
+  AWAITING_HUMAN
+  COMPLETED
+  FAILED
+}
+
+enum PipelineStage {
+  INGESTION
+  PRODUCT_AGENT
+  PRD_VALIDATION
+  ENGINEERING_AGENT
+  IMPLEMENTATION_VALIDATION
+  QA_AGENT
+  QA_VALIDATION
+  OUTPUT
+}
+
+enum PipelineStatus {
+  RUNNING
+  PAUSED
+  COMPLETED
+  FAILED
+}
+
+enum StageStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  AWAITING_HUMAN
+}

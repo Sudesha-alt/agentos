@@ -1,0 +1,184 @@
+import OpenAI from "openai";
+import type { ImplementationOutput, PrdOutput, QaOutput } from "../types/agents";
+import type { NormalizedTicket } from "../types/ticket";
+import { logger } from "../utils/logger";
+import { withRetry } from "../utils/retry";
+import { vectorStore } from "./vectorStore";
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+const EMBEDDING_MODEL = "text-embedding-3-small";
+
+export const embedder = {
+  async embed(text: string): Promise<number[]> {
+    const cleanedText = prepareTextForEmbedding(text);
+
+    const response = await withRetry(
+      () =>
+        openai.embeddings.create({
+          model: EMBEDDING_MODEL,
+          input: cleanedText,
+        }),
+      {
+        maxAttempts: 3,
+        baseDelayMs: 1000,
+        maxDelayMs: 10000,
+      }
+    );
+
+    return response.data[0].embedding;
+  },
+
+  async embedTicket(
+    jiraTicketId: string,
+    jiraKey: string,
+    ticket: Pick<
+      NormalizedTicket,
+      "summary" | "description" | "issueType" | "priority" | "components"
+    >
+  ): Promise<void> {
+    const text = `
+TICKET: ${ticket.summary}
+TYPE: ${ticket.issueType}
+PRIORITY: ${ticket.priority}
+COMPONENTS: ${ticket.components.join(", ")}
+DESCRIPTION: ${ticket.description}
+    `.trim();
+
+    const embedding = await this.embed(text);
+
+    await vectorStore.upsert({
+      jiraTicketId,
+      jiraKey,
+      contentType: "ticket",
+      content: text,
+      embedding,
+      metadata: {
+        summary: ticket.summary,
+        issueType: ticket.issueType,
+        priority: ticket.priority,
+        components: ticket.components,
+        embeddedAt: new Date().toISOString(),
+      },
+    });
+
+    logger.info({ jiraKey }, "ticket embedded");
+  },
+
+  async embedPRD(
+    jiraTicketId: string,
+    jiraKey: string,
+    prd: Pick<
+      PrdOutput,
+      | "title"
+      | "problemStatement"
+      | "proposedSolution"
+      | "acceptanceCriteria"
+      | "userStories"
+      | "edgeCases"
+    >
+  ): Promise<void> {
+    const text = `
+PRD: ${prd.title}
+PROBLEM: ${prd.problemStatement}
+SOLUTION: ${prd.proposedSolution}
+USER STORIES: ${prd.userStories.join(" | ")}
+ACCEPTANCE CRITERIA: ${prd.acceptanceCriteria.join(" | ")}
+EDGE CASES: ${prd.edgeCases.join(" | ")}
+    `.trim();
+
+    const embedding = await this.embed(text);
+
+    await vectorStore.upsert({
+      jiraTicketId,
+      jiraKey,
+      contentType: "prd",
+      content: text,
+      embedding,
+      metadata: {
+        title: prd.title,
+        criteriaCount: prd.acceptanceCriteria.length,
+        embeddedAt: new Date().toISOString(),
+      },
+    });
+
+    logger.info({ jiraKey }, "prd embedded");
+  },
+
+  async embedQAReport(
+    jiraTicketId: string,
+    jiraKey: string,
+    qaReport: Pick<QaOutput, "testSummary" | "testCases" | "riskAreas" | "coverageReport">
+  ): Promise<void> {
+    const text = `
+QA REPORT SUMMARY: ${qaReport.testSummary}
+RISK AREAS: ${qaReport.riskAreas.join(" | ")}
+TEST CASES: ${qaReport.testCases
+  .map((tc) => `${tc.title} [${tc.type}/${tc.priority}]`)
+  .join(" | ")}
+COVERAGE: ${qaReport.coverageReport.coveragePercent}%
+    `.trim();
+
+    const embedding = await this.embed(text);
+
+    await vectorStore.upsert({
+      jiraTicketId,
+      jiraKey,
+      contentType: "qa_report",
+      content: text,
+      embedding,
+      metadata: {
+        testCaseCount: qaReport.testCases.length,
+        coveragePercent: qaReport.coverageReport.coveragePercent,
+        embeddedAt: new Date().toISOString(),
+      },
+    });
+
+    logger.info({ jiraKey }, "qa report embedded");
+  },
+
+  async embedImplementation(
+    jiraTicketId: string,
+    jiraKey: string,
+    impl: Pick<
+      ImplementationOutput,
+      "summary" | "technicalApproach" | "components" | "risks"
+    >
+  ): Promise<void> {
+    const text = `
+IMPLEMENTATION: ${impl.summary}
+APPROACH: ${impl.technicalApproach}
+COMPONENTS: ${impl.components
+  .map((c) => `${c.name}: ${c.description}`)
+  .join(" | ")}
+RISKS: ${impl.risks
+  .map((r) => `${r.description} [${r.severity}]`)
+  .join(" | ")}
+    `.trim();
+
+    const embedding = await this.embed(text);
+
+    await vectorStore.upsert({
+      jiraTicketId,
+      jiraKey,
+      contentType: "implementation",
+      content: text,
+      embedding,
+      metadata: {
+        componentCount: impl.components.length,
+        riskCount: impl.risks.length,
+        embeddedAt: new Date().toISOString(),
+      },
+    });
+
+    logger.info({ jiraKey }, "implementation embedded");
+  },
+};
+
+export function prepareTextForEmbedding(text: string): string {
+  return text
+    .replace(/\s+/g, " ")
+    .replace(/[^\w\s.,!?-]/g, "")
+    .trim()
+    .slice(0, 8000);
+}

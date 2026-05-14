@@ -1,0 +1,109 @@
+import { NavLink } from "react-router-dom";
+import Logo from "../../components/Logo";
+import { APP_NAV } from "../../shared/config/app";
+
+const NAV = APP_NAV.map((item) => ({
+  ...item,
+  icon:
+    item.to === "/app"
+      ? IconDashboard
+      : item.to === "/app/pipelines"
+        ? IconPipeline
+        : IconSettings,
+}));
+
+export default function Sidebar() {
+  return (
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-hairline bg-canvas/95 backdrop-blur-md md:flex">
+      <div className="flex h-16 items-center border-b border-hairline px-5">
+        <Logo />
+      </div>
+
+      <nav className="flex-1 px-3 py-5">
+        <p className="mb-2 px-3 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-mute">
+          Workflow
+        </p>
+        <ul className="space-y-0.5">
+          {NAV.map((item) => (
+            <li key={item.to}>
+              <NavLink
+                to={item.to}
+                end={item.end}
+                className={({ isActive }) =>
+                  `group flex items-center gap-3 rounded-[1rem] px-3 py-2.5 text-[13px] transition-colors duration-150 ${
+                    isActive
+                      ? "bg-surface text-ink shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]"
+                      : "text-ink-dim hover:bg-surface/60 hover:text-ink"
+                  }`
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    <span
+                      className={`flex size-5 items-center justify-center ${
+                        isActive ? "text-indigo" : "text-ink-mute group-hover:text-ink"
+                      }`}
+                    >
+                      <item.icon />
+                    </span>
+                    {item.label}
+                    {isActive && (
+                      <span className="ml-auto size-1.5 rounded-full bg-indigo shadow-[0_0_8px_2px_rgba(99,102,241,0.7)]" />
+                    )}
+                  </>
+                )}
+              </NavLink>
+            </li>
+          ))}
+        </ul>
+      </nav>
+
+      <div className="mx-3 mb-4 rounded-[1rem] border border-hairline bg-surface/40 p-3">
+        <div className="flex items-center justify-between">
+          <span className="editorial-kicker text-ink-mute">
+            System
+          </span>
+          <span className="size-1.5 rounded-full bg-success shadow-[0_0_8px_2px_rgba(34,197,94,0.6)]" />
+        </div>
+        <p className="mt-3 font-display text-[1.4rem] leading-none tracking-tight text-ink">
+          Operational
+        </p>
+        <p className="mt-1 font-mono text-[11px] text-ink-dim">
+          Editorial shell · v0.8.0
+        </p>
+      </div>
+    </aside>
+  );
+}
+
+function IconDashboard() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+      <rect x="1.5" y="1.5" width="4.5" height="6" rx="1" stroke="currentColor" />
+      <rect x="1.5" y="9" width="4.5" height="3.5" rx="1" stroke="currentColor" />
+      <rect x="8" y="1.5" width="4.5" height="3.5" rx="1" stroke="currentColor" />
+      <rect x="8" y="6.5" width="4.5" height="6" rx="1" stroke="currentColor" />
+    </svg>
+  );
+}
+function IconPipeline() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+      <circle cx="3" cy="7" r="1.5" stroke="currentColor" />
+      <circle cx="11" cy="7" r="1.5" stroke="currentColor" />
+      <circle cx="7" cy="7" r="1.5" stroke="currentColor" />
+      <path d="M4.5 7 H5.5 M8.5 7 H9.5" stroke="currentColor" />
+    </svg>
+  );
+}
+function IconSettings() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+      <circle cx="7" cy="7" r="2" stroke="currentColor" />
+      <path
+        d="M7 1.5v1.4M7 11.1v1.4M1.5 7h1.4M11.1 7h1.4M3.2 3.2l1 1M9.8 9.8l1 1M9.8 4.2l1-1M3.2 10.8l1-1"
+        stroke="currentColor"
+      />
+    </svg>
+  );
+}
