@@ -142,6 +142,25 @@ export const SubmitOverrideResponseSchema = z.object({
   ok: z.boolean(),
 });
 
+export const AuthUserSchema = z.object({
+  id: z.string(),
+  email: z.string().email(),
+  name: z.string(),
+});
+
+export const AuthSessionSchema = z.object({
+  token: z.string(),
+  issuedAt: z.string(),
+  user: AuthUserSchema,
+});
+
+export const LoginRequestSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+});
+
+export const LoginResponseSchema = AuthSessionSchema;
+
 export const SettingsSchema = z.object({
   jiraBaseUrl: z.string(),
   jiraEmail: z.string(),
@@ -171,4 +190,8 @@ export type ReadinessResponseDto = z.infer<typeof ReadinessResponseSchema>;
 export type RunPipelineResponseDto = z.infer<typeof RunPipelineResponseSchema>;
 export type SubmitOverrideRequestDto = z.infer<typeof SubmitOverrideRequestSchema>;
 export type SubmitOverrideResponseDto = z.infer<typeof SubmitOverrideResponseSchema>;
+export type AuthUserDto = z.infer<typeof AuthUserSchema>;
+export type AuthSessionDto = z.infer<typeof AuthSessionSchema>;
+export type LoginRequestDto = z.infer<typeof LoginRequestSchema>;
+export type LoginResponseDto = z.infer<typeof LoginResponseSchema>;
 export type SettingsDto = z.infer<typeof SettingsSchema>;

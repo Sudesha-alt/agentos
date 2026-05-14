@@ -1,26 +1,49 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Marketing from "./pages/Marketing";
+import Login from "./pages/Login";
 import AppShell from "./app/layout/AppShell";
 import Dashboard from "./app/pages/Dashboard";
 import Pipelines from "./app/pages/Pipelines";
 import PipelineDetail from "./app/pages/PipelineDetail";
 import Override from "./app/pages/Override";
 import Settings from "./app/pages/Settings";
+import {
+  AuthProvider,
+  PublicOnlyRoute,
+  RequireAuth,
+} from "./shared/providers/AuthProvider";
 
 function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Marketing />} />
-        <Route path="/app" element={<AppShell />}>
-          <Route index element={<Dashboard />} />
-          <Route path="pipelines" element={<Pipelines />} />
-          <Route path="pipelines/:id" element={<PipelineDetail />} />
-          <Route path="pipelines/:id/override" element={<Override />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <AuthProvider>
+        <Routes>
+          <Route path="/" element={<Marketing />} />
+          <Route
+            path="/login"
+            element={
+              <PublicOnlyRoute>
+                <Login />
+              </PublicOnlyRoute>
+            }
+          />
+          <Route
+            path="/app"
+            element={
+              <RequireAuth>
+                <AppShell />
+              </RequireAuth>
+            }
+          >
+            <Route index element={<Dashboard />} />
+            <Route path="pipelines" element={<Pipelines />} />
+            <Route path="pipelines/:id" element={<PipelineDetail />} />
+            <Route path="pipelines/:id/override" element={<Override />} />
+            <Route path="settings" element={<Settings />} />
+          </Route>
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
     </BrowserRouter>
   );
 }

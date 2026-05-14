@@ -36,7 +36,7 @@ export default function Marketing() {
           <span>Agentos · Workflow intelligence layer</span>
           <span>
             <a
-              href="/app"
+              href="/login"
               className="hover:text-ink transition-colors"
             >
               Open app →

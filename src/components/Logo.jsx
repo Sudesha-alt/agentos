@@ -1,7 +1,7 @@
-export default function Logo({ className = "" }) {
+export default function Logo({ className = "", href = "#top" }) {
   return (
     <a
-      href="#top"
+      href={href}
       className={`group inline-flex items-center gap-2.5 ${className}`}
       aria-label="Agentos home"
     >
