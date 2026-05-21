@@ -1,7 +1,10 @@
 import "dotenv/config";
 import * as Sentry from "@sentry/node";
 import { createApp } from "./app";
+import { initIntakeDb } from "./jira-intake/sqliteStore";
 import { logger } from "./utils/logger";
+
+initIntakeDb();
 
 if (process.env.SENTRY_DSN) {
   Sentry.init({ dsn: process.env.SENTRY_DSN });

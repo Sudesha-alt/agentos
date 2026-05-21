@@ -5,19 +5,22 @@ import react from "@vitejs/plugin-react";
 // the orchestration backend without CORS gymnastics in dev.
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, import.meta.dirname, "");
-  const jiraIntakeUrl = env.VITE_JIRA_INTAKE_URL || "http://localhost:3000";
+  const apiUrl = env.VITE_API_URL || "http://localhost:4000";
 
   return {
     plugins: [react()],
     server: {
+      host: "127.0.0.1",
+      port: 5173,
+      strictPort: true,
       proxy: {
         "/api": {
-          target: "http://localhost:4000",
+          target: apiUrl,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/api/, ""),
         },
         "/jira-intake": {
-          target: jiraIntakeUrl,
+          target: apiUrl,
           changeOrigin: true,
           rewrite: (path) => path.replace(/^\/jira-intake/, ""),
         },

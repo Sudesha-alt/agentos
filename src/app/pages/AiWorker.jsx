@@ -30,7 +30,7 @@ export default function AiWorker() {
 
   const statusLine = useMemo(() => {
     if (issuesError) {
-      return "Jira intake service unreachable — start it on port 3000";
+      return "Agentos API unreachable — run npm run dev from d:\\agentos";
     }
     if (debugData?.last) {
       return `Last webhook ${debugData.last.issueKey} · ${formatWhen(debugData.last.receivedAt)}`;
@@ -38,7 +38,7 @@ export default function AiWorker() {
     if ((stats?.active ?? items.length) > 0) {
       return "Queue loaded from local intake database";
     }
-    return "Waiting for Jira webhooks (ngrok → :3000/webhooks/jira)";
+    return "Waiting for Jira webhooks (ngrok → :4000/webhooks/jira)";
   }, [issuesError, debugData, stats, items.length]);
 
   return (
@@ -94,7 +94,7 @@ export default function AiWorker() {
           ) : issuesError ? (
             <EmptyState
               title="Intake service offline"
-              body="Run npm start in the Jira Webhook project on port 3000, then refresh."
+              body="Run npm run dev from the agentos folder (starts API on port 4000), then refresh."
             />
           ) : !items.length ? (
             <EmptyState

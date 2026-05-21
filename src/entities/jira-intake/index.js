@@ -1,6 +1,6 @@
 import { fetchJson } from "../../shared/lib/fetchJson";
 
-/** Proxied to Jira Webhook service (default http://localhost:3000) via vite.config.js */
+/** Proxied to agentos server (:4000) via vite.config.js /jira-intake */
 const BASE = "/jira-intake";
 
 export async function listAiWorkerIssues(active = "1") {
