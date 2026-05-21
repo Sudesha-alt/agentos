@@ -2,14 +2,17 @@ import { NavLink } from "react-router-dom";
 import Logo from "../../components/Logo";
 import { APP_NAV } from "../../shared/config/app";
 
+const NAV_ICONS = {
+  "/app": IconDashboard,
+  "/app/pipelines": IconPipeline,
+  "/app/ai-worker": IconAiWorker,
+  "/app/jira-search": IconSearch,
+  "/app/settings": IconSettings,
+};
+
 const NAV = APP_NAV.map((item) => ({
   ...item,
-  icon:
-    item.to === "/app"
-      ? IconDashboard
-      : item.to === "/app/pipelines"
-        ? IconPipeline
-        : IconSettings,
+  icon: NAV_ICONS[item.to] ?? IconDashboard,
 }));
 
 export default function Sidebar() {
@@ -104,6 +107,22 @@ function IconSettings() {
         d="M7 1.5v1.4M7 11.1v1.4M1.5 7h1.4M11.1 7h1.4M3.2 3.2l1 1M9.8 9.8l1 1M9.8 4.2l1-1M3.2 10.8l1-1"
         stroke="currentColor"
       />
+    </svg>
+  );
+}
+function IconAiWorker() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+      <rect x="2" y="3" width="10" height="8" rx="1" stroke="currentColor" />
+      <path d="M4.5 6.5h5M4.5 8.5h3" stroke="currentColor" />
+    </svg>
+  );
+}
+function IconSearch() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+      <circle cx="6" cy="6" r="3.5" stroke="currentColor" />
+      <path d="M8.5 8.5L12 12" stroke="currentColor" />
     </svg>
   );
 }
