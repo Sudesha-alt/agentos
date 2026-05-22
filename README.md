@@ -8,7 +8,7 @@ keeps a human in control at every step.
 This repository contains both halves of the product:
 
 - **Marketing site** (`/`) — Awwwards-style React landing page
-- **Product app** (`/app/*`) — dashboard, pipeline detail, override flow, settings
+- **Product app** (`/app/*`) — dashboard, pipelines, **AI Worker queue**, **board search**, settings
 - **Backend** (`server/`) — Express + BullMQ orchestrator that runs the agents
 
 ## Stack
@@ -21,26 +21,28 @@ This repository contains both halves of the product:
 ## Run locally
 
 ```bash
-# 1. Frontend (marketing + product app)
+# UI + API (includes AI Worker queue + board search)
 npm install
+cd server && npm install && cp .env.example .env && cd ..
 npm run dev
-# → http://localhost:5173/      marketing
-# → http://localhost:5173/app   product app (uses mock data if backend is down)
+# → http://localhost:5173/app/ai-worker
+# → http://localhost:5173/app/jira-search
 
-# 2. Backend (orchestration engine)
+# Pipelines only (optional — needs Postgres, Redis, model keys in server/.env)
 cd server
-cp .env.example .env       # fill in DATABASE_URL, REDIS_URL, ANTHROPIC_API_KEY, OPENAI_API_KEY, JIRA_*
-npm install
 npm run prisma:generate
 npm run prisma:migrate     # then run the pgvector ALTER from server/README.md
-npm run dev                # Express on :4000
-npm run worker             # BullMQ pipeline worker
+npm run worker             # BullMQ pipeline worker (separate terminal)
 ```
 
 The Vite dev server proxies `/api/*` to `http://localhost:4000`, so the
 product UI just calls `/api/pipelines`, etc. If the backend isn't running,
 the product UI falls back to an in-memory mock and shows a "Mock backend"
 indicator in the top bar.
+
+**Jira intake pages** (`/app/ai-worker`, `/app/jira-search`) are built into the
+agentos server (SQLite queue + Jira board search). Run `npm run dev` at the repo
+root to start UI + API together. See [INTEGRATION.md](./INTEGRATION.md).
 
 ## Layout
 

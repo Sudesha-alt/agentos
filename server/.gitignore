@@ -3,5 +3,6 @@ dist
 src/generated
 .env
 .env.local
+data/
 *.log
 .tsbuildinfo

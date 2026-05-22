@@ -1,22 +1,51 @@
 import { Router } from "express";
+import { handleAiWorkerWebhook } from "../../jira-intake/aiWorkerWebhookHandler";
+import { intakeConfig } from "../../jira-intake/config";
 import { handleJiraWebhook } from "../../integrations/webhookHandler";
 import { logger } from "../../utils/logger";
 
 const router = Router();
 
-// Jira webhooks should send a shared-secret in a header we agreed on when
-// registering the webhook. Reject anything that doesn't match.
+function isPipelineCreateEvent(body: unknown): boolean {
+  return (
+    typeof body === "object" &&
+    body !== null &&
+    (body as { webhookEvent?: string }).webhookEvent === "jira:issue_created"
+  );
+}
+
+// Legacy URL used by Jira + ngrok: same path as the standalone Jira Webhook app.
+// issue_created → agent pipeline; all other events (e.g. issue_updated) → AI Worker intake.
+router.get("/jira", (_req, res) => {
+  res.json({
+    ok: true,
+    message:
+      "Jira webhook. POST issue_created for pipeline; POST issue_updated (etc.) for AI Worker intake.",
+    trackedStatuses: intakeConfig.aiWorkerStatuses,
+    aiWorkerPath: "/webhooks/jira/ai-worker",
+  });
+});
+
 router.post("/jira", (req, res, next) => {
-  const expected = process.env.JIRA_WEBHOOK_SECRET;
-  if (expected) {
-    const provided = req.header("x-agentos-secret");
-    if (provided !== expected) {
-      logger.warn({ ip: req.ip }, "rejected webhook — bad secret");
-      res.status(401).json({ error: "unauthorized" });
-      return;
+  if (isPipelineCreateEvent(req.body)) {
+    const expected = process.env.JIRA_WEBHOOK_SECRET;
+    if (expected) {
+      const provided = req.header("x-agentos-secret");
+      if (provided !== expected) {
+        logger.warn({ ip: req.ip }, "rejected pipeline webhook — bad secret");
+        res.status(401).json({ error: "unauthorized" });
+        return;
+      }
     }
+    void handleJiraWebhook(req, res).catch(next);
+    return;
   }
-  void handleJiraWebhook(req, res).catch(next);
+
+  handleAiWorkerWebhook(req, res);
+});
+
+router.post("/jira/ai-worker", (req, res) => {
+  handleAiWorkerWebhook(req, res);
 });
 
 export default router;

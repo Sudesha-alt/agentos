@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { prisma } from "../../db/client";
+import { getPrisma } from "../../db/client";
 import { redisConnection } from "../../queue/jobQueue";
 
 const router = Router();
@@ -10,11 +10,16 @@ router.get("/healthz", (_req, res) => {
 
 router.get("/readyz", async (_req, res) => {
   const checks: Record<string, "ok" | string> = {};
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    checks.postgres = "ok";
-  } catch (err) {
-    checks.postgres = err instanceof Error ? err.message : "error";
+  const prisma = getPrisma();
+  if (!prisma) {
+    checks.postgres = "skipped (DATABASE_URL not set)";
+  } else {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      checks.postgres = "ok";
+    } catch (err) {
+      checks.postgres = err instanceof Error ? err.message : "error";
+    }
   }
   try {
     await redisConnection.ping();

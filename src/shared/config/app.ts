@@ -13,6 +13,8 @@ export const DATA_MODE =
 export const APP_NAV = [
   { to: "/app", label: "Dashboard", breadcrumb: "Workspace", end: true },
   { to: "/app/pipelines", label: "Pipelines", breadcrumb: "Pipelines" },
+  { to: "/app/ai-worker", label: "AI Worker", breadcrumb: "AI Worker" },
+  { to: "/app/jira-search", label: "Board search", breadcrumb: "Board search" },
   { to: "/app/settings", label: "Settings", breadcrumb: "Settings" },
 ] as const;
 

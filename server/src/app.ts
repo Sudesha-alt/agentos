@@ -6,6 +6,7 @@ import express, {
 } from "express";
 import helmet from "helmet";
 import healthRouter from "./api/routes/health";
+import jiraIntakeRouter from "./api/routes/jiraIntake";
 import overrideRouter from "./api/routes/override";
 import pipelineRouter from "./api/routes/pipeline";
 import webhooksRouter from "./api/routes/webhooks";
@@ -26,6 +27,7 @@ export function createApp(): express.Express {
   });
 
   app.use("/", healthRouter);
+  app.use("/", jiraIntakeRouter);
   app.use("/webhooks", webhooksRouter);
   app.use("/pipelines", pipelineRouter);
   app.use("/pipelines", overrideRouter);
