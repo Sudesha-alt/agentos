@@ -5,6 +5,7 @@ import express, {
   type NextFunction,
 } from "express";
 import helmet from "helmet";
+import authRouter from "./api/routes/auth";
 import healthRouter from "./api/routes/health";
 import jiraIntakeRouter from "./api/routes/jiraIntake";
 import overrideRouter from "./api/routes/override";
@@ -33,7 +34,7 @@ export function createApp(): express.Express {
     );
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Content-Type, x-agentos-secret"
+      "Content-Type, Authorization, x-agentos-secret"
     );
     if (req.method === "OPTIONS") {
       res.sendStatus(204);
@@ -51,6 +52,7 @@ export function createApp(): express.Express {
   });
 
   app.use("/", healthRouter);
+  app.use("/api/auth", authRouter);
   app.use("/jira-intake", jiraIntakeRouter);
   app.use("/webhooks", webhooksRouter);
   app.use("/pipelines", pipelineRouter);

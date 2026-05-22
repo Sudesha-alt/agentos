@@ -3,10 +3,9 @@ import {
   LoginRequestSchema,
   LoginResponseSchema,
 } from "../../contracts";
+import { apiPath } from "../../shared/config/apiBase";
 import { DATA_MODE } from "../../shared/config/app";
 import { fetchJson } from "../../shared/lib/fetchJson";
-
-const BASE = "/api";
 
 export const AUTH_SESSION_STORAGE_KEY = "agentos.auth.session";
 
@@ -14,6 +13,33 @@ export const DEMO_CREDENTIAL_HINT = {
   email: "demo@agentos.ai",
   password: "agentos123",
 };
+
+function persistSession(session) {
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(
+      AUTH_SESSION_STORAGE_KEY,
+      JSON.stringify(session)
+    );
+  }
+}
+
+function readStoredSession() {
+  if (typeof window === "undefined") return null;
+  const raw = window.localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    return AuthSessionSchema.parse(JSON.parse(raw));
+  } catch {
+    window.localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
+    return null;
+  }
+}
+
+function clearStoredSession() {
+  if (typeof window !== "undefined") {
+    window.localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
+  }
+}
 
 function buildMockSession(email) {
   const localPart = email.split("@")[0] || "operator";
@@ -34,61 +60,65 @@ function buildMockSession(email) {
   });
 }
 
+function authHeaders(session) {
+  if (!session?.token) return {};
+  return { Authorization: `Bearer ${session.token}` };
+}
+
 const mockAuthAdapter = {
   async getSession() {
-    if (typeof window === "undefined") return null;
-    const raw = window.localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
-    if (!raw) return null;
-    try {
-      return AuthSessionSchema.parse(JSON.parse(raw));
-    } catch {
-      window.localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
-      return null;
-    }
+    return readStoredSession();
   },
   async login(payload) {
     const parsed = LoginRequestSchema.parse(payload);
     const session = buildMockSession(parsed.email);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(
-        AUTH_SESSION_STORAGE_KEY,
-        JSON.stringify(session)
-      );
-    }
+    persistSession(session);
     return LoginResponseSchema.parse(session);
   },
   async logout() {
-    if (typeof window !== "undefined") {
-      window.localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
-    }
+    clearStoredSession();
   },
 };
 
 const restAuthAdapter = {
   async getSession() {
+    const stored = readStoredSession();
+    if (!stored?.token) return null;
     try {
-      return AuthSessionSchema.parse(await fetchJson(`${BASE}/auth/session`));
+      return AuthSessionSchema.parse(
+        await fetchJson(apiPath("/api", "/auth/session"), {
+          headers: authHeaders(stored),
+        })
+      );
     } catch {
+      clearStoredSession();
       return null;
     }
   },
   async login(payload) {
-    return LoginResponseSchema.parse(
-      await fetchJson(`${BASE}/auth/login`, {
+    const parsed = LoginRequestSchema.parse(payload);
+    const session = LoginResponseSchema.parse(
+      await fetchJson(apiPath("/api", "/auth/login"), {
         method: "POST",
-        body: JSON.stringify(LoginRequestSchema.parse(payload)),
+        body: JSON.stringify(parsed),
       })
     );
+    persistSession(session);
+    return session;
   },
   async logout() {
+    const stored = readStoredSession();
     try {
-      await fetchJson(`${BASE}/auth/logout`, {
+      await fetchJson(apiPath("/api", "/auth/logout"), {
         method: "POST",
+        headers: authHeaders(stored),
       });
     } catch {
-      // Keep logout resilient in case the session has already expired.
+      // Session may already be gone on the server.
     }
+    clearStoredSession();
   },
 };
 
-export const authAdapter = DATA_MODE === "rest" ? restAuthAdapter : mockAuthAdapter;
+export const authAdapter =
+  DATA_MODE === "rest" ? restAuthAdapter : mockAuthAdapter;
