@@ -1,7 +1,14 @@
-import { Router } from "express";
-import { intakeConfig } from "../../jira-intake/config";
+import { Router, type Request } from "express";
+import { intakeConfig, validateJiraConfig } from "../../jira-intake/config";
 import { searchBoardByKeyword } from "../../jira-intake/boardSearchService";
+import {
+  advanceIssueToNextColumn,
+  applyColumnMappingFromSelection,
+  getBoardColumnsOrdered,
+  syncWorkingColumnFromBoard,
+} from "../../jira-intake/boardColumnsService";
 import { handleAiWorkerWebhook } from "../../jira-intake/aiWorkerWebhookHandler";
+import { getIntegrationMapping } from "../../jira-intake/integrationConfigStore";
 import {
   getQueueStats,
   listAiWorkerIssues,
@@ -17,10 +24,102 @@ router.get("/health", (_req, res) => {
   res.json({ ok: true });
 });
 
-router.get("/ai-worker/config", (_req, res) => {
+function publicApiBase(req: Request): string {
+  if (process.env.PUBLIC_API_URL?.trim()) {
+    return process.env.PUBLIC_API_URL.replace(/\/$/, "");
+  }
+  const proto = req.header("x-forwarded-proto") || req.protocol || "https";
+  const host = req.header("x-forwarded-host") || req.get("host") || "localhost:4000";
+  return `${proto}://${host}`;
+}
+
+router.get("/integration/setup", (req, res) => {
+  const base = publicApiBase(req);
+  const mapping = getIntegrationMapping();
+  let jiraReady = false;
+  try {
+    validateJiraConfig();
+    jiraReady = true;
+  } catch {
+    jiraReady = false;
+  }
   res.json({
-    trackedStatuses: intakeConfig.aiWorkerStatuses,
-    hint: "Webhook must send issue.fields.status.name matching one of these (case-insensitive).",
+    publicApiBase: base,
+    webhookUrl: `${base}/webhooks/jira`,
+    webhookEvents: ["jira:issue_updated", "jira:issue_created"],
+    webhookHint:
+      "In Jira → Settings → Webhooks, paste the URL above. Enable Issue updated so moves between columns sync the AI Worker queue.",
+    mapping,
+    trackedStatuses: mapping.workingStatuses,
+    jiraConfigured: jiraReady,
+    boardId: intakeConfig.jira.boardId || null,
+  });
+});
+
+router.get("/boards/columns", async (_req, res) => {
+  try {
+    const columns = await getBoardColumnsOrdered();
+    res.json({ columns });
+  } catch (err) {
+    const e = err as Error & { status?: number };
+    res.status(e.status && e.status >= 400 ? e.status : 502).json({ error: e.message });
+  }
+});
+
+router.put("/integration/mapping", async (req, res) => {
+  const workingColumnName = String(req.body?.workingColumnName ?? "").trim();
+  const nextColumnName = String(req.body?.nextColumnName ?? "").trim();
+  if (!workingColumnName || !nextColumnName) {
+    res.status(400).json({
+      error: "workingColumnName and nextColumnName are required",
+    });
+    return;
+  }
+  try {
+    const columns = await getBoardColumnsOrdered();
+    const mapping = applyColumnMappingFromSelection({
+      workingColumnName,
+      nextColumnName,
+      columns,
+    });
+    res.json(mapping);
+  } catch (err) {
+    const e = err as Error & { status?: number };
+    res.status(e.status && e.status >= 400 ? e.status : 502).json({ error: e.message });
+  }
+});
+
+router.get("/integration/mapping", (_req, res) => {
+  res.json(getIntegrationMapping());
+});
+
+router.post("/ai-worker/sync", async (_req, res) => {
+  try {
+    const result = await syncWorkingColumnFromBoard();
+    res.json(result);
+  } catch (err) {
+    const e = err as Error & { status?: number };
+    res.status(e.status && e.status >= 400 ? e.status : 502).json({ error: e.message });
+  }
+});
+
+router.post("/ai-worker/issues/:issueKey/advance", async (req, res) => {
+  try {
+    const result = await advanceIssueToNextColumn(req.params.issueKey);
+    res.json(result);
+  } catch (err) {
+    const e = err as Error & { status?: number };
+    res.status(e.status && e.status >= 400 ? e.status : 502).json({ error: e.message });
+  }
+});
+
+router.get("/ai-worker/config", (_req, res) => {
+  const mapping = getIntegrationMapping();
+  res.json({
+    trackedStatuses: mapping.workingStatuses,
+    workingColumnName: mapping.workingColumnName,
+    nextColumnName: mapping.nextColumnName,
+    hint: "Webhook must send issue.fields.status.name matching working column statuses.",
   });
 });
 

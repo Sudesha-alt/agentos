@@ -23,7 +23,7 @@ export function initIntakeDb(): Database.Database {
   return db;
 }
 
-function getDb(): Database.Database {
+export function getDb(): Database.Database {
   if (!db) initIntakeDb();
   return db!;
 }

@@ -16,6 +16,7 @@ import { logger } from "./utils/logger";
 
 export function createApp(): express.Express {
   const app = express();
+  app.set("trust proxy", 1);
 
   app.use(helmet());
   app.use((req, res, next) => {

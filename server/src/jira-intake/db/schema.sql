@@ -17,3 +17,11 @@ CREATE TABLE IF NOT EXISTS ai_worker_issues (
 );
 
 CREATE INDEX IF NOT EXISTS idx_ai_worker_active ON ai_worker_issues(active);
+
+CREATE TABLE IF NOT EXISTS jira_integration_config (
+  singleton_id            INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+  working_column_name     TEXT,
+  next_column_name        TEXT,
+  working_statuses_json   TEXT NOT NULL DEFAULT '[]',
+  updated_at              TEXT NOT NULL
+);

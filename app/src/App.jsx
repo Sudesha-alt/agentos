@@ -7,7 +7,7 @@ import Pipelines from "./app/pages/Pipelines";
 import PipelineDetail from "./app/pages/PipelineDetail";
 import Override from "./app/pages/Override";
 import Settings from "./app/pages/Settings";
-import AiWorker from "./app/pages/AiWorker";
+import JiraIntegration from "./app/pages/JiraIntegration";
 import JiraSearch from "./app/pages/JiraSearch";
 import {
   AuthProvider,
@@ -41,7 +41,8 @@ function App() {
             <Route path="pipelines" element={<Pipelines />} />
             <Route path="pipelines/:id" element={<PipelineDetail />} />
             <Route path="pipelines/:id/override" element={<Override />} />
-            <Route path="ai-worker" element={<AiWorker />} />
+            <Route path="jira" element={<JiraIntegration />} />
+            <Route path="ai-worker" element={<JiraIntegration />} />
             <Route path="jira-search" element={<JiraSearch />} />
             <Route path="settings" element={<Settings />} />
           </Route>

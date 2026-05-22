@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { intakeConfig } from "./config";
 import { isAiWorkerStatus } from "./aiWorkerFilter";
+import { getTrackedWorkingStatuses } from "./integrationConfigStore";
 import { parseJiraWebhook } from "./jiraEventParser";
 import {
   deactivateAiWorkerIssue,
@@ -38,7 +39,7 @@ export function handleAiWorkerWebhook(req: Request, res: Response): void {
 
     const inAiWorker = isAiWorkerStatus(
       parsed.statusName,
-      intakeConfig.aiWorkerStatuses
+      getTrackedWorkingStatuses()
     );
 
     if (inAiWorker) {

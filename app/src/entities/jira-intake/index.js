@@ -46,3 +46,39 @@ export function useJiraIntakeSummary(options = {}) {
     pollMs: options.pollMs ?? 12000,
   });
 }
+
+export async function getIntegrationSetup() {
+  return fetchJson(intake("/integration/setup"));
+}
+
+export async function getBoardColumns() {
+  return fetchJson(intake("/boards/columns"));
+}
+
+export async function getIntegrationMapping() {
+  return fetchJson(intake("/integration/mapping"));
+}
+
+export async function saveIntegrationMapping(body) {
+  return fetchJson(intake("/integration/mapping"), {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function syncWorkingColumn() {
+  return fetchJson(intake("/ai-worker/sync"), { method: "POST" });
+}
+
+export async function advanceIssue(issueKey) {
+  return fetchJson(
+    intake(`/ai-worker/issues/${encodeURIComponent(issueKey)}/advance`),
+    { method: "POST" }
+  );
+}
+
+export function useIntegrationSetup(options = {}) {
+  return useResource(() => getIntegrationSetup(), [], {
+    pollMs: options.pollMs ?? 30000,
+  });
+}

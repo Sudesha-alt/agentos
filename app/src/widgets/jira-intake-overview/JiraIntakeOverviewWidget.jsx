@@ -50,7 +50,7 @@ export default function JiraIntakeOverviewWidget() {
             </p>
             <div className="flex flex-wrap gap-4 text-[13px]">
               <Link
-                to="/app/ai-worker"
+                to="/app/jira"
                 className="text-ink-dim transition-colors hover:text-indigo"
               >
                 Open AI Worker queue →

@@ -5,7 +5,7 @@ import { APP_NAV_SECTIONS } from "../../shared/config/app";
 const NAV_ICONS = {
   "/app": IconDashboard,
   "/app/pipelines": IconPipeline,
-  "/app/ai-worker": IconAiWorker,
+  "/app/jira": IconAiWorker,
   "/app/jira-search": IconSearch,
   "/app/settings": IconSettings,
 };

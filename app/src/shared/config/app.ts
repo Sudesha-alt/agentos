@@ -13,7 +13,7 @@ export const DATA_MODE =
 export const APP_NAV = [
   { to: "/app", label: "Dashboard", breadcrumb: "Workspace", end: true },
   { to: "/app/pipelines", label: "Pipelines", breadcrumb: "Pipelines" },
-  { to: "/app/ai-worker", label: "AI Worker", breadcrumb: "AI Worker" },
+  { to: "/app/jira", label: "Jira integration", breadcrumb: "Jira integration" },
   { to: "/app/jira-search", label: "Board search", breadcrumb: "Board search" },
   { to: "/app/settings", label: "Settings", breadcrumb: "Settings" },
 ] as const;
@@ -33,7 +33,7 @@ export const APP_NAV_SECTIONS = [
     id: "jira",
     label: "Jira intake",
     items: [
-      { to: "/app/ai-worker", label: "AI Worker", breadcrumb: "AI Worker" },
+      { to: "/app/jira", label: "Jira integration", breadcrumb: "Jira integration" },
       { to: "/app/jira-search", label: "Board search", breadcrumb: "Board search" },
     ],
   },
