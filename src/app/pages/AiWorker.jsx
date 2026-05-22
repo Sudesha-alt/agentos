@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import {
   getAiWorkerDebug,
@@ -5,6 +6,7 @@ import {
 } from "../../entities/jira-intake";
 import { useResource } from "../../shared/lib/useResource";
 import EmptyState from "../components/EmptyState";
+import LabelPill from "../components/LabelPill";
 import Spinner from "../components/Spinner";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
 
@@ -30,7 +32,7 @@ export default function AiWorker() {
 
   const statusLine = useMemo(() => {
     if (issuesError) {
-      return "Agentos API unreachable — run npm run dev from d:\\agentos";
+      return "API unreachable — run npm run dev in server/ (port 4000)";
     }
     if (debugData?.last) {
       return `Last webhook ${debugData.last.issueKey} · ${formatWhen(debugData.last.receivedAt)}`;
@@ -38,7 +40,7 @@ export default function AiWorker() {
     if ((stats?.active ?? items.length) > 0) {
       return "Queue loaded from local intake database";
     }
-    return "Waiting for Jira webhooks (ngrok → :4000/webhooks/jira)";
+    return "Waiting for Jira webhooks → POST /webhooks/jira/ai-worker";
   }, [issuesError, debugData, stats, items.length]);
 
   return (
@@ -48,20 +50,31 @@ export default function AiWorker() {
         title="AI Worker queue"
         body="Tickets in the AI worker board column, captured via webhook and stored by the intake service. Separate from the agent pipeline ledger."
         right={
-          <button
-            type="button"
-            onClick={() => refetch()}
-            className="rounded-full border border-hairline bg-surface/60 px-4 py-2 font-mono text-[10.5px] uppercase tracking-[0.16em] text-ink-dim transition-colors hover:text-ink"
-          >
-            Refresh
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              to="/app/jira-search"
+              className="rounded-full border border-hairline bg-surface/60 px-4 py-2 font-mono text-[10.5px] uppercase tracking-[0.16em] text-ink-dim transition-colors hover:text-ink"
+            >
+              Board search
+            </Link>
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="rounded-full border border-hairline bg-surface/60 px-4 py-2 font-mono text-[10.5px] uppercase tracking-[0.16em] text-ink-dim transition-colors hover:text-ink"
+            >
+              Refresh
+            </button>
+          </div>
         }
       />
 
       <div className="flex flex-wrap items-center gap-3">
-        <StatusPill label={`${stats?.active ?? (showInactive ? 0 : items.length)} active`} tone="success" />
+        <LabelPill
+          label={`${stats?.active ?? (showInactive ? 0 : items.length)} active`}
+          tone="success"
+        />
         {stats?.inactive > 0 ? (
-          <StatusPill label={`${stats.inactive} left column`} tone="muted" />
+          <LabelPill label={`${stats.inactive} left column`} tone="muted" />
         ) : null}
         <span className="font-mono text-[11px] text-ink-dim">{statusLine}</span>
       </div>
@@ -94,7 +107,7 @@ export default function AiWorker() {
           ) : issuesError ? (
             <EmptyState
               title="Intake service offline"
-              body="Run npm run dev from the agentos folder (starts API on port 4000), then refresh."
+              body="From the repo root run npm run dev (starts API on :4000). Set JIRA_* in server/.env and point your Jira webhook at /webhooks/jira/ai-worker."
             />
           ) : !items.length ? (
             <EmptyState
@@ -102,7 +115,7 @@ export default function AiWorker() {
               body={
                 showInactive
                   ? "No tickets have left the AI worker column yet."
-                  : "Move a card into the AI worker column in Jira, or check ngrok and webhook URL."
+                  : "Move a card into the AI worker column in Jira, or check ngrok and the webhook URL."
               }
             />
           ) : (
@@ -124,14 +137,16 @@ function IssueRow({ issue }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="font-mono text-[12px] text-indigo">{issue.issueKey}</p>
-          <h3 className="mt-1 text-[15px] font-medium text-ink">{issue.summary || "Untitled"}</h3>
+          <h3 className="mt-1 text-[15px] font-medium text-ink">
+            {issue.summary || "Untitled"}
+          </h3>
           {issue.description ? (
             <p className="mt-2 line-clamp-2 text-[13px] leading-relaxed text-ink-dim">
               {issue.description}
             </p>
           ) : null}
         </div>
-        <StatusPill
+        <LabelPill
           label={issue.active ? issue.status : `${issue.status} · inactive`}
           tone={issue.active ? "success" : "muted"}
         />
@@ -143,22 +158,6 @@ function IssueRow({ issue }) {
         {issue.lastSeenAt ? <span>Seen {formatWhen(issue.lastSeenAt)}</span> : null}
       </div>
     </li>
-  );
-}
-
-function StatusPill({ label, tone = "muted" }) {
-  const tones = {
-    success: "border-success/30 text-success",
-    warning: "border-warning/30 text-warning",
-    muted: "border-hairline text-ink-dim",
-    indigo: "border-indigo/30 text-indigo",
-  };
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] ${tones[tone] ?? tones.muted}`}
-    >
-      {label}
-    </span>
   );
 }
 

@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useState } from "react";
 import { searchBoard } from "../../entities/jira-intake";
 import EmptyState from "../components/EmptyState";
@@ -35,6 +36,14 @@ export default function JiraSearch() {
         kicker="Jira intake"
         title="Board keyword search"
         body="Search the entire Jira board for keywords in summaries and descriptions. Results are grouped by board column and fetched live from Jira via the intake service."
+        right={
+          <Link
+            to="/app/ai-worker"
+            className="rounded-full border border-hairline bg-surface/60 px-4 py-2 font-mono text-[10.5px] uppercase tracking-[0.16em] text-ink-dim transition-colors hover:text-ink"
+          >
+            AI Worker queue
+          </Link>
+        }
       />
 
       <Panel>

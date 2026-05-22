@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { usePipelineList } from "../../entities/pipeline";
 import DashboardOverviewWidget from "../../widgets/dashboard-overview/DashboardOverviewWidget";
+import JiraIntakeOverviewWidget from "../../widgets/jira-intake-overview/JiraIntakeOverviewWidget";
 import RecentPipelinesWidget from "../../widgets/recent-pipelines/RecentPipelinesWidget";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
 import { fadeUp, stagger, viewportOnce } from "../../lib/motion";
@@ -47,6 +48,8 @@ export default function Dashboard() {
         completed={summary.completed}
         failed={summary.failed}
       />
+
+      <JiraIntakeOverviewWidget />
 
       <section className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <RecentPipelinesWidget items={items} loading={loading} />

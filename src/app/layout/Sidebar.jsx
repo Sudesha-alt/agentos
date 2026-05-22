@@ -1,6 +1,6 @@
 import { NavLink } from "react-router-dom";
 import Logo from "../../components/Logo";
-import { APP_NAV } from "../../shared/config/app";
+import { APP_NAV_SECTIONS } from "../../shared/config/app";
 
 const NAV_ICONS = {
   "/app": IconDashboard,
@@ -10,11 +10,6 @@ const NAV_ICONS = {
   "/app/settings": IconSettings,
 };
 
-const NAV = APP_NAV.map((item) => ({
-  ...item,
-  icon: NAV_ICONS[item.to] ?? IconDashboard,
-}));
-
 export default function Sidebar() {
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-hairline bg-canvas/95 backdrop-blur-md md:flex">
@@ -22,50 +17,60 @@ export default function Sidebar() {
         <Logo />
       </div>
 
-      <nav className="flex-1 px-3 py-5">
-        <p className="mb-2 px-3 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-mute">
-          Workflow
-        </p>
-        <ul className="space-y-0.5">
-          {NAV.map((item) => (
-            <li key={item.to}>
-              <NavLink
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) =>
-                  `group flex items-center gap-3 rounded-[1rem] px-3 py-2.5 text-[13px] transition-colors duration-150 ${
-                    isActive
-                      ? "bg-surface text-ink shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]"
-                      : "text-ink-dim hover:bg-surface/60 hover:text-ink"
-                  }`
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    <span
-                      className={`flex size-5 items-center justify-center ${
-                        isActive ? "text-indigo" : "text-ink-mute group-hover:text-ink"
-                      }`}
+      <nav className="flex-1 overflow-y-auto px-3 py-5">
+        {APP_NAV_SECTIONS.map((section, sectionIndex) => (
+          <div
+            key={section.id}
+            className={sectionIndex > 0 ? "mt-8 border-t border-hairline/60 pt-6" : ""}
+          >
+            <p className="mb-2 px-3 font-mono text-[10px] uppercase tracking-[0.18em] text-ink-mute">
+              {section.label}
+            </p>
+            <ul className="space-y-0.5">
+              {section.items.map((item) => {
+                const Icon = NAV_ICONS[item.to] ?? IconDashboard;
+                return (
+                  <li key={item.to}>
+                    <NavLink
+                      to={item.to}
+                      end={item.end}
+                      className={({ isActive }) =>
+                        `group flex items-center gap-3 rounded-[1rem] px-3 py-2.5 text-[13px] transition-colors duration-150 ${
+                          isActive
+                            ? "bg-surface text-ink shadow-[inset_0_0_0_1px_rgba(255,255,255,0.03)]"
+                            : "text-ink-dim hover:bg-surface/60 hover:text-ink"
+                        }`
+                      }
                     >
-                      <item.icon />
-                    </span>
-                    {item.label}
-                    {isActive && (
-                      <span className="ml-auto size-1.5 rounded-full bg-indigo shadow-[0_0_8px_2px_rgba(99,102,241,0.7)]" />
-                    )}
-                  </>
-                )}
-              </NavLink>
-            </li>
-          ))}
-        </ul>
+                      {({ isActive }) => (
+                        <>
+                          <span
+                            className={`flex size-5 items-center justify-center ${
+                              isActive
+                                ? "text-indigo"
+                                : "text-ink-mute group-hover:text-ink"
+                            }`}
+                          >
+                            <Icon />
+                          </span>
+                          {item.label}
+                          {isActive && (
+                            <span className="ml-auto size-1.5 rounded-full bg-indigo shadow-[0_0_8px_2px_rgba(99,102,241,0.7)]" />
+                          )}
+                        </>
+                      )}
+                    </NavLink>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
       </nav>
 
       <div className="mx-3 mb-4 rounded-[1rem] border border-hairline bg-surface/40 p-3">
         <div className="flex items-center justify-between">
-          <span className="editorial-kicker text-ink-mute">
-            System
-          </span>
+          <span className="editorial-kicker text-ink-mute">System</span>
           <span className="size-1.5 rounded-full bg-success shadow-[0_0_8px_2px_rgba(34,197,94,0.6)]" />
         </div>
         <p className="mt-3 font-display text-[1.4rem] leading-none tracking-tight text-ink">

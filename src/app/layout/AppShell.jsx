@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { Outlet } from "react-router-dom";
 import { EASE } from "../../lib/motion";
+import MobileNav from "./MobileNav";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 
@@ -13,6 +14,7 @@ export default function AppShell() {
         <Sidebar />
         <div className="flex min-h-screen flex-1 flex-col md:pl-60">
           <TopBar />
+          <MobileNav />
           <motion.main
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}

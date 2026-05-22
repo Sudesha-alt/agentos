@@ -11,7 +11,7 @@ in control at every stage transition.
 - PostgreSQL (Supabase) with `pgvector`
 - Prisma ORM
 - Redis + BullMQ for the pipeline worker
-- Anthropic Claude Sonnet 4 for agent reasoning
+- Anthropic Claude Sonnet 4 (direct API or **AWS Bedrock**) for agent reasoning
 - OpenAI `text-embedding-3-small` for RAG embeddings
 - Sentry + Pino structured logging
 
@@ -38,7 +38,7 @@ prisma/schema.prisma
 ```bash
 cp .env.example .env
 # fill in DATABASE_URL, SUPABASE_URL, SUPABASE_SERVICE_KEY, REDIS_URL,
-# ANTHROPIC_API_KEY, OPENAI_API_KEY, JIRA_*
+# LLM_PROVIDER + (ANTHROPIC_API_KEY or AWS Bedrock creds), OPENAI_API_KEY, JIRA_*
 
 npm install
 npm run prisma:generate
@@ -145,6 +145,23 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 ```
+
+### AWS Bedrock (Claude agents)
+
+1. In [Amazon Bedrock console](https://console.aws.amazon.com/bedrock/), enable **Claude Sonnet 4** (or your chosen model) for your region.
+2. In `server/.env`:
+
+```ini
+LLM_PROVIDER=bedrock
+AWS_ACCESS_KEY_ID=your-access-key
+AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_REGION=us-east-1
+BEDROCK_MODEL_ID=anthropic.claude-sonnet-4-20250514-v1:0
+```
+
+Bedrock uses **IAM access keys** (or `~/.aws/credentials`), not an Anthropic API key. Model ids must match Bedrock’s `anthropic.*` inference profile for your region.
+
+To keep using [console.anthropic.com](https://console.anthropic.com/) keys instead, leave `LLM_PROVIDER=anthropic` (default) and set `ANTHROPIC_API_KEY`.
 
 Run the API and worker side by side:
 

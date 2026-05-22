@@ -1,11 +1,9 @@
-import Anthropic from "@anthropic-ai/sdk";
 import { auditRepo } from "../db/repositories/auditRepo";
+import { getClaudeClient, getClaudeModel } from "../llm/claudeClient";
 import type { AgentOutput } from "../types/agents";
 import { AgentParseError } from "../utils/errors";
 import { logger } from "../utils/logger";
 import { retry } from "../utils/retry";
-
-const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 // Claude Sonnet 4 pricing per token (May 2025): $3/Mtok input, $15/Mtok output.
 const INPUT_COST_PER_TOKEN = 0.000003;
@@ -14,7 +12,7 @@ const OUTPUT_COST_PER_TOKEN = 0.000015;
 export abstract class BaseAgent<TParsed = Record<string, unknown>> {
   abstract name: string;
   abstract systemPrompt: string;
-  protected model = "claude-sonnet-4-20250514";
+  protected model = getClaudeModel();
   protected maxTokens = 4000;
 
   async run(pipelineId: string, userPrompt: string): Promise<AgentOutput<TParsed>> {
@@ -26,7 +24,7 @@ export abstract class BaseAgent<TParsed = Record<string, unknown>> {
 
     const response = await retry(
       () =>
-        claude.messages.create({
+        getClaudeClient().messages.create({
           model: this.model,
           max_tokens: this.maxTokens,
           system: this.systemPrompt,
