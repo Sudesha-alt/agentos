@@ -52,7 +52,7 @@ export const STAGE_ORDER: PipelineStage[] = [
 
 export const STAGE_LABELS: Record<PipelineStage, string> = {
   INGESTION: "Ingestion",
-  PRODUCT_AGENT: "Product Agent",
+  PRODUCT_AGENT: "Discovery",
   PRD_VALIDATION: "PRD Gate",
   ENGINEERING_AGENT: "Engineering Agent",
   IMPLEMENTATION_VALIDATION: "Implementation Gate",

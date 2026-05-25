@@ -16,17 +16,19 @@ export const pipelineSteps = [
   },
   {
     id: "02",
-    title: "Product Agent generates the PRD",
-    kicker: "Intent expansion",
+    title: "Discovery engine synthesises the PRD",
+    kicker: "Four-stage discovery",
     description:
-      "The Product Agent retrieves prior tickets, release notes, customer calls, and product taxonomy before writing anything.",
-    badge: "PRODUCT_AGENT",
+      "Ticket analysis, historical intelligence from RAG, gap analysis, and complexity scoring run before PRD synthesis — so engineering gets a spec built on structured intelligence.",
+    badge: "DISCOVERY",
     terminal: [
-      "$ agent product run --ticket JIRA-1287",
-      "context.load   9 related tickets, 3 docs, 2 customer notes",
-      "prd.generate   requirements.md",
-      "criteria       7 acceptance criteria produced",
-      "status         human intent normalized",
+      "$ discovery run --ticket JIRA-1287",
+      "stage.1        ticket analysis — 12 atomic requirements",
+      "stage.2        historical intelligence — 4 similar tickets",
+      "stage.3        gap analysis — 6 gaps, 1 blocking",
+      "stage.4        complexity score 6/10 — 9d realistic",
+      "prd.generate   requirements.md — confidence 87%",
+      "status         PRD attached to Jira",
     ],
   },
   {

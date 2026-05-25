@@ -9,6 +9,7 @@ import {
 } from "../../jira-intake/boardColumnsService";
 import { handleAiWorkerWebhook } from "../../jira-intake/aiWorkerWebhookHandler";
 import { connectJira } from "../../jira-intake/connectJira";
+import { ensureAgentosWebhook, findWebhookByUrl } from "../../jira-intake/jiraWebhookService";
 import { getPublicJiraCredentials } from "../../jira-intake/jiraCredentialsStore";
 import { getIntegrationMapping } from "../../jira-intake/integrationConfigStore";
 import {
@@ -70,9 +71,9 @@ router.post("/integration/connect", async (req, res) => {
     ? String(req.body.webhookSecret).trim()
     : undefined;
 
-  if (!baseUrl || !email || !boardId) {
+  if (!baseUrl || !boardId) {
     res.status(400).json({
-      error: "baseUrl, email, and boardId are required",
+      error: "baseUrl and boardId are required",
     });
     return;
   }
@@ -84,22 +85,63 @@ router.post("/integration/connect", async (req, res) => {
     });
     return;
   }
+  if (!email && !apiToken && !publicBefore.email) {
+    res.status(400).json({
+      error: "email or apiToken is required on first connect",
+    });
+    return;
+  }
 
   try {
+    const apiBase = publicApiBase(req);
+    const webhookUrl = `${apiBase}/webhooks/jira`;
     const result = await connectJira({
       baseUrl,
-      email,
+      email: email || undefined,
       boardId,
       apiToken,
       webhookSecret,
+      webhookUrl,
+      autoRegisterWebhook: req.body?.autoRegisterWebhook !== false,
     });
-    const apiBase = publicApiBase(req);
     res.json({
       ...result,
       publicApiBase: apiBase,
-      webhookUrl: `${apiBase}/webhooks/jira`,
+      webhookUrl,
       webhookEvents: ["jira:issue_updated", "jira:issue_created"],
     });
+  } catch (err) {
+    const e = err as Error & { status?: number };
+    res.status(e.status && e.status >= 400 ? e.status : 502).json({ error: e.message });
+  }
+});
+
+router.post("/integration/webhook/register", async (req, res) => {
+  const apiBase = publicApiBase(req);
+  const webhookUrl = `${apiBase}/webhooks/jira`;
+  const jira = getPublicJiraCredentials();
+  if (!jira.webhookSecret) {
+    res.status(400).json({ error: "Connect Jira first to generate a webhook secret" });
+    return;
+  }
+  try {
+    const result = await ensureAgentosWebhook({
+      webhookUrl,
+      secret: jira.webhookSecret,
+      projectKey: req.body?.projectKey ? String(req.body.projectKey) : null,
+    });
+    res.json({ webhookUrl, ...result });
+  } catch (err) {
+    const e = err as Error & { status?: number };
+    res.status(e.status && e.status >= 400 ? e.status : 502).json({ error: e.message });
+  }
+});
+
+router.get("/integration/webhook/status", async (req, res) => {
+  const webhookUrl = `${publicApiBase(req)}/webhooks/jira`;
+  try {
+    const hook = await findWebhookByUrl(webhookUrl);
+    res.json({ webhookUrl, registered: Boolean(hook), webhook: hook });
   } catch (err) {
     const e = err as Error & { status?: number };
     res.status(e.status && e.status >= 400 ? e.status : 502).json({ error: e.message });

@@ -1,7 +1,10 @@
 import type { Prisma, PipelineStage } from "../db/prisma";
-import { ProductAgent } from "../agents/productAgent";
 import { EngineeringAgent } from "../agents/engineeringAgent";
 import { QAAgent } from "../agents/qaAgent";
+import {
+  DiscoveryPausedError,
+  runDiscovery,
+} from "../discovery/discoveryOrchestrator";
 import { auditRepo } from "../db/repositories/auditRepo";
 import { pipelineRepo } from "../db/repositories/pipelineRepo";
 import { ticketRepo } from "../db/repositories/ticketRepo";
@@ -22,13 +25,11 @@ import { validatePrd } from "../validators/prdValidator";
 import { validateQa } from "../validators/qaValidator";
 import {
   buildEngineeringAgentContext,
-  buildProductAgentContext,
   buildQaAgentContext,
 } from "./contextBuilder";
 import { stateManager } from "./stateManager";
 
 export class PipelineOrchestrator {
-  private readonly productAgent = new ProductAgent();
   private readonly engineeringAgent = new EngineeringAgent();
   private readonly qaAgent = new QAAgent();
 
@@ -131,6 +132,14 @@ export class PipelineOrchestrator {
       await ticketRepo.setStatus(ticket.id, "COMPLETED");
       logger.info({ pipelineId: pipeline.id }, "pipeline completed");
     } catch (err) {
+      if (err instanceof DiscoveryPausedError) {
+        await ticketRepo.setStatus(ticket.id, "AWAITING_HUMAN");
+        logger.warn(
+          { pipelineId: pipeline.id, blockingGaps: err.blockingGaps },
+          "discovery paused for human clarification"
+        );
+        return;
+      }
       const message = err instanceof Error ? err.message : String(err);
       await stateManager.fail(pipeline.id, "OUTPUT", message);
       await ticketRepo.setStatus(ticket.id, "FAILED");
@@ -158,23 +167,48 @@ export class PipelineOrchestrator {
 
   private async runProductAgent(
     pipelineId: string,
-    jiraKey: string,
+    _jiraKey: string,
     ticket: NormalizedTicket
   ): Promise<AgentOutput<PrdOutput>> {
-    const retrieved = await retriever.retrieveForProductAgent(ticket, jiraKey);
-    const context = buildProductAgentContext(ticket, retrieved);
     const stageLog = await pipelineRepo.startStage({
       pipelineId,
       stage: "PRODUCT_AGENT",
-      inputJson: { context },
+      inputJson: {
+        mode: "discovery",
+        jiraKey: ticket.jiraKey,
+      } as unknown as Prisma.InputJsonValue,
     });
-    const output = await this.productAgent.run(pipelineId, context);
+
+    const discovery = await runDiscovery(ticket, pipelineId);
+
+    const output: AgentOutput<PrdOutput> = {
+      raw: JSON.stringify(discovery.prd),
+      parsed: discovery.prdOutput,
+      metadata: {
+        inputTokens: discovery.totalTokensUsed,
+        outputTokens: 0,
+        costUsd: discovery.totalCostUsd,
+        durationMs: discovery.durationMs,
+      },
+    };
+
     await pipelineRepo.completeStage({
       stageLogId: stageLog.id,
-      output: output.parsed as unknown as Prisma.InputJsonValue,
-      confidenceScore: output.parsed.confidenceScore,
-      tokenCount: output.metadata.inputTokens + output.metadata.outputTokens,
-      costUsd: output.metadata.costUsd,
+      output: {
+        prd: discovery.prdOutput,
+        scores: discovery.scores,
+        toolCallLog: discovery.toolCallLog,
+        discovery: {
+          ticketAnalysis: discovery.ticketAnalysis,
+          historicalIntelligence: discovery.historicalIntelligence,
+          gapAnalysis: discovery.gapAnalysis,
+          complexityAssessment: discovery.complexityAssessment,
+          generatedPrd: discovery.prd,
+        },
+      } as unknown as Prisma.InputJsonValue,
+      confidenceScore: discovery.scores.prdQualityScore,
+      tokenCount: discovery.totalTokensUsed,
+      costUsd: discovery.totalCostUsd,
     });
     await stateManager.advance(pipelineId, "PRD_VALIDATION");
     return output;

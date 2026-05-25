@@ -87,7 +87,7 @@ export function validatePrd(prd: unknown): ValidationResult {
     issues.push({
       code: "LOW_CONFIDENCE",
       severity: "error",
-      message: `PRD confidence ${data.confidenceScore} below 0.7 threshold — human clarification required.`,
+      message: `PRD quality score ${data.confidenceScore} below 0.7 threshold — human clarification required.`,
     });
   }
 

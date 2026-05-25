@@ -9,15 +9,51 @@ import {
   saveJiraCredentials,
 } from "./jiraCredentialsStore";
 import { getIntegrationMapping } from "./integrationConfigStore";
+import { fetchJiraCurrentUser, ensureAgentosWebhook } from "./jiraWebhookService";
 
 export async function connectJira(input: {
   baseUrl: string;
-  email: string;
+  email?: string;
   apiToken?: string;
   boardId: string;
   webhookSecret?: string;
+  webhookUrl?: string;
+  autoRegisterWebhook?: boolean;
 }) {
-  saveJiraCredentials(input);
+  const prior = getPublicJiraCredentials();
+  let email = input.email?.trim() || prior.email || "";
+
+  if (input.apiToken?.trim()) {
+    saveJiraCredentials({
+      baseUrl: input.baseUrl,
+      email: email || "pending@connect",
+      apiToken: input.apiToken,
+      boardId: input.boardId,
+      webhookSecret: input.webhookSecret,
+    });
+    try {
+      const me = await fetchJiraCurrentUser();
+      email = me.email;
+      saveJiraCredentials({
+        baseUrl: input.baseUrl,
+        email,
+        apiToken: input.apiToken,
+        boardId: input.boardId,
+        webhookSecret: input.webhookSecret,
+      });
+    } catch {
+      if (!email) throw new Error("apiToken valid but could not fetch Jira profile — enter email");
+    }
+  } else {
+    saveJiraCredentials({
+      baseUrl: input.baseUrl,
+      email,
+      apiToken: input.apiToken,
+      boardId: input.boardId,
+      webhookSecret: input.webhookSecret,
+    });
+  }
+
   validateJiraConfig();
 
   const boardId = input.boardId.trim();
@@ -41,9 +77,38 @@ export async function connectJira(input: {
     });
   }
 
+  const jira = getPublicJiraCredentials();
+  let webhookRegistration: {
+    registered: boolean;
+    created: boolean;
+    jiraWebhookId?: number;
+    error?: string;
+  } = { registered: false, created: false };
+
+  if (input.autoRegisterWebhook !== false && input.webhookUrl && jira.webhookSecret) {
+    try {
+      const result = await ensureAgentosWebhook({
+        webhookUrl: input.webhookUrl,
+        secret: jira.webhookSecret,
+        projectKey: board.location?.projectKey || null,
+      });
+      webhookRegistration = {
+        registered: result.registered,
+        created: result.created,
+        jiraWebhookId: result.webhook.id,
+      };
+    } catch (err) {
+      webhookRegistration = {
+        registered: false,
+        created: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
+  }
+
   return {
     connected: true,
-    jira: getPublicJiraCredentials(),
+    jira,
     board: {
       id: boardId,
       name: board.name || `Board ${boardId}`,
@@ -52,5 +117,6 @@ export async function connectJira(input: {
     },
     columns,
     mapping,
+    webhookRegistration,
   };
 }

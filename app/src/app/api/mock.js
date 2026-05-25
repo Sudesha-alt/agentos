@@ -86,6 +86,270 @@ const MOCK_PIPELINES = [
   },
 ];
 
+const MOCK_TICKET_ANALYSIS = {
+  coreIntent:
+    "Enable enterprise admins to export immutable pipeline audit trails for compliance attestation.",
+  atomicRequirements: [
+    {
+      id: "REQ-001",
+      description: "Admin can request export for up to 90 days of workspace activity",
+      type: "functional",
+      source: "explicit",
+      clarity: "clear",
+    },
+    {
+      id: "REQ-002",
+      description: "Export bundle includes SHA-256 integrity verification",
+      type: "non-functional",
+      source: "implicit",
+      clarity: "clear",
+    },
+    {
+      id: "REQ-003",
+      description: "Non-admin roles receive 403 on export API",
+      type: "functional",
+      source: "implicit",
+      clarity: "ambiguous",
+    },
+  ],
+  ambiguities: [
+    {
+      description: "PII redaction policy not specified",
+      impact: "high",
+      question: "Should exports redact user emails by default?",
+    },
+  ],
+  userPersonas: [
+    {
+      persona: "Workspace admin",
+      need: "SOC2-ready audit export",
+      currentPain: "Must screen-scrape the dashboard",
+    },
+  ],
+  systemsAffected: ["API", "Object storage", "Notification service", "Postgres"],
+  roughComplexity: "medium",
+  workType: "new-feature",
+  understandingConfidence: 0.78,
+};
+
+const MOCK_HISTORICAL = {
+  successPatterns: [
+    {
+      pattern: "Async job + signed download URL for large exports",
+      source: "PLT-1198",
+      applicability: "direct",
+    },
+  ],
+  knownFailures: [
+    {
+      failure: "Multipart upload retries caused hash drift",
+      source: "PLT-1204",
+      preventionSuggestion: "Compute hash incrementally during stream",
+    },
+  ],
+  impliedRequirements: [
+    {
+      requirement: "Rate limit export requests per workspace",
+      source: "PLT-1198",
+      confidence: 0.82,
+    },
+  ],
+  technicalPatterns: [
+    {
+      pattern: "BullMQ worker streams Postgres in chunks",
+      context: "Prior export features",
+      relevance: "high",
+    },
+  ],
+  historicalQAIssues: [
+    { issue: "Missing 403 test for non-admin", frequency: "often" },
+  ],
+  reuseOpportunities: [
+    {
+      component: "signed-url-service",
+      description: "Existing S3 presign helper",
+      source: "PLT-1198",
+    },
+  ],
+  historicalCoverage: "moderate",
+  intelligenceConfidence: 0.74,
+};
+
+const MOCK_GAPS = {
+  knownKnowns: [
+    { item: "Export scoped to one workspace", confidence: 0.95, source: "ticket" },
+  ],
+  knownUnknowns: [
+    {
+      gap: "Default PII redaction behaviour",
+      category: "scope-boundary",
+      resolutionRequired: true,
+      suggestedResolution: "PM decision on redaction toggle",
+      defaultAssumption: "Redact email fields by default",
+    },
+  ],
+  endpointGaps: [
+    {
+      description: "Create async export job",
+      existingEndpoint: null,
+      newEndpointNeeded: "POST /api/v1/workspaces/:id/exports",
+      httpMethod: "POST",
+      estimatedComplexity: "moderate",
+    },
+  ],
+  dataGaps: [
+    {
+      description: "Track export job lifecycle",
+      newFieldsNeeded: ["status: enum", "hash: string"],
+      newTablesNeeded: ["export_jobs"],
+      existingTablesAffected: ["pipelines", "audit_logs"],
+    },
+  ],
+  accessGaps: [
+    {
+      description: "Only workspace_admin may enqueue exports",
+      rolesInvolved: ["workspace_admin", "member"],
+      permissionModel: "RBAC check on POST /exports",
+    },
+  ],
+  nfrGaps: [
+    {
+      type: "performance",
+      gap: "No p95 SLA for export completion",
+      defaultStandard: "p95 < 8 minutes for 90-day range",
+    },
+  ],
+  readinessForPRD: "ready-with-assumptions",
+  blockingGaps: 1,
+  totalGaps: 6,
+};
+
+const MOCK_COMPLEXITY = {
+  overallScore: 6,
+  dimensions: {
+    technicalComplexity: 6,
+    integrationComplexity: 7,
+    dataComplexity: 5,
+    uxComplexity: 4,
+    testingComplexity: 6,
+  },
+  effortEstimate: { optimistic: 6, realistic: 9, pessimistic: 14, unit: "days" },
+  complexityDrivers: [
+    {
+      driver: "Streaming large datasets to object storage",
+      impact: "high",
+      mitigation: "Chunked reads with backpressure",
+    },
+  ],
+  estimateRisks: [
+    { risk: "PII policy change mid-sprint", probability: "medium", impactDays: 3 },
+  ],
+  shouldBreakDown: false,
+  breakdownSuggestion: null,
+  priorityAssessment: {
+    businessValue: 8,
+    technicalDebt: 6,
+    userImpact: 7,
+    recommendedPriority: "high",
+    priorityReasoning: "Enterprise compliance blocker",
+  },
+};
+
+const MOCK_GENERATED_PRD = {
+  title: "Workspace-level audit log export",
+  version: "v1.0",
+  status: "Draft",
+  jiraKey: "PLT-1271",
+  createdAt: minutes(13.7),
+  priority: "High",
+  effortEstimate: "9 days (realistic)",
+  problemStatement:
+    "Enterprise admins cannot extract immutable audit trails of pipeline activity for SOC2 attestation without screen-scraping the dashboard.",
+  proposedSolution:
+    "Add an asynchronous export job that produces a signed CSV/JSON bundle scoped to one workspace, with SHA-256 integrity hash and a 7-day download window.",
+  successDefinition:
+    "Admin receives tamper-evident export within SLA; download link expires after 7 days.",
+  userPersonas: MOCK_TICKET_ANALYSIS.userPersonas,
+  userStories: [
+    {
+      id: "US-001",
+      story:
+        "As a workspace admin I want to export 90 days of pipeline activity so that I can attach it to my SOC2 audit",
+      acceptanceCriteria: [
+        "Given an admin with workspace_admin role When they POST an export for a valid date range Then a job is enqueued and confirmation is sent within 60 seconds",
+        "Given a completed export When the admin downloads the bundle Then the SHA-256 header matches the file body",
+        "Given a non-admin When they call POST /exports Then the API returns 403 WS_EXPORT_FORBIDDEN",
+      ],
+      priority: "must-have",
+    },
+  ],
+  technicalRequirements: {
+    endpoints: [
+      {
+        method: "POST",
+        path: "/api/v1/workspaces/:workspaceId/exports",
+        description: "Enqueue export job",
+        requestBody: "{ from: ISO, to: ISO }",
+        responseShape: "{ jobId: string, status: 'queued' }",
+        authRequired: true,
+        notes: "workspace_admin only",
+      },
+    ],
+    dataModel: [
+      {
+        table: "export_jobs",
+        changes: "create",
+        fields: ["id: uuid", "workspace_id: uuid", "status: enum", "content_hash: string"],
+      },
+    ],
+    systemsAffected: MOCK_TICKET_ANALYSIS.systemsAffected,
+    technicalAssumptions: ["S3 bucket per workspace", "Emails redacted by default"],
+  },
+  nonFunctionalRequirements: [
+    {
+      type: "performance",
+      requirement: "p95 export completes in under 8 minutes for 90-day range",
+      measurable: "Load test with 500k audit rows",
+    },
+  ],
+  assumptions: ["PII redacted by default until PM confirms otherwise"],
+  outOfScope: ["Scheduled recurring exports", "PDF rendering"],
+  openQuestions: [
+    {
+      question: "Should we redact PII fields by default?",
+      impact: "Schema and QA coverage",
+      defaultAssumption: "Redact email fields",
+      owner: "PM",
+    },
+  ],
+  risks: [
+    {
+      risk: "Large workspaces exceed multipart limits",
+      probability: "medium",
+      impact: "Export failure or timeout",
+      mitigation: "Shard into 4GB parts",
+    },
+  ],
+  successMetrics: [
+    {
+      metric: "Export completion time",
+      baseline: "N/A (new)",
+      target: "p95 < 8 min",
+      measurementMethod: "Worker duration histogram",
+    },
+  ],
+  complexitySummary: {
+    score: 6,
+    effortOptimistic: "6 days",
+    effortRealistic: "9 days",
+    effortPessimistic: "14 days",
+    keyComplexityDrivers: ["Streaming to S3", "RBAC on new endpoints"],
+  },
+  prdConfidence: 0.62,
+  confidenceNotes:
+    "Open question about PII redaction must be answered before engineering finalises schema.",
+};
+
 const MOCK_PRD = {
   title: "Workspace-level audit log export",
   problemStatement:
@@ -122,6 +386,42 @@ const MOCK_PRD = {
   confidenceScore: 0.62,
   confidenceReason:
     "Open question about PII redaction must be answered before engineering can finalise schema. Recommend human review.",
+};
+
+const MOCK_SCORES = {
+  understandingScore: 0.72,
+  prdQualityScore: 0.62,
+  historicalSignalScore: 0.68,
+  complexityScore: 5.8,
+  passesGate: false,
+  gateFailureReasons: [
+    "1 blocking gap(s) must be resolved",
+    "PRD quality 62% below 70% gate threshold",
+  ],
+  recommendation: "clarify",
+  bands: {
+    understanding: { point: 0.72, uncertainty: 0.06, low: 0.66, high: 0.78 },
+    prdQuality: { point: 0.62, uncertainty: 0.06, low: 0.56, high: 0.68 },
+    historicalSignal: { point: 0.68, uncertainty: 0.05, low: 0.63, high: 0.73 },
+  },
+  breakdown: {
+    readiness: "ready-with-assumptions",
+    blockingGaps: 1,
+    totalGaps: 6,
+    recommendation: "clarify",
+  },
+};
+
+const MOCK_DISCOVERY_OUTPUT = {
+  prd: MOCK_PRD,
+  scores: MOCK_SCORES,
+  discovery: {
+    ticketAnalysis: MOCK_TICKET_ANALYSIS,
+    historicalIntelligence: MOCK_HISTORICAL,
+    gapAnalysis: MOCK_GAPS,
+    complexityAssessment: MOCK_COMPLEXITY,
+    generatedPrd: MOCK_GENERATED_PRD,
+  },
 };
 
 const MOCK_IMPLEMENTATION = {
@@ -256,10 +556,46 @@ const MOCK_QA = {
 
 const MOCK_AUDIT = [
   { event: "PIPELINE_STARTED", metadata: { jiraKey: "PLT-1271" }, timestamp: minutes(14) },
-  { event: "PRODUCT_AGENT_STARTED", metadata: { promptLength: 2342 }, timestamp: minutes(13.8) },
+  { event: "TICKET_EMBEDDED", metadata: { jiraKey: "PLT-1271" }, timestamp: minutes(13.95) },
+  { event: "CONTEXT_RETRIEVED", metadata: { chunksFound: 4, topSimilarity: 0.81 }, timestamp: minutes(13.9) },
   {
-    event: "PRODUCT_AGENT_COMPLETED",
-    metadata: { inputTokens: 1340, outputTokens: 1882, costUsd: 0.0327, durationMs: 8120 },
+    event: "TICKET_ANALYSED",
+    metadata: { requirementsFound: 3, ambiguities: 1, confidence: 0.78 },
+    timestamp: minutes(13.85),
+  },
+  {
+    event: "INTELLIGENCE_EXTRACTED",
+    metadata: { patterns: 1, failures: 1, implied: 1 },
+    timestamp: minutes(13.8),
+  },
+  {
+    event: "GAPS_ANALYSED",
+    metadata: { totalGaps: 6, blockingGaps: 1, readiness: "ready-with-assumptions" },
+    timestamp: minutes(13.75),
+  },
+  {
+    event: "COMPLEXITY_SCORED",
+    metadata: { score: 6, realisticDays: 9, priority: "high" },
+    timestamp: minutes(13.7),
+  },
+  {
+    event: "PRD_GENERATED",
+    metadata: { userStories: 1, endpoints: 1 },
+    timestamp: minutes(13.65),
+  },
+  {
+    event: "SCORES_COMPUTED",
+    metadata: {
+      understandingScore: 0.78,
+      prdQualityScore: 0.62,
+      historicalSignalScore: 0.74,
+      complexityScore: 6,
+    },
+    timestamp: minutes(13.62),
+  },
+  {
+    event: "DISCOVERY_COMPLETE",
+    metadata: { durationMs: 45200, totalCost: 0.0327 },
     timestamp: minutes(13.6),
   },
   { event: "STAGE_ADVANCED", metadata: { from: "PRODUCT_AGENT", to: "PRD_VALIDATION" }, timestamp: minutes(13.5) },
@@ -311,7 +647,14 @@ function fullPipelineDetail(id) {
     ...list,
     stages: [
       fakeStage("INGESTION", "COMPLETED", { indexed: true }),
-      fakeStage("PRODUCT_AGENT", "COMPLETED", MOCK_PRD, null, 0.0327, MOCK_PRD.confidenceScore),
+      fakeStage(
+        "PRODUCT_AGENT",
+        "COMPLETED",
+        MOCK_DISCOVERY_OUTPUT,
+        null,
+        0.0327,
+        MOCK_PRD.confidenceScore
+      ),
       fakeStage(
         "PRD_VALIDATION",
         list.status === "PAUSED" ? "AWAITING_HUMAN" : "COMPLETED",
