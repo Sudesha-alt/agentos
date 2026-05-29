@@ -23,7 +23,8 @@ Components: ${ticket.components.join(", ") || "None specified"}`.trim(),
 
 export function buildEngineeringAgentContext(
   prd: PrdOutput,
-  retrievedContext: RetrievedContext[]
+  retrievedContext: RetrievedContext[],
+  codebaseContext?: string
 ): string {
   const compressed = contextCompressor.compress({
     currentLabel: "Current PRD",
@@ -35,7 +36,14 @@ Open Questions: ${prd.openQuestions.join(" | ") || "None"}`.trim(),
     retrievedContext,
   });
 
-  return compressed.text;
+  if (!codebaseContext?.trim()) {
+    return compressed.text;
+  }
+
+  return `${compressed.text}
+
+Codebase Intelligence Snapshot:
+${codebaseContext}`.trim();
 }
 
 export function buildQaAgentContext(

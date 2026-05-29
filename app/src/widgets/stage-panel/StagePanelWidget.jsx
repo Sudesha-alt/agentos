@@ -1,5 +1,9 @@
 import StatusPill from "../../app/components/StatusPill";
 import JsonViewer from "../../app/components/JsonViewer";
+import {
+  hasDiscoveryContent,
+  parseDiscoveryOutput,
+} from "../../entities/discovery";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import {
   formatCompactNumber,
@@ -7,10 +11,27 @@ import {
   formatStageLabel,
   formatUsd,
 } from "../../shared/lib/format";
+import DiscoveryModuleWidget from "../discovery/DiscoveryModuleWidget";
 import ValidationPanelWidget from "../validation-panel/ValidationPanelWidget";
 
 export default function StagePanelWidget({ stage }) {
   if (!stage) return null;
+
+  const discovery =
+    stage.stage === "PRODUCT_AGENT"
+      ? parseDiscoveryOutput(stage.output)
+      : null;
+  const showDiscovery = discovery && hasDiscoveryContent(discovery);
+
+  if (showDiscovery) {
+    return (
+      <DiscoveryModuleWidget
+        parsed={discovery}
+        stage={stage}
+        rawOutput={stage.output}
+      />
+    );
+  }
 
   return (
     <Panel>

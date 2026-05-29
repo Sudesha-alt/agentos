@@ -1,7 +1,12 @@
 import type { Prisma, PipelineStage } from "../db/prisma";
-import { ProductAgent } from "../agents/productAgent";
 import { EngineeringAgent } from "../agents/engineeringAgent";
-import { QAAgent } from "../agents/qaAgent";
+import { runQaAgentic } from "../qaAgent";
+import { attachQaReportToJira } from "../qa/report/reportAttacher";
+import { codebaseQueryService } from "../codebaseIntelligence/queryService";
+import {
+  DiscoveryPausedError,
+  runDiscovery,
+} from "../discovery/discoveryOrchestrator";
 import { auditRepo } from "../db/repositories/auditRepo";
 import { pipelineRepo } from "../db/repositories/pipelineRepo";
 import { ticketRepo } from "../db/repositories/ticketRepo";
@@ -20,17 +25,11 @@ import { logger } from "../utils/logger";
 import { validateImplementation } from "../validators/implementationValidator";
 import { validatePrd } from "../validators/prdValidator";
 import { validateQa } from "../validators/qaValidator";
-import {
-  buildEngineeringAgentContext,
-  buildProductAgentContext,
-  buildQaAgentContext,
-} from "./contextBuilder";
+import { buildEngineeringAgentContext } from "./contextBuilder";
 import { stateManager } from "./stateManager";
 
 export class PipelineOrchestrator {
-  private readonly productAgent = new ProductAgent();
   private readonly engineeringAgent = new EngineeringAgent();
-  private readonly qaAgent = new QAAgent();
 
   async run(ticketId: string): Promise<void> {
     const ticket = await ticketRepo.findById(ticketId);
@@ -53,12 +52,12 @@ export class PipelineOrchestrator {
     try {
       await this.ingest(pipeline.id, normalizedTicket);
 
-      const prdOutput = await this.runProductAgent(
+      const productStage = await this.runProductAgent(
         pipeline.id,
         normalizedTicket.jiraKey,
         normalizedTicket,
       );
-      const prdValidation = await this.validatePrdStage(pipeline.id, prdOutput);
+      const prdValidation = await this.validatePrdStage(pipeline.id, productStage.agentOutput);
       if (!(await this.continueOrPause(pipeline.id, "PRD_VALIDATION", prdValidation))) {
         await ticketRepo.setStatus(ticket.id, "AWAITING_HUMAN");
         return;
@@ -66,18 +65,19 @@ export class PipelineOrchestrator {
       await indexer.indexPrd(
         normalizedTicket.jiraTicketId,
         normalizedTicket.jiraKey,
-        prdOutput.parsed
+        productStage.agentOutput.parsed
       );
 
       const implementationOutput = await this.runEngineeringAgent(
         pipeline.id,
         normalizedTicket.jiraKey,
-        prdOutput.parsed
+        productStage.agentOutput.parsed,
+        productStage.enrichedPrdDocument
       );
       const implementationValidation = await this.validateImplementationStage(
         pipeline.id,
         implementationOutput,
-        prdOutput.parsed
+        productStage.agentOutput.parsed
       );
       if (
         !(await this.continueOrPause(
@@ -95,20 +95,28 @@ export class PipelineOrchestrator {
         implementationOutput.parsed
       );
 
-      const qaOutput = await this.runQaAgent(
+      const qaStage = await this.runQaAgent(
         pipeline.id,
         normalizedTicket.jiraKey,
-        prdOutput.parsed,
+        productStage.agentOutput.parsed,
         implementationOutput.parsed
       );
+      const qaOutput = qaStage.agentOutput;
       const qaValidation = await this.validateQaStage(
         pipeline.id,
         qaOutput,
-        prdOutput.parsed
+        productStage.agentOutput.parsed
       );
       if (!(await this.continueOrPause(pipeline.id, "QA_VALIDATION", qaValidation))) {
         await ticketRepo.setStatus(ticket.id, "AWAITING_HUMAN");
         return;
+      }
+      if (qaStage.executionReport) {
+        await attachQaReportToJira(
+          normalizedTicket.jiraKey,
+          qaOutput.parsed,
+          qaStage.executionReport
+        );
       }
       await indexer.indexQaReport(
         normalizedTicket.jiraTicketId,
@@ -117,7 +125,8 @@ export class PipelineOrchestrator {
       );
 
       await this.writeBackToJira(pipeline.id, normalizedTicket.jiraKey, {
-        prd: prdOutput.parsed,
+        prd: productStage.agentOutput.parsed,
+        prdDocument: productStage.enrichedPrdDocument,
         implementation: implementationOutput.parsed,
         qa: qaOutput.parsed,
         validations: {
@@ -131,6 +140,14 @@ export class PipelineOrchestrator {
       await ticketRepo.setStatus(ticket.id, "COMPLETED");
       logger.info({ pipelineId: pipeline.id }, "pipeline completed");
     } catch (err) {
+      if (err instanceof DiscoveryPausedError) {
+        await ticketRepo.setStatus(ticket.id, "AWAITING_HUMAN");
+        logger.warn(
+          { pipelineId: pipeline.id, blockingGaps: err.blockingGaps },
+          "discovery paused for human clarification"
+        );
+        return;
+      }
       const message = err instanceof Error ? err.message : String(err);
       await stateManager.fail(pipeline.id, "OUTPUT", message);
       await ticketRepo.setStatus(ticket.id, "FAILED");
@@ -158,26 +175,73 @@ export class PipelineOrchestrator {
 
   private async runProductAgent(
     pipelineId: string,
-    jiraKey: string,
+    _jiraKey: string,
     ticket: NormalizedTicket
-  ): Promise<AgentOutput<PrdOutput>> {
-    const retrieved = await retriever.retrieveForProductAgent(ticket, jiraKey);
-    const context = buildProductAgentContext(ticket, retrieved);
+  ): Promise<{
+    agentOutput: AgentOutput<PrdOutput>;
+    enrichedPrdDocument: Record<string, unknown>;
+  }> {
     const stageLog = await pipelineRepo.startStage({
       pipelineId,
       stage: "PRODUCT_AGENT",
-      inputJson: { context },
+      inputJson: {
+        mode: "discovery",
+        jiraKey: ticket.jiraKey,
+      } as unknown as Prisma.InputJsonValue,
     });
-    const output = await this.productAgent.run(pipelineId, context);
+
+    const discovery = await runDiscovery(ticket, pipelineId);
+
+    const output: AgentOutput<PrdOutput> = {
+      raw: JSON.stringify(discovery.prd),
+      parsed: discovery.prdOutput,
+      metadata: {
+        inputTokens: discovery.totalTokensUsed,
+        outputTokens: 0,
+        costUsd: discovery.totalCostUsd,
+        durationMs: discovery.durationMs,
+      },
+    };
+
+    const enrichedPrdDocument: Record<string, unknown> = {
+      prdOutput: discovery.prdOutput,
+      generatedPrd: discovery.prd,
+      historicalIntelligence: discovery.historicalIntelligence,
+      ticketAnalysis: discovery.ticketAnalysis,
+      gapAnalysis: discovery.gapAnalysis,
+      complexityAssessment: discovery.complexityAssessment,
+      scores: discovery.scores,
+      toolCallLog: discovery.toolCallLog,
+      synthesisSummary: {
+        historicalCoverage: discovery.historicalIntelligence.historicalCoverage,
+        reusedPatterns: discovery.historicalIntelligence.successPatterns,
+        knownFailures: discovery.historicalIntelligence.knownFailures,
+        impliedRequirements: discovery.historicalIntelligence.impliedRequirements,
+        reuseOpportunities: discovery.historicalIntelligence.reuseOpportunities,
+        blockingGaps: discovery.gapAnalysis.blockingGaps,
+      },
+    };
+
     await pipelineRepo.completeStage({
       stageLogId: stageLog.id,
-      output: output.parsed as unknown as Prisma.InputJsonValue,
-      confidenceScore: output.parsed.confidenceScore,
-      tokenCount: output.metadata.inputTokens + output.metadata.outputTokens,
-      costUsd: output.metadata.costUsd,
+      output: {
+        prd: discovery.prdOutput,
+        scores: discovery.scores,
+        toolCallLog: discovery.toolCallLog,
+        discovery: {
+          ticketAnalysis: discovery.ticketAnalysis,
+          historicalIntelligence: discovery.historicalIntelligence,
+          gapAnalysis: discovery.gapAnalysis,
+          complexityAssessment: discovery.complexityAssessment,
+          generatedPrd: discovery.prd,
+        },
+      } as unknown as Prisma.InputJsonValue,
+      confidenceScore: discovery.scores.prdQualityScore,
+      tokenCount: discovery.totalTokensUsed,
+      costUsd: discovery.totalCostUsd,
     });
     await stateManager.advance(pipelineId, "PRD_VALIDATION");
-    return output;
+    return { agentOutput: output, enrichedPrdDocument };
   }
 
   private async validatePrdStage(
@@ -203,12 +267,21 @@ export class PipelineOrchestrator {
   private async runEngineeringAgent(
     pipelineId: string,
     jiraKey: string,
-    prd: PrdOutput
+    prd: PrdOutput,
+    enrichedPrdDocument: Record<string, unknown>
   ): Promise<AgentOutput<ImplementationOutput>> {
     const retrieved = await retriever.retrieveForEngineeringAgent(prd, jiraKey);
-    const context = buildEngineeringAgentContext(prd, retrieved);
+    const codebaseIntelligence = await this.getCodebaseIntelligenceSnapshot(prd);
+    const enrichedPrdSummary = this.buildEnrichedPrdSummary(enrichedPrdDocument);
+    const context = buildEngineeringAgentContext(
+      prd,
+      retrieved,
+      `${enrichedPrdSummary}\n\n${codebaseIntelligence.snapshotText}`
+    );
     const input = {
       context,
+      enrichedPrdDocument,
+      codebaseIntelligence,
       prd,
       instruction: "Produce an implementation plan mapped to every acceptance criterion.",
     };
@@ -230,6 +303,100 @@ export class PipelineOrchestrator {
     });
     await stateManager.advance(pipelineId, "IMPLEMENTATION_VALIDATION");
     return output;
+  }
+
+  private buildEnrichedPrdSummary(enrichedPrdDocument: Record<string, unknown>): string {
+    const synthesis = (enrichedPrdDocument.synthesisSummary ?? {}) as Record<string, unknown>;
+    const historicalCoverage = Number(synthesis.historicalCoverage ?? 0);
+    const reusedPatterns = Array.isArray(synthesis.reusedPatterns)
+      ? synthesis.reusedPatterns
+      : [];
+    const knownFailures = Array.isArray(synthesis.knownFailures)
+      ? synthesis.knownFailures
+      : [];
+    const impliedRequirements = Array.isArray(synthesis.impliedRequirements)
+      ? synthesis.impliedRequirements
+      : [];
+    const blockingGaps = Number(synthesis.blockingGaps ?? 0);
+
+    const lines = [
+      "Enriched PRD Intelligence:",
+      `- Historical coverage: ${historicalCoverage}`,
+      `- Reuse patterns: ${reusedPatterns.length}`,
+      `- Known failures to avoid: ${knownFailures.length}`,
+      `- Implied requirements: ${impliedRequirements.length}`,
+      `- Blocking gaps: ${blockingGaps}`,
+    ];
+
+    return lines.join("\n");
+  }
+
+  private async getCodebaseIntelligenceSnapshot(prd: PrdOutput): Promise<{
+    branch: string;
+    semanticMatches: unknown[];
+    featureFiles: unknown[];
+    recentChanges: unknown[];
+    snapshotText: string;
+  }> {
+    const branch = process.env.GITHUB_DEFAULT_BRANCH ?? "main";
+
+    try {
+      const [semanticMatches, featureFiles, recentChanges] = await Promise.all([
+        codebaseQueryService.searchCodebaseSemantically({
+          query: `${prd.title}\n${prd.problemStatement}\n${prd.acceptanceCriteria.join("\n")}`,
+          branchName: branch,
+          topK: 8,
+          similarityThreshold: 0.68,
+        }),
+        codebaseQueryService.getFilesTouchingFeature(prd.title, branch),
+        codebaseQueryService.getRecentChanges(branch, 10),
+      ]);
+
+      const semanticLines = semanticMatches
+        .slice(0, 8)
+        .map((match: any) => {
+          const similarity = Number(match.similarity ?? 0).toFixed(3);
+          return `- ${match.file_path ?? "unknown"} (similarity ${similarity})`;
+        });
+
+      const featureLines = featureFiles
+        .slice(0, 10)
+        .map((file: any) => `- ${file.filePath} :: ${file.summary ?? "no summary"}`);
+
+      const changeLines = recentChanges
+        .slice(0, 8)
+        .map(
+          (change: any) =>
+            `- ${change.sha?.slice(0, 8) ?? "unknown"} ${change.message ?? ""} (${change.author ?? "unknown"})`
+        );
+
+      const snapshotText = [
+        `Branch: ${branch}`,
+        "Top semantic matches:",
+        ...(semanticLines.length ? semanticLines : ["- none"]),
+        "Likely feature files:",
+        ...(featureLines.length ? featureLines : ["- none"]),
+        "Recent branch changes:",
+        ...(changeLines.length ? changeLines : ["- none"]),
+      ].join("\n");
+
+      return {
+        branch,
+        semanticMatches,
+        featureFiles,
+        recentChanges,
+        snapshotText,
+      };
+    } catch (err) {
+      logger.warn({ err, branch }, "codebase intelligence lookup failed for engineering stage");
+      return {
+        branch,
+        semanticMatches: [],
+        featureFiles: [],
+        recentChanges: [],
+        snapshotText: "Unavailable (lookup failed or index not ready).",
+      };
+    }
   }
 
   private async validateImplementationStage(
@@ -258,30 +425,41 @@ export class PipelineOrchestrator {
     jiraKey: string,
     prd: PrdOutput,
     implementation: ImplementationOutput
-  ): Promise<AgentOutput<QaOutput>> {
+  ) {
     const retrieved = await retriever.retrieveForQAAgent(prd, jiraKey);
-    const context = buildQaAgentContext(prd, implementation, retrieved);
     const input = {
-      context,
       prd,
       implementation,
-      instruction: "Generate test cases mapped directly to each acceptance criterion.",
+      retrievedContext: retrieved,
+      instruction:
+        "Four-phase QA: understand code, write tests, run tests, report findings.",
     };
     const stageLog = await pipelineRepo.startStage({
       pipelineId,
       stage: "QA_AGENT",
       inputJson: input as unknown as Prisma.InputJsonValue,
     });
-    const output = await this.qaAgent.run(pipelineId, JSON.stringify(input, null, 2));
+    const result = await runQaAgentic({
+      pipelineId,
+      jiraKey,
+      prd,
+      implementation,
+      retrievedContext: retrieved,
+    });
+    const output = result.agentOutput;
     await pipelineRepo.completeStage({
       stageLogId: stageLog.id,
-      output: output.parsed as unknown as Prisma.InputJsonValue,
+      output: {
+        qa: output.parsed,
+        executionReport: result.executionReport,
+        toolCallLog: result.toolCallLog,
+      } as unknown as Prisma.InputJsonValue,
       confidenceScore: output.parsed.confidenceScore,
       tokenCount: output.metadata.inputTokens + output.metadata.outputTokens,
       costUsd: output.metadata.costUsd,
     });
     await stateManager.advance(pipelineId, "QA_VALIDATION");
-    return output;
+    return result;
   }
 
   private async validateQaStage(

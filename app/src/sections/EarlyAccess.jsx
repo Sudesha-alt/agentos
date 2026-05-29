@@ -32,7 +32,7 @@ export default function EarlyAccess() {
   return (
     <section
       id="access"
-      className="relative flex min-h-[100svh] items-center overflow-hidden border-t border-hairline bg-canvas py-24"
+      className="relative flex items-center overflow-hidden border-t border-hairline bg-canvas py-24 sm:py-32"
     >
       <div className="grid-bg absolute inset-0 opacity-50 pointer-events-none radial-mask-center" />
       <div className="absolute left-1/2 top-1/2 size-[40rem] -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo/8 blur-[110px] pointer-events-none" />

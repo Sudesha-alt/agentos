@@ -11,6 +11,10 @@ export interface JiraComment {
   body: unknown;
 }
 
+export interface JiraIssueSearchResult<TIssue = unknown> {
+  issues: TIssue[];
+}
+
 export class JiraClient {
   private readonly baseUrl: string;
   private readonly authHeader: string;
@@ -50,11 +54,93 @@ export class JiraClient {
     return this.request(`/rest/api/3/issue/${encodeURIComponent(jiraKey)}`);
   }
 
+  getIssueWithFields<T = unknown>(jiraKey: string, fields: string[]): Promise<T> {
+    const params = new URLSearchParams();
+    if (fields.length > 0) {
+      params.set("fields", fields.join(","));
+    }
+    const suffix = params.toString() ? `?${params}` : "";
+    return this.request(
+      `/rest/api/3/issue/${encodeURIComponent(jiraKey)}${suffix}`
+    );
+  }
+
+  searchIssues<TIssue = unknown>(
+    jql: string,
+    options: { fields?: string[]; maxResults?: number } = {}
+  ): Promise<JiraIssueSearchResult<TIssue>> {
+    const params = new URLSearchParams({
+      jql,
+      maxResults: String(options.maxResults ?? 10),
+    });
+    if (options.fields?.length) {
+      params.set("fields", options.fields.join(","));
+    }
+    return this.request(`/rest/api/3/search?${params.toString()}`);
+  }
+
   addComment(jiraKey: string, comment: JiraComment): Promise<unknown> {
     return this.request(
       `/rest/api/3/issue/${encodeURIComponent(jiraKey)}/comment`,
       { method: "POST", body: JSON.stringify(comment) }
     );
+  }
+
+  addPlainTextComment(jiraKey: string, text: string): Promise<unknown> {
+    const paragraphs = text
+      .split(/\n{2,}/)
+      .map((block) => block.trim())
+      .filter(Boolean);
+
+    const content = paragraphs.flatMap((paragraph, index) => {
+      const nodes = paragraph.split("\n").map((line) => ({
+        type: "text" as const,
+        text: line,
+      }));
+      const block =
+        nodes.length === 1
+          ? { type: "paragraph" as const, content: nodes }
+          : {
+              type: "paragraph" as const,
+              content: [{ type: "text" as const, text: paragraph }],
+            };
+      return index < paragraphs.length - 1
+        ? [block, { type: "paragraph" as const, content: [] }]
+        : [block];
+    });
+
+    return this.addComment(jiraKey, {
+      body: {
+        type: "doc",
+        version: 1,
+        content: content.length ? content : [{ type: "paragraph", content: [{ type: "text", text }] }],
+      },
+    });
+  }
+
+  async addLabels(jiraKey: string, labelsToAdd: string[]): Promise<void> {
+    if (!labelsToAdd.length) return;
+    const issue = (await this.getIssue(jiraKey)) as {
+      fields?: { labels?: string[] };
+    };
+    const existing = issue.fields?.labels ?? [];
+    const merged = [...new Set([...existing, ...labelsToAdd])];
+    await this.request(`/rest/api/3/issue/${encodeURIComponent(jiraKey)}`, {
+      method: "PUT",
+      body: JSON.stringify({ fields: { labels: merged } }),
+    });
+  }
+
+  async updateStoryPoints(jiraKey: string, points: number): Promise<void> {
+    const fieldId = process.env.JIRA_STORY_POINTS_FIELD;
+    if (!fieldId) {
+      logger.debug({ jiraKey, points }, "JIRA_STORY_POINTS_FIELD not set — skip story points");
+      return;
+    }
+    await this.request(`/rest/api/3/issue/${encodeURIComponent(jiraKey)}`, {
+      method: "PUT",
+      body: JSON.stringify({ fields: { [fieldId]: points } }),
+    });
   }
 
   addAttachmentNote(

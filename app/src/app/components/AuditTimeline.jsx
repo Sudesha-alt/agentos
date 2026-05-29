@@ -8,6 +8,27 @@ const TONE = {
   PIPELINE_FAILED: "text-danger",
   AWAITING_HUMAN: "text-warning",
   HUMAN_OVERRIDE: "text-warning",
+  TICKET_EMBEDDED: "text-indigo",
+  CONTEXT_RETRIEVED: "text-indigo",
+  TICKET_ANALYSED: "text-indigo",
+  INTELLIGENCE_EXTRACTED: "text-indigo",
+  GAPS_ANALYSED: "text-warning",
+  COMPLEXITY_SCORED: "text-indigo",
+  PRD_GENERATED: "text-success",
+  DISCOVERY_COMPLETE: "text-success",
+  SCORES_COMPUTED: "text-indigo",
+};
+
+const EVENT_LABELS = {
+  TICKET_EMBEDDED: "Ticket embedded",
+  CONTEXT_RETRIEVED: "Historical context retrieved",
+  TICKET_ANALYSED: "Ticket analysed",
+  INTELLIGENCE_EXTRACTED: "Historical intelligence extracted",
+  GAPS_ANALYSED: "Gaps analysed",
+  COMPLEXITY_SCORED: "Complexity scored",
+  PRD_GENERATED: "PRD generated",
+  DISCOVERY_COMPLETE: "Discovery complete",
+  SCORES_COMPUTED: "Formula scores computed",
 };
 
 export default function AuditTimeline({ items }) {
@@ -36,7 +57,7 @@ export default function AuditTimeline({ items }) {
           </span>
           <div className="flex items-center justify-between gap-3">
             <span className={`font-mono text-[12px] ${TONE[entry.event] ?? "text-ink"}`}>
-              {entry.event}
+              {EVENT_LABELS[entry.event] ?? entry.event}
             </span>
             <span className="font-mono text-[10.5px] text-ink-mute">
               {formatRelativeTime(entry.timestamp)}

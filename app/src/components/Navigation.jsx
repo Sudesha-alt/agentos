@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import Logo from "./Logo";
 import { EASE } from "../lib/motion";
+import { useMarketingScroll } from "../marketing/hooks/useMarketingScroll";
 
 const LINKS = [
   { label: "Pipeline", href: "#pipeline" },
@@ -11,16 +12,36 @@ const LINKS = [
   { label: "Integrations", href: "#integrations" },
 ];
 
-export default function Navigation() {
-  const [scrolled, setScrolled] = useState(false);
+function SignInLink({ className, onClick, marketingScroll }) {
+  if (marketingScroll) {
+    return (
+      <a href="/login" className={className} onClick={onClick}>
+        Sign in
+      </a>
+    );
+  }
+
+  return (
+    <Link to="/login" className={className} onClick={onClick}>
+      Sign in
+    </Link>
+  );
+}
+
+export default function Navigation({ marketingScroll = false }) {
+  const marketingOffset = useMarketingScroll();
+  const [windowScrolled, setWindowScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const scrolled = marketingScroll ? marketingOffset > 0.015 : windowScrolled;
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 12);
+    if (marketingScroll) return undefined;
+
+    const onScroll = () => setWindowScrolled(window.scrollY > 12);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, []);
+  }, [marketingScroll]);
 
   useEffect(() => {
     document.documentElement.style.overflow = menuOpen ? "hidden" : "";
@@ -58,12 +79,10 @@ export default function Navigation() {
           </nav>
 
           <div className="hidden md:flex items-center gap-3">
-            <Link
-              to="/login"
+            <SignInLink
+              marketingScroll={marketingScroll}
               className="inline-flex items-center gap-2 rounded-full border border-hairline bg-transparent px-4 py-2 text-[12.5px] text-ink-dim transition-colors hover:border-hairline-strong hover:text-ink"
-            >
-              Sign in
-            </Link>
+            />
             <a
               href="#access"
               className="btn-trace inline-flex items-center gap-2 rounded-full border border-hairline-strong bg-surface px-4 py-2 text-[12.5px] text-ink transition-colors hover:border-indigo/50"
@@ -130,13 +149,11 @@ export default function Navigation() {
                 ))}
               </ul>
               <div className="mt-auto pb-10">
-                <Link
-                  to="/login"
+                <SignInLink
+                  marketingScroll={marketingScroll}
                   onClick={() => setMenuOpen(false)}
                   className="mb-3 inline-flex w-full items-center justify-center gap-2 rounded-full border border-hairline bg-transparent px-4 py-3 text-sm text-ink-dim transition-colors hover:text-ink"
-                >
-                  Sign in
-                </Link>
+                />
                 <a
                   href="#access"
                   onClick={() => setMenuOpen(false)}

@@ -58,6 +58,17 @@ export async function connectJiraIntegration(body) {
   });
 }
 
+export async function registerJiraWebhook(body = {}) {
+  return fetchJson(intake("/integration/webhook/register"), {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export async function getJiraWebhookStatus() {
+  return fetchJson(intake("/integration/webhook/status"));
+}
+
 export async function getBoardColumns() {
   return fetchJson(intake("/boards/columns"));
 }

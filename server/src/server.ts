@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/node";
 import { createApp } from "./app";
 import { loadJiraCredentialsFromStore } from "./jira-intake/jiraCredentialsStore";
 import { initIntakeDb } from "./jira-intake/sqliteStore";
+import { initCodebaseVizWebSocket } from "./codebaseIntelligence/codebaseVizHub";
 import { logger } from "./utils/logger";
 
 initIntakeDb();
@@ -18,6 +19,8 @@ const app = createApp();
 const server = app.listen(port, () => {
   logger.info({ port }, "agentos-server listening");
 });
+
+initCodebaseVizWebSocket(server);
 
 function shutdown(signal: string): void {
   logger.info({ signal }, "shutting down");

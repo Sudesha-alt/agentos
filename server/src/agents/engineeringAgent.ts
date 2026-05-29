@@ -46,6 +46,8 @@ Rules:
 - Every acceptance criterion in the PRD must appear in criteriaMapping.
   If you cannot map a criterion, flag it as a blocker.
 - Do not assume any technology stack. Work with what is provided.
+- Treat codebaseIntelligence as source-of-truth repository context. Prefer it
+  over guesses, and explicitly call out uncertainty when the snapshot is empty.
 - Estimate conservatively. Add 20% buffer to any component estimate.
 - Return ONLY valid JSON.
   `.trim();

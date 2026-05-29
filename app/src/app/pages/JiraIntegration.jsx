@@ -1,13 +1,15 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   advanceIssue,
   connectJiraIntegration,
   getBoardColumns,
-  getIntegrationSetup,
+  getJiraWebhookStatus,
   listAiWorkerIssues,
+  registerJiraWebhook,
   saveIntegrationMapping,
   syncWorkingColumn,
+  useIntegrationSetup,
 } from "../../entities/jira-intake";
 import { settingsAdapter } from "../../entities/settings";
 import { useResource } from "../../shared/lib/useResource";
@@ -15,6 +17,7 @@ import EmptyState from "../components/EmptyState";
 import LabelPill from "../components/LabelPill";
 import Spinner from "../components/Spinner";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
+import JiraSetupGuideWidget from "../../widgets/jira-setup-guide/JiraSetupGuideWidget";
 
 export default function JiraIntegration() {
   const {
@@ -22,8 +25,29 @@ export default function JiraIntegration() {
     error: setupError,
     loading: setupLoading,
     refetch: refetchSetup,
-  } = useResource(() => getIntegrationSetup(), []);
+  } = useIntegrationSetup();
 
+  if (setupLoading && !setup) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <Spinner />
+      </div>
+    );
+  }
+
+  if (setupError) {
+    return (
+      <EmptyState
+        title="Cannot reach API"
+        body="Set VITE_API_URL on Vercel to your Render URL and redeploy."
+      />
+    );
+  }
+
+  return <JiraIntegrationContent setup={setup} refetchSetup={refetchSetup} />;
+}
+
+function JiraIntegrationContent({ setup, refetchSetup }) {
   const {
     data: issuesData,
     error: issuesError,
@@ -34,14 +58,20 @@ export default function JiraIntegration() {
     enabled: Boolean(setup?.connected),
   });
 
-  const [baseUrl, setBaseUrl] = useState("");
-  const [email, setEmail] = useState("");
+  const [baseUrl, setBaseUrl] = useState(() => setup?.jira?.baseUrl || "");
+  const [email, setEmail] = useState(() => setup?.jira?.email || "");
   const [apiToken, setApiToken] = useState("");
-  const [boardId, setBoardId] = useState("");
-  const [webhookSecret, setWebhookSecret] = useState("");
+  const [boardId, setBoardId] = useState(() => setup?.jira?.boardId || "");
+  const [webhookSecret, setWebhookSecret] = useState(
+    () => setup?.jira?.webhookSecret || ""
+  );
   const [columns, setColumns] = useState([]);
-  const [workingColumn, setWorkingColumn] = useState("");
-  const [nextColumn, setNextColumn] = useState("");
+  const [workingColumn, setWorkingColumn] = useState(
+    () => setup?.mapping?.workingColumnName || ""
+  );
+  const [nextColumn, setNextColumn] = useState(
+    () => setup?.mapping?.nextColumnName || ""
+  );
   const [connectPending, setConnectPending] = useState(false);
   const [connectError, setConnectError] = useState("");
   const [mappingPending, setMappingPending] = useState(false);
@@ -50,36 +80,33 @@ export default function JiraIntegration() {
   const [advancePendingKey, setAdvancePendingKey] = useState(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [copiedSecret, setCopiedSecret] = useState(false);
+  const [webhookRegistered, setWebhookRegistered] = useState(false);
+  const [webhookRegisterPending, setWebhookRegisterPending] = useState(false);
 
   const connected = Boolean(setup?.connected);
   const items = issuesData?.items ?? [];
-
-  const applySetupToForm = useCallback((data) => {
-    if (!data?.jira) return;
-    setBaseUrl(data.jira.baseUrl || "");
-    setEmail(data.jira.email || "");
-    setBoardId(data.jira.boardId || "");
-    setWebhookSecret(data.jira.webhookSecret || "");
-    if (data.mapping?.workingColumnName) {
-      setWorkingColumn(data.mapping.workingColumnName);
-    }
-    if (data.mapping?.nextColumnName) {
-      setNextColumn(data.mapping.nextColumnName);
-    }
-  }, []);
-
-  useEffect(() => {
-    applySetupToForm(setup);
-  }, [setup, applySetupToForm]);
+  const jiraAdminWebhooksUrl = baseUrl
+    ? `${baseUrl.replace(/\/$/, "")}/plugins/servlet/webhooks`
+    : null;
+  const canConnect =
+    baseUrl &&
+    boardId &&
+    (apiToken.trim() || setup?.jira?.hasApiToken);
 
   useEffect(() => {
     if (!connected) return;
     let cancelled = false;
     (async () => {
       try {
-        const { columns: cols } = await getBoardColumns();
+        const [{ columns: cols }, webhookStatus] = await Promise.all([
+          getBoardColumns(),
+          getJiraWebhookStatus().catch(() => ({ registered: false })),
+        ]);
         if (!cancelled && cols?.length) {
           setColumns(cols);
+        }
+        if (!cancelled) {
+          setWebhookRegistered(Boolean(webhookStatus.registered));
         }
       } catch {
         /* columns load optional until mapping step */
@@ -136,11 +163,42 @@ export default function JiraIntegration() {
           ? `Connected to Jira board “${result.board.name}”.`
           : "Connected to Jira."
       );
+      if (result.webhookRegistration?.registered) {
+        setWebhookRegistered(true);
+      } else if (result.webhookRegistration?.error) {
+        setWebhookRegistered(false);
+        setStatusMessage(result.webhookRegistration.error);
+      }
+
       await refetchSetup();
+      try {
+        const status = await getJiraWebhookStatus();
+        setWebhookRegistered(Boolean(status.registered));
+      } catch {
+        /* optional */
+      }
     } catch (err) {
       setConnectError(err instanceof Error ? err.message : "Connection failed");
     } finally {
       setConnectPending(false);
+    }
+  }
+
+  async function handleRegisterWebhook() {
+    setWebhookRegisterPending(true);
+    setStatusMessage("");
+    try {
+      const result = await registerJiraWebhook();
+      setWebhookRegistered(Boolean(result.registered));
+      setStatusMessage(
+        result.created
+          ? "Webhook created in Jira automatically."
+          : "Webhook already registered in Jira."
+      );
+    } catch (err) {
+      setStatusMessage(err instanceof Error ? err.message : "Webhook registration failed");
+    } finally {
+      setWebhookRegisterPending(false);
     }
   }
 
@@ -198,23 +256,6 @@ export default function JiraIntegration() {
     setTimeout(() => setter(false), 2000);
   }
 
-  if (setupLoading && !setup) {
-    return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <Spinner />
-      </div>
-    );
-  }
-
-  if (setupError) {
-    return (
-      <EmptyState
-        title="Cannot reach API"
-        body="Set VITE_API_URL on Vercel to your Render URL and redeploy."
-      />
-    );
-  }
-
   return (
     <div className="mx-auto w-full max-w-[82rem] space-y-6">
       <PageIntro
@@ -223,7 +264,7 @@ export default function JiraIntegration() {
         body={
           connected
             ? "Webhook URL and secrets are ready. Map columns, sync your working queue, and advance tickets in one click."
-            : "Enter your Atlassian details once. We verify the board, generate your webhook URL, and wire the integration."
+            : "Paste your site URL and API token — we fetch your email, verify the board, and try to register the webhook in Jira for you."
         }
         right={
           connected ? (
@@ -239,11 +280,18 @@ export default function JiraIntegration() {
         }
       />
 
+      <JiraSetupGuideWidget
+        connected={connected}
+        webhookUrl={setup?.webhookUrl}
+        baseUrl={baseUrl}
+        defaultOpen={!connected}
+      />
+
       <Panel>
         <PanelHeader
           kicker={connected ? "Connected" : "Step 1"}
           title="Jira account"
-          body="Values are loaded from the server when already configured (Render env or a previous connect)."
+          body="Use the setup guide above for where to find each value. Saved credentials load from the server on refresh."
         />
         <div className="space-y-4 p-5 sm:p-6">
           <div className="grid gap-4 sm:grid-cols-2">
@@ -252,12 +300,13 @@ export default function JiraIntegration() {
               value={baseUrl}
               onChange={setBaseUrl}
               placeholder="https://your-domain.atlassian.net"
+              hint="Jira site URL — see guide §1"
             />
             <Field
-              label="Service email"
+              label="Service email (optional)"
               value={email}
               onChange={setEmail}
-              placeholder="you@company.com"
+              placeholder="Filled from Jira when you connect with API token"
             />
             <Field
               label="API token"
@@ -269,13 +318,25 @@ export default function JiraIntegration() {
                   : "Atlassian API token"
               }
               type="password"
+              hint="Create at id.atlassian.com — see guide §2"
             />
             <Field
               label="Board ID"
               value={boardId}
               onChange={setBoardId}
               placeholder="e.g. 123"
+              hint="Board search or Jira URL — see guide §4"
             />
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <ExternalLink
+              href="https://id.atlassian.com/manage-profile/security/api-tokens"
+              label="Create API token at Atlassian"
+            />
+            {jiraAdminWebhooksUrl ? (
+              <ExternalLink href={jiraAdminWebhooksUrl} label="Open Jira webhooks (manual)" />
+            ) : null}
           </div>
 
           {connectError ? (
@@ -285,7 +346,7 @@ export default function JiraIntegration() {
           {!connected ? (
             <button
               type="button"
-              disabled={connectPending || !baseUrl || !email || !boardId}
+              disabled={connectPending || !canConnect}
               onClick={() => void handleConnect()}
               className="w-full rounded-full bg-indigo py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-white disabled:opacity-50 sm:w-auto sm:px-8"
             >
@@ -320,10 +381,29 @@ export default function JiraIntegration() {
           <Panel>
             <PanelHeader
               kicker="Step 2"
-              title="Webhook (auto-configured)"
-              body="Copy into Jira → System → Webhooks. Issue updated keeps the working column in sync."
+              title="Webhook"
+              body="We generate the URL and secret. With Jira admin access, Connect can register the webhook via API — otherwise use the manual link."
+              right={
+                webhookRegistered ? (
+                  <LabelPill label="Registered in Jira" tone="success" />
+                ) : (
+                  <LabelPill label="Not in Jira yet" tone="warning" />
+                )
+              }
             />
             <div className="space-y-4 p-5 sm:p-6">
+              {!webhookRegistered ? (
+                <button
+                  type="button"
+                  disabled={webhookRegisterPending}
+                  onClick={() => void handleRegisterWebhook()}
+                  className="rounded-full bg-indigo px-5 py-2.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-white disabled:opacity-50"
+                >
+                  {webhookRegisterPending
+                    ? "Registering in Jira…"
+                    : "Register webhook in Jira"}
+                </button>
+              ) : null}
               <CopyRow
                 label="Webhook URL"
                 value={setup?.webhookUrl}
@@ -439,7 +519,7 @@ export default function JiraIntegration() {
   );
 }
 
-function Field({ label, value, onChange, placeholder, type = "text" }) {
+function Field({ label, value, onChange, placeholder, type = "text", hint }) {
   return (
     <label className="block">
       <span className="editorial-kicker text-ink-mute">{label}</span>
@@ -450,6 +530,11 @@ function Field({ label, value, onChange, placeholder, type = "text" }) {
         placeholder={placeholder}
         className="mt-2 w-full rounded-[0.85rem] border border-hairline bg-canvas/50 px-4 py-2.5 text-[14px] text-ink outline-none focus:border-indigo/50"
       />
+      {hint ? (
+        <p className="mt-1.5 font-mono text-[9px] uppercase tracking-[0.12em] text-ink-mute">
+          {hint}
+        </p>
+      ) : null}
     </label>
   );
 }
@@ -471,6 +556,19 @@ function SelectField({ label, value, onChange, options }) {
         ))}
       </select>
     </label>
+  );
+}
+
+function ExternalLink({ href, label }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="font-mono text-[10.5px] uppercase tracking-[0.14em] text-indigo hover:underline"
+    >
+      {label} ↗
+    </a>
   );
 }
 

@@ -7,7 +7,7 @@ export default function Hero() {
   return (
     <section
       id="top"
-      className="relative isolate min-h-[100svh] w-full overflow-hidden"
+      className="relative isolate w-full overflow-hidden border-b border-hairline"
     >
       <div className="grid-bg absolute inset-0 opacity-100 [mask-image:radial-gradient(ellipse_at_center,black_30%,transparent_75%)] pointer-events-none" />
       <div
@@ -15,9 +15,7 @@ export default function Hero() {
         className="pointer-events-none absolute left-1/2 top-1/2 -z-10 size-[60vmin] -translate-x-1/2 -translate-y-1/2 rounded-full bg-indigo/10 blur-[100px]"
       />
 
-      <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-canvas to-transparent pointer-events-none" />
-
-      <div className="relative mx-auto flex min-h-[100svh] max-w-7xl flex-col items-center justify-center px-5 pt-24 sm:px-8">
+      <div className="relative mx-auto flex max-w-7xl flex-col items-center px-5 pb-16 pt-28 sm:px-8 sm:pb-20 sm:pt-32">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -97,7 +95,7 @@ export default function Hero() {
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.9, ease: EASE, delay: 0.55 }}
-          className="mt-14 w-full"
+          className="mt-12 w-full sm:mt-14"
         >
           <HeroPipeline />
         </motion.div>
@@ -113,8 +111,6 @@ export default function Hero() {
           <span className="hidden md:inline">v0.7.4 · build 1138</span>
         </motion.div>
       </div>
-
-      <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-canvas to-transparent pointer-events-none" />
     </section>
   );
 }

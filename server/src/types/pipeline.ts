@@ -38,3 +38,11 @@ export interface ValidationResult {
 export interface PipelineRunJob {
   ticketId: string;
 }
+
+export interface CodebaseIndexJob {
+  branchName: string;
+  changedFiles: string[];
+  deletedFiles: string[];
+  commitSha: string;
+  triggerType: "webhook" | "manual";
+}

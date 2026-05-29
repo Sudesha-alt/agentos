@@ -10,6 +10,7 @@ import { EASE } from "../../lib/motion";
 import StatusPill from "../components/StatusPill";
 import StagePanelWidget from "../../widgets/stage-panel/StagePanelWidget";
 import AuditFeedWidget from "../../widgets/audit-feed/AuditFeedWidget";
+import TicketActivityWidget from "../../widgets/ticket-activity/TicketActivityWidget";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
 
 export default function PipelineDetail() {
@@ -129,6 +130,12 @@ export default function PipelineDetail() {
           >
             <StagePanelWidget stage={selected} />
           </motion.div>
+
+          <TicketActivityWidget
+            stages={stages}
+            auditLogs={auditItems.length ? auditItems : item.auditLogs}
+            currentStage={item.currentStage}
+          />
 
           <AuditFeedWidget items={auditItems.length ? auditItems : item.auditLogs} />
         </div>

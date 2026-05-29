@@ -84,6 +84,110 @@ model AuditLog {
   @@index([pipelineId, timestamp])
 }
 
+model CodebaseVisualizationCache {
+  id          String   @id @default(cuid())
+  repoOwner   String
+  repoName    String
+  branchName  String
+  layoutJson  Json
+  computedAt  DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([repoOwner, repoName, branchName])
+  @@index([computedAt])
+}
+
+model CodebaseFile {
+  id            String   @id @default(cuid())
+  repoOwner     String
+  repoName      String
+  filePath      String
+  branchName    String
+  content       String   @db.Text
+  contentHash   String
+  size          Int
+  language      String?
+  summary       String?  @db.Text
+  exports       Json
+  imports       Json
+  patterns      Json
+  lastCommitSha String?
+  lastCommitMsg String?
+  lastCommitAt  DateTime?
+  lastAuthor    String?
+  indexedAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  isDeleted     Boolean  @default(false)
+
+  @@unique([repoOwner, repoName, filePath, branchName])
+  @@index([repoOwner, repoName, branchName])
+  @@index([language])
+  @@index([contentHash])
+}
+
+model BranchState {
+  id           String   @id @default(cuid())
+  repoOwner    String
+  repoName     String
+  branchName   String
+  sourceBranch String
+  jiraKey      String?
+  createdBy    String
+  headSha      String
+  behindBy     Int      @default(0)
+  aheadBy      Int      @default(0)
+  prNumber     Int?
+  prUrl        String?
+  prStatus     String?
+  filesChanged Json
+  lastPushAt   DateTime?
+  lastPushBy   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([repoOwner, repoName, branchName])
+  @@index([jiraKey])
+}
+
+model CommitHistory {
+  id            String   @id @default(cuid())
+  repoOwner     String
+  repoName      String
+  branchName    String
+  sha           String
+  message       String
+  author        String
+  authoredAt    DateTime
+  filesAdded    Json
+  filesModified Json
+  filesDeleted  Json
+  pushedBy      String
+  pipelineId    String?
+  jiraKey       String?
+  createdAt     DateTime @default(now())
+
+  @@unique([repoOwner, repoName, sha])
+  @@index([branchName])
+  @@index([jiraKey])
+}
+
+model CodebaseIndexRun {
+  id           String   @id @default(cuid())
+  repoOwner    String
+  repoName     String
+  branchName   String
+  runType      String
+  status       String
+  filesIndexed Int      @default(0)
+  filesUpdated Int      @default(0)
+  filesDeleted Int      @default(0)
+  triggerType  String
+  triggerSha   String?
+  startedAt    DateTime @default(now())
+  completedAt  DateTime?
+  error        String?
+}
+
 enum TicketStatus {
   RECEIVED
   PROCESSING

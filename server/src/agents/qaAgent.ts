@@ -1,6 +1,7 @@
 import type { QaOutput } from "../types/agents";
 import { BaseAgent } from "./baseAgent";
 
+/** @deprecated Use runQaAgentic from ../qaAgent for the four-phase QA workflow. */
 export class QAAgent extends BaseAgent<QaOutput> {
   name = "QA_AGENT";
 

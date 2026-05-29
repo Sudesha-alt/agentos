@@ -10,31 +10,50 @@ export const DATA_MODE =
     ? DATA_MODES.REST
     : DATA_MODES.MOCK;
 
+/** Flat list for breadcrumbs and mobile nav. */
 export const APP_NAV = [
-  { to: "/app", label: "Dashboard", breadcrumb: "Workspace", end: true },
-  { to: "/app/pipelines", label: "Pipelines", breadcrumb: "Pipelines" },
-  { to: "/app/jira", label: "Jira integration", breadcrumb: "Jira integration" },
-  { to: "/app/jira-search", label: "Board search", breadcrumb: "Board search" },
-  { to: "/app/settings", label: "Settings", breadcrumb: "Settings" },
+  { to: "/app", label: "Command Center", breadcrumb: "Command Center", end: true },
+  { to: "/app/pipelines", label: "Pipeline Explorer", breadcrumb: "Pipelines" },
+  { to: "/app/codebase", label: "Codebase", breadcrumb: "Codebase" },
+  { to: "/app/qa", label: "QA Center", breadcrumb: "QA Center" },
+  { to: "/app/costs", label: "Cost Intelligence", breadcrumb: "Costs" },
+  { to: "/app/audit", label: "Audit Trail", breadcrumb: "Audit" },
+  { to: "/app/settings", label: "Configuration", breadcrumb: "Configuration" },
+  { to: "/app/jira", label: "Jira integration", breadcrumb: "Jira" },
+  { to: "/app/jira-search", label: "Board search", breadcrumb: "Search" },
 ] as const;
 
-/** Sidebar groups — keeps Jira intake distinct from the agent pipeline. */
+/** Sidebar groups aligned to the UX blueprint personas. */
 export const APP_NAV_SECTIONS = [
   {
-    id: "workflow",
-    label: "Workflow",
+    id: "executive",
+    label: "Executive",
     items: [
-      { to: "/app", label: "Dashboard", breadcrumb: "Workspace", end: true },
-      { to: "/app/pipelines", label: "Pipelines", breadcrumb: "Pipelines" },
-      { to: "/app/settings", label: "Settings", breadcrumb: "Settings" },
+      { to: "/app", label: "Command Center", breadcrumb: "Command Center", end: true },
+      { to: "/app/costs", label: "Cost Intelligence", breadcrumb: "Costs" },
     ],
   },
   {
-    id: "jira",
-    label: "Jira intake",
+    id: "operations",
+    label: "Operations",
     items: [
-      { to: "/app/jira", label: "Jira integration", breadcrumb: "Jira integration" },
-      { to: "/app/jira-search", label: "Board search", breadcrumb: "Board search" },
+      { to: "/app/pipelines", label: "Pipeline Explorer", breadcrumb: "Pipelines" },
+      { to: "/app/codebase", label: "Codebase Intelligence", breadcrumb: "Codebase" },
+      { to: "/app/qa", label: "QA Center", breadcrumb: "QA" },
+    ],
+  },
+  {
+    id: "compliance",
+    label: "Compliance",
+    items: [{ to: "/app/audit", label: "Audit Trail", breadcrumb: "Audit" }],
+  },
+  {
+    id: "admin",
+    label: "Admin",
+    items: [
+      { to: "/app/settings", label: "Configuration", breadcrumb: "Configuration" },
+      { to: "/app/jira", label: "Jira integration", breadcrumb: "Jira" },
+      { to: "/app/jira-search", label: "Board search", breadcrumb: "Search" },
     ],
   },
 ] as const;
@@ -52,13 +71,13 @@ export const STAGE_ORDER: PipelineStage[] = [
 
 export const STAGE_LABELS: Record<PipelineStage, string> = {
   INGESTION: "Ingestion",
-  PRODUCT_AGENT: "Product Agent",
+  PRODUCT_AGENT: "Discovery",
   PRD_VALIDATION: "PRD Gate",
-  ENGINEERING_AGENT: "Engineering Agent",
-  IMPLEMENTATION_VALIDATION: "Implementation Gate",
+  ENGINEERING_AGENT: "Engineering",
+  IMPLEMENTATION_VALIDATION: "Impl. Gate",
   QA_AGENT: "QA Agent",
   QA_VALIDATION: "QA Gate",
-  OUTPUT: "Jira writeback",
+  OUTPUT: "Writeback",
 };
 
 export const STATUS_LABELS: Record<PipelineStatus | StageStatus, string> = {

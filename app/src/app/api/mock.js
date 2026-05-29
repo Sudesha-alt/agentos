@@ -86,6 +86,270 @@ const MOCK_PIPELINES = [
   },
 ];
 
+const MOCK_TICKET_ANALYSIS = {
+  coreIntent:
+    "Enable enterprise admins to export immutable pipeline audit trails for compliance attestation.",
+  atomicRequirements: [
+    {
+      id: "REQ-001",
+      description: "Admin can request export for up to 90 days of workspace activity",
+      type: "functional",
+      source: "explicit",
+      clarity: "clear",
+    },
+    {
+      id: "REQ-002",
+      description: "Export bundle includes SHA-256 integrity verification",
+      type: "non-functional",
+      source: "implicit",
+      clarity: "clear",
+    },
+    {
+      id: "REQ-003",
+      description: "Non-admin roles receive 403 on export API",
+      type: "functional",
+      source: "implicit",
+      clarity: "ambiguous",
+    },
+  ],
+  ambiguities: [
+    {
+      description: "PII redaction policy not specified",
+      impact: "high",
+      question: "Should exports redact user emails by default?",
+    },
+  ],
+  userPersonas: [
+    {
+      persona: "Workspace admin",
+      need: "SOC2-ready audit export",
+      currentPain: "Must screen-scrape the dashboard",
+    },
+  ],
+  systemsAffected: ["API", "Object storage", "Notification service", "Postgres"],
+  roughComplexity: "medium",
+  workType: "new-feature",
+  understandingConfidence: 0.78,
+};
+
+const MOCK_HISTORICAL = {
+  successPatterns: [
+    {
+      pattern: "Async job + signed download URL for large exports",
+      source: "PLT-1198",
+      applicability: "direct",
+    },
+  ],
+  knownFailures: [
+    {
+      failure: "Multipart upload retries caused hash drift",
+      source: "PLT-1204",
+      preventionSuggestion: "Compute hash incrementally during stream",
+    },
+  ],
+  impliedRequirements: [
+    {
+      requirement: "Rate limit export requests per workspace",
+      source: "PLT-1198",
+      confidence: 0.82,
+    },
+  ],
+  technicalPatterns: [
+    {
+      pattern: "BullMQ worker streams Postgres in chunks",
+      context: "Prior export features",
+      relevance: "high",
+    },
+  ],
+  historicalQAIssues: [
+    { issue: "Missing 403 test for non-admin", frequency: "often" },
+  ],
+  reuseOpportunities: [
+    {
+      component: "signed-url-service",
+      description: "Existing S3 presign helper",
+      source: "PLT-1198",
+    },
+  ],
+  historicalCoverage: "moderate",
+  intelligenceConfidence: 0.74,
+};
+
+const MOCK_GAPS = {
+  knownKnowns: [
+    { item: "Export scoped to one workspace", confidence: 0.95, source: "ticket" },
+  ],
+  knownUnknowns: [
+    {
+      gap: "Default PII redaction behaviour",
+      category: "scope-boundary",
+      resolutionRequired: true,
+      suggestedResolution: "PM decision on redaction toggle",
+      defaultAssumption: "Redact email fields by default",
+    },
+  ],
+  endpointGaps: [
+    {
+      description: "Create async export job",
+      existingEndpoint: null,
+      newEndpointNeeded: "POST /api/v1/workspaces/:id/exports",
+      httpMethod: "POST",
+      estimatedComplexity: "moderate",
+    },
+  ],
+  dataGaps: [
+    {
+      description: "Track export job lifecycle",
+      newFieldsNeeded: ["status: enum", "hash: string"],
+      newTablesNeeded: ["export_jobs"],
+      existingTablesAffected: ["pipelines", "audit_logs"],
+    },
+  ],
+  accessGaps: [
+    {
+      description: "Only workspace_admin may enqueue exports",
+      rolesInvolved: ["workspace_admin", "member"],
+      permissionModel: "RBAC check on POST /exports",
+    },
+  ],
+  nfrGaps: [
+    {
+      type: "performance",
+      gap: "No p95 SLA for export completion",
+      defaultStandard: "p95 < 8 minutes for 90-day range",
+    },
+  ],
+  readinessForPRD: "ready-with-assumptions",
+  blockingGaps: 1,
+  totalGaps: 6,
+};
+
+const MOCK_COMPLEXITY = {
+  overallScore: 6,
+  dimensions: {
+    technicalComplexity: 6,
+    integrationComplexity: 7,
+    dataComplexity: 5,
+    uxComplexity: 4,
+    testingComplexity: 6,
+  },
+  effortEstimate: { optimistic: 6, realistic: 9, pessimistic: 14, unit: "days" },
+  complexityDrivers: [
+    {
+      driver: "Streaming large datasets to object storage",
+      impact: "high",
+      mitigation: "Chunked reads with backpressure",
+    },
+  ],
+  estimateRisks: [
+    { risk: "PII policy change mid-sprint", probability: "medium", impactDays: 3 },
+  ],
+  shouldBreakDown: false,
+  breakdownSuggestion: null,
+  priorityAssessment: {
+    businessValue: 8,
+    technicalDebt: 6,
+    userImpact: 7,
+    recommendedPriority: "high",
+    priorityReasoning: "Enterprise compliance blocker",
+  },
+};
+
+const MOCK_GENERATED_PRD = {
+  title: "Workspace-level audit log export",
+  version: "v1.0",
+  status: "Draft",
+  jiraKey: "PLT-1271",
+  createdAt: minutes(13.7),
+  priority: "High",
+  effortEstimate: "9 days (realistic)",
+  problemStatement:
+    "Enterprise admins cannot extract immutable audit trails of pipeline activity for SOC2 attestation without screen-scraping the dashboard.",
+  proposedSolution:
+    "Add an asynchronous export job that produces a signed CSV/JSON bundle scoped to one workspace, with SHA-256 integrity hash and a 7-day download window.",
+  successDefinition:
+    "Admin receives tamper-evident export within SLA; download link expires after 7 days.",
+  userPersonas: MOCK_TICKET_ANALYSIS.userPersonas,
+  userStories: [
+    {
+      id: "US-001",
+      story:
+        "As a workspace admin I want to export 90 days of pipeline activity so that I can attach it to my SOC2 audit",
+      acceptanceCriteria: [
+        "Given an admin with workspace_admin role When they POST an export for a valid date range Then a job is enqueued and confirmation is sent within 60 seconds",
+        "Given a completed export When the admin downloads the bundle Then the SHA-256 header matches the file body",
+        "Given a non-admin When they call POST /exports Then the API returns 403 WS_EXPORT_FORBIDDEN",
+      ],
+      priority: "must-have",
+    },
+  ],
+  technicalRequirements: {
+    endpoints: [
+      {
+        method: "POST",
+        path: "/api/v1/workspaces/:workspaceId/exports",
+        description: "Enqueue export job",
+        requestBody: "{ from: ISO, to: ISO }",
+        responseShape: "{ jobId: string, status: 'queued' }",
+        authRequired: true,
+        notes: "workspace_admin only",
+      },
+    ],
+    dataModel: [
+      {
+        table: "export_jobs",
+        changes: "create",
+        fields: ["id: uuid", "workspace_id: uuid", "status: enum", "content_hash: string"],
+      },
+    ],
+    systemsAffected: MOCK_TICKET_ANALYSIS.systemsAffected,
+    technicalAssumptions: ["S3 bucket per workspace", "Emails redacted by default"],
+  },
+  nonFunctionalRequirements: [
+    {
+      type: "performance",
+      requirement: "p95 export completes in under 8 minutes for 90-day range",
+      measurable: "Load test with 500k audit rows",
+    },
+  ],
+  assumptions: ["PII redacted by default until PM confirms otherwise"],
+  outOfScope: ["Scheduled recurring exports", "PDF rendering"],
+  openQuestions: [
+    {
+      question: "Should we redact PII fields by default?",
+      impact: "Schema and QA coverage",
+      defaultAssumption: "Redact email fields",
+      owner: "PM",
+    },
+  ],
+  risks: [
+    {
+      risk: "Large workspaces exceed multipart limits",
+      probability: "medium",
+      impact: "Export failure or timeout",
+      mitigation: "Shard into 4GB parts",
+    },
+  ],
+  successMetrics: [
+    {
+      metric: "Export completion time",
+      baseline: "N/A (new)",
+      target: "p95 < 8 min",
+      measurementMethod: "Worker duration histogram",
+    },
+  ],
+  complexitySummary: {
+    score: 6,
+    effortOptimistic: "6 days",
+    effortRealistic: "9 days",
+    effortPessimistic: "14 days",
+    keyComplexityDrivers: ["Streaming to S3", "RBAC on new endpoints"],
+  },
+  prdConfidence: 0.62,
+  confidenceNotes:
+    "Open question about PII redaction must be answered before engineering finalises schema.",
+};
+
 const MOCK_PRD = {
   title: "Workspace-level audit log export",
   problemStatement:
@@ -122,6 +386,42 @@ const MOCK_PRD = {
   confidenceScore: 0.62,
   confidenceReason:
     "Open question about PII redaction must be answered before engineering can finalise schema. Recommend human review.",
+};
+
+const MOCK_SCORES = {
+  understandingScore: 0.72,
+  prdQualityScore: 0.62,
+  historicalSignalScore: 0.68,
+  complexityScore: 5.8,
+  passesGate: false,
+  gateFailureReasons: [
+    "1 blocking gap(s) must be resolved",
+    "PRD quality 62% below 70% gate threshold",
+  ],
+  recommendation: "clarify",
+  bands: {
+    understanding: { point: 0.72, uncertainty: 0.06, low: 0.66, high: 0.78 },
+    prdQuality: { point: 0.62, uncertainty: 0.06, low: 0.56, high: 0.68 },
+    historicalSignal: { point: 0.68, uncertainty: 0.05, low: 0.63, high: 0.73 },
+  },
+  breakdown: {
+    readiness: "ready-with-assumptions",
+    blockingGaps: 1,
+    totalGaps: 6,
+    recommendation: "clarify",
+  },
+};
+
+const MOCK_DISCOVERY_OUTPUT = {
+  prd: MOCK_PRD,
+  scores: MOCK_SCORES,
+  discovery: {
+    ticketAnalysis: MOCK_TICKET_ANALYSIS,
+    historicalIntelligence: MOCK_HISTORICAL,
+    gapAnalysis: MOCK_GAPS,
+    complexityAssessment: MOCK_COMPLEXITY,
+    generatedPrd: MOCK_GENERATED_PRD,
+  },
 };
 
 const MOCK_IMPLEMENTATION = {
@@ -176,6 +476,17 @@ const MOCK_IMPLEMENTATION = {
   confidenceScore: 0.84,
   confidenceReason:
     "Plan maps to every acceptance criterion, dependencies are owned in-house, single moderate risk has mitigation.",
+  codeEdits: [
+    {
+      filePath: "server/src/pipeline/orchestrator.ts",
+      summary: "Inject enriched PRD and codebase snapshot into Engineering agent input.",
+      diff: "@@ -236,7 +236,10 @@\n- private async runEngineeringAgent(pipelineId, jiraKey, prd)\n+ private async runEngineeringAgent(\n+   pipelineId,\n+   jiraKey,\n+   prd,\n+   enrichedPrdDocument\n+ )\n@@\n- const input = { context, prd, instruction }\n+ const input = { context, enrichedPrdDocument, codebaseIntelligence, prd, instruction }",
+      before:
+        "const input = {\n  context,\n  prd,\n  instruction: \"Produce an implementation plan mapped to every acceptance criterion.\",\n};",
+      after:
+        "const input = {\n  context,\n  enrichedPrdDocument,\n  codebaseIntelligence,\n  prd,\n  instruction: \"Produce an implementation plan mapped to every acceptance criterion.\",\n};",
+    },
+  ],
 };
 
 const MOCK_QA = {
@@ -256,11 +567,57 @@ const MOCK_QA = {
 
 const MOCK_AUDIT = [
   { event: "PIPELINE_STARTED", metadata: { jiraKey: "PLT-1271" }, timestamp: minutes(14) },
-  { event: "PRODUCT_AGENT_STARTED", metadata: { promptLength: 2342 }, timestamp: minutes(13.8) },
+  { event: "TICKET_EMBEDDED", metadata: { jiraKey: "PLT-1271" }, timestamp: minutes(13.95) },
+  { event: "CONTEXT_RETRIEVED", metadata: { chunksFound: 4, topSimilarity: 0.81 }, timestamp: minutes(13.9) },
   {
-    event: "PRODUCT_AGENT_COMPLETED",
-    metadata: { inputTokens: 1340, outputTokens: 1882, costUsd: 0.0327, durationMs: 8120 },
+    event: "TICKET_ANALYSED",
+    metadata: { requirementsFound: 3, ambiguities: 1, confidence: 0.78 },
+    timestamp: minutes(13.85),
+  },
+  {
+    event: "INTELLIGENCE_EXTRACTED",
+    metadata: { patterns: 1, failures: 1, implied: 1 },
+    timestamp: minutes(13.8),
+  },
+  {
+    event: "GAPS_ANALYSED",
+    metadata: { totalGaps: 6, blockingGaps: 1, readiness: "ready-with-assumptions" },
+    timestamp: minutes(13.75),
+  },
+  {
+    event: "COMPLEXITY_SCORED",
+    metadata: { score: 6, realisticDays: 9, priority: "high" },
+    timestamp: minutes(13.7),
+  },
+  {
+    event: "PRD_GENERATED",
+    metadata: { userStories: 1, endpoints: 1 },
+    timestamp: minutes(13.65),
+  },
+  {
+    event: "SCORES_COMPUTED",
+    metadata: {
+      understandingScore: 0.78,
+      prdQualityScore: 0.62,
+      historicalSignalScore: 0.74,
+      complexityScore: 6,
+    },
+    timestamp: minutes(13.62),
+  },
+  {
+    event: "DISCOVERY_COMPLETE",
+    metadata: { durationMs: 45200, totalCost: 0.0327 },
     timestamp: minutes(13.6),
+  },
+  {
+    event: "CODE_EDIT_APPLIED",
+    metadata: {
+      stage: "ENGINEERING_AGENT",
+      filePath: "server/src/pipeline/orchestrator.ts",
+      summary: "Engineering input now includes enriched PRD document and codebase intelligence snapshot.",
+      diff: "@@\n- const input = { context, prd, instruction }\n+ const input = { context, enrichedPrdDocument, codebaseIntelligence, prd, instruction }",
+    },
+    timestamp: minutes(13.55),
   },
   { event: "STAGE_ADVANCED", metadata: { from: "PRODUCT_AGENT", to: "PRD_VALIDATION" }, timestamp: minutes(13.5) },
   {
@@ -311,7 +668,14 @@ function fullPipelineDetail(id) {
     ...list,
     stages: [
       fakeStage("INGESTION", "COMPLETED", { indexed: true }),
-      fakeStage("PRODUCT_AGENT", "COMPLETED", MOCK_PRD, null, 0.0327, MOCK_PRD.confidenceScore),
+      fakeStage(
+        "PRODUCT_AGENT",
+        "COMPLETED",
+        MOCK_DISCOVERY_OUTPUT,
+        null,
+        0.0327,
+        MOCK_PRD.confidenceScore
+      ),
       fakeStage(
         "PRD_VALIDATION",
         list.status === "PAUSED" ? "AWAITING_HUMAN" : "COMPLETED",
@@ -346,8 +710,255 @@ function fullPipelineDetail(id) {
   };
 }
 
+const MOCK_METRICS = {
+  metrics: [
+    { id: "in_pipeline", label: "In pipeline today", value: "3", delta: "+1 vs yesterday", deltaPositive: true },
+    { id: "completed_week", label: "Completed this week", value: "12", delta: "+4 vs last week", deltaPositive: true },
+    { id: "cycle_reduction", label: "Cycle time reduction", value: "38%", delta: "vs manual baseline", deltaPositive: true },
+    { id: "cost_today", label: "Cost today", value: "$4.82", delta: "-9% vs avg", deltaPositive: true },
+    { id: "interventions", label: "Human interventions", value: "2", delta: "1 PRD · 1 QA", deltaPositive: false },
+  ],
+};
+
+const MOCK_ACTIVITY = {
+  events: [
+    { id: "ev1", pipelineId: "pl_01J7H2", tone: "progress", message: "PLT-1287 entered QA Agent — 4 minutes ago", timestamp: minutes(4) },
+    { id: "ev2", pipelineId: "pl_01J6XP", tone: "paused", message: "PLT-1271 paused at PRD gate — confidence 61% — needs review", timestamp: minutes(14) },
+    { id: "ev3", pipelineId: "pl_01J6L1", tone: "complete", message: "PLT-1264 completed — PRD approved — PR #847 created", timestamp: minutes(38) },
+    { id: "ev4", pipelineId: "pl_01J6CK", tone: "failed", message: "PLT-1252 failed at Engineering Agent — integration timeout", timestamp: minutes(82) },
+    { id: "ev5", pipelineId: "pl_01J5W3", tone: "complete", message: "PLT-1244 completed — full pipeline without intervention", timestamp: minutes(132) },
+  ],
+};
+
+const MOCK_CYCLE_TREND = {
+  points: Array.from({ length: 30 }, (_, i) => ({
+    day: `Day ${30 - i}`,
+    hours: 48 - i * 0.9 - Math.sin(i / 3) * 2,
+  })),
+};
+
+const MOCK_QA_COVERAGE = {
+  files: [
+    { path: "server/src/pipeline/orchestrator.ts", coverage: 72, lines: 420, branches: 68 },
+    { path: "server/src/agents/productAgent.ts", coverage: 88, lines: 180, branches: 82 },
+    { path: "app/src/widgets/pipeline-explorer/PipelineCard.jsx", coverage: 45, lines: 96, branches: 40 },
+    { path: "server/src/qa/testing/testRunner.ts", coverage: 91, lines: 210, branches: 85 },
+  ],
+};
+
+const MOCK_QA_HEATMAP = {
+  features: ["PLT-1287", "PLT-1271", "PLT-1264", "PLT-1252"],
+  criteria: ["Auth boundary", "Happy path", "Error handling", "Performance"],
+  cells: [
+    ["pass", "pass", "warn", "na"],
+    ["warn", "pass", "fail", "na"],
+    ["pass", "pass", "pass", "pass"],
+    ["fail", "warn", "fail", "na"],
+  ],
+};
+
+const MOCK_QA_FAILURES = {
+  columns: [
+    { id: "critical", label: "Critical", items: [{ id: "f1", testName: "POST /exports returns 403 for member", criterion: "Non-admin receives 403", error: "Expected 403 got 200", remediation: "Add RBAC guard on route" }] },
+    { id: "high", label: "High", items: [{ id: "f2", testName: "Export hash matches bundle", criterion: "SHA-256 integrity", error: "Hash mismatch", remediation: "Stream hash during upload" }] },
+    { id: "medium", label: "Medium", items: [] },
+    { id: "low", label: "Low", items: [{ id: "f3", testName: "Rate limit headers present", criterion: "Rate limit export", error: "Missing X-RateLimit-Remaining", remediation: "Apply existing limiter middleware" }] },
+  ],
+};
+
+const MOCK_CODEBASE_STRUCTURE = {
+  nodes: [
+    { id: "server", label: "server/", size: 420, activity: "indexed", coverage: 72 },
+    { id: "app", label: "app/", size: 280, activity: "recent-human", coverage: 58 },
+    { id: "orchestrator", label: "pipeline/orchestrator.ts", size: 48, activity: "agent-modified", coverage: 72, parent: "server" },
+    { id: "qaAgent", label: "qaAgent/index.ts", size: 32, activity: "recent-index", coverage: 91, parent: "server" },
+  ],
+};
+
+const MOCK_CODEBASE_BRANCHES = {
+  branches: [
+    { name: "cursor/discovery-rag-tools", origin: "agent", jiraKey: "PLT-1271", prStatus: "open", agentCommits: 8, humanCommits: 2, humanAfterAgent: true },
+    { name: "main", origin: "human", jiraKey: null, prStatus: null, agentCommits: 0, humanCommits: 24, humanAfterAgent: false },
+  ],
+};
+
+const MOCK_COSTS = {
+  summary: {
+    monthSpend: 142.67,
+    avgPerFeature: 11.89,
+    costPerToken: 0.000018,
+  },
+  daily: [
+    { day: "Mon", product: 1.2, engineering: 2.1, qa: 0.9 },
+    { day: "Tue", product: 0.8, engineering: 1.8, qa: 1.1 },
+    { day: "Wed", product: 1.5, engineering: 2.4, qa: 0.7 },
+    { day: "Thu", product: 1.1, engineering: 1.9, qa: 1.3 },
+    { day: "Fri", product: 0.9, engineering: 2.2, qa: 1.0 },
+  ],
+  byFeature: [
+    { jiraKey: "PLT-1287", title: "Usage billing controls", tokens: 84200, cost: 14.2, hoursSaved: 18, roi: 19.1 },
+    { jiraKey: "PLT-1271", title: "Audit log export", tokens: 62100, cost: 10.8, hoursSaved: 14, roi: 15.6 },
+    { jiraKey: "PLT-1264", title: "Slack gate notifications", tokens: 38400, cost: 6.1, hoursSaved: 9, roi: 22.3 },
+  ],
+};
+
 export const mockApi = {
   wasUsed: () => used,
+  async metricsSummary() {
+    markUsed();
+    await delay(80);
+    return MOCK_METRICS;
+  },
+  async activityEvents() {
+    markUsed();
+    await delay(80);
+    return MOCK_ACTIVITY;
+  },
+  async cycleTrend() {
+    markUsed();
+    await delay(80);
+    return MOCK_CYCLE_TREND;
+  },
+  async qaCoverage() {
+    markUsed();
+    await delay(100);
+    return MOCK_QA_COVERAGE;
+  },
+  async qaHeatmap() {
+    markUsed();
+    await delay(100);
+    return MOCK_QA_HEATMAP;
+  },
+  async qaFailures() {
+    markUsed();
+    await delay(100);
+    return MOCK_QA_FAILURES;
+  },
+  async qaReports() {
+    markUsed();
+    await delay(100);
+    return {
+      reports: [
+        { ticketId: "PLT-1287", passRate: 94, recommendation: "approve_with_conditions" },
+        { ticketId: "PLT-1271", passRate: 72, recommendation: "request_changes" },
+      ],
+    };
+  },
+  async qaReport(ticketId) {
+    markUsed();
+    await delay(120);
+    return {
+      ticketId,
+      passRate: ticketId === "PLT-1271" ? 72 : 94,
+      recommendation: ticketId === "PLT-1271" ? "request_changes" : "approve_with_conditions",
+      summary: MOCK_QA.testSummary,
+      coverage: MOCK_QA.coverageReport,
+      failures: MOCK_QA_FAILURES.columns.flatMap((c) => c.items),
+    };
+  },
+  async codebaseStructure() {
+    markUsed();
+    await delay(100);
+    return MOCK_CODEBASE_STRUCTURE;
+  },
+  async codebaseBranches() {
+    markUsed();
+    await delay(100);
+    return MOCK_CODEBASE_BRANCHES;
+  },
+  async codebaseCommits() {
+    markUsed();
+    await delay(100);
+    return {
+      commits: [
+        { id: "c1", author: "agent", message: "Wire QA agentic loop", files: 12, at: minutes(20) },
+        { id: "c2", author: "human", message: "Fix test runner paths on Windows", files: 2, at: minutes(18) },
+        { id: "c3", author: "agent", message: "Add codebase intelligence snapshot", files: 8, at: minutes(45) },
+      ],
+    };
+  },
+  async codebaseSearch(query) {
+    markUsed();
+    await delay(140);
+    return {
+      query,
+      results: [
+        { path: "server/src/pipeline/orchestrator.ts", score: 0.89, snippet: "runQaAgentic pipeline stage" },
+        { path: "server/src/qaAgent/index.ts", score: 0.84, snippet: "four-phase QA workflow" },
+        { path: "server/src/codebaseIntelligence/layoutComputer.ts", score: 0.81, snippet: "treemap layout for visualization" },
+        { path: "app/src/features/codebase-viz/TreemapCanvas.jsx", score: 0.78, snippet: "canvas rendering for district map" },
+      ],
+    };
+  },
+  async codebaseVisualization(branch = "main") {
+    markUsed();
+    await delay(160);
+    return buildMockVisualization(branch);
+  },
+  async codebaseFileInterior(_branch, filePath) {
+    markUsed();
+    await delay(100);
+    return {
+      filePath,
+      summary: "Mock file interior — function blocks inside this module.",
+      blocks: [
+        { id: "fn1", name: "render", kind: "function", x: 8, y: 8, w: 940, h: 80, lineCount: 40 },
+        { id: "fn2", name: "hitTest", kind: "function", x: 8, y: 96, w: 940, h: 60, lineCount: 28 },
+        { id: "fn3", name: "paint", kind: "function", x: 8, y: 168, w: 940, h: 120, lineCount: 55 },
+      ],
+    };
+  },
+  async codebaseAsk(question) {
+    markUsed();
+    await delay(200);
+    const q = question.toLowerCase();
+    let highlightPaths = [
+      "server/src/pipeline/orchestrator.ts",
+      "server/src/qaAgent/index.ts",
+    ];
+    let answer =
+      "The pipeline orchestrator coordinates stage transitions; QA runs in a four-phase agentic loop.";
+
+    if (q.includes("auth")) {
+      highlightPaths = [
+        "server/src/api/routes/auth.ts",
+        "app/src/shared/providers/AuthProvider.jsx",
+      ];
+      answer = "Authentication spans the auth API route and the frontend AuthProvider.";
+    }
+
+    return { answer, highlightPaths, relatedSnippets: [] };
+  },
+  async costsSummary() {
+    markUsed();
+    await delay(80);
+    return MOCK_COSTS.summary;
+  },
+  async costsDaily() {
+    markUsed();
+    await delay(80);
+    return { days: MOCK_COSTS.daily };
+  },
+  async costsByFeature() {
+    markUsed();
+    await delay(80);
+    return { features: MOCK_COSTS.byFeature };
+  },
+  async costsRoi({ hourlyRate = 150, sprintWeeks = 2, reworkRate = 0.25 }) {
+    markUsed();
+    await delay(100);
+    const annualSavings = Math.round(
+      hourlyRate * 40 * 52 * (0.35 + reworkRate * 0.4) * (sprintWeeks / 2)
+    );
+    return {
+      hourlyRate,
+      sprintWeeks,
+      reworkRate,
+      annualSavings,
+      subscriptionCost: 18000,
+      netBenefit: annualSavings - 18000,
+    };
+  },
   async listPipelines(status) {
     markUsed();
     await delay(120);
@@ -382,6 +993,127 @@ export const mockApi = {
     return { status: "ready", checks: { postgres: "ok", redis: "ok" } };
   },
 };
+
+function buildMockVisualization(branch) {
+  const paths = [
+    ["server/src/pipeline/orchestrator.ts", 380, ["service-layer"], "Pipeline orchestration and stage transitions."],
+    ["server/src/agents/productAgent.ts", 240, ["service-layer"], "Product agent and PRD tool loop."],
+    ["server/src/qaAgent/index.ts", 210, ["service-layer"], "Four-phase QA agent entry point."],
+    ["server/src/codebaseIntelligence/layoutComputer.ts", 320, ["utility"], "Precomputed treemap layout for visualization API."],
+    ["server/src/codebaseIntelligence/indexer.ts", 410, ["service-layer"], "Indexes repository files with AI summaries."],
+    ["server/src/api/routes/codebase.ts", 95, ["api-route"], "Codebase intelligence REST routes."],
+    ["app/src/features/codebase-viz/CodebaseVisualization.jsx", 280, ["ui-component"], "Primary district map UI shell."],
+    ["app/src/features/codebase-viz/TreemapCanvas.jsx", 190, ["ui-component"], "Canvas renderer for file cells."],
+    ["app/src/entities/codebase/index.js", 120, ["utility"], "Client adapters for codebase APIs."],
+    ["app/src/app/pages/CodebaseIntelligence.jsx", 80, ["ui-component"], "Codebase intelligence page host."],
+  ];
+
+  const cols = 4;
+  const cellW = 240;
+  const cellH = 160;
+  const nodes = paths.map(([path, size, patterns, summary], index) => {
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    return {
+      id: path,
+      path,
+      name: path.split("/").pop(),
+      type: "file",
+      size,
+      depth: path.split("/").length,
+      parent: path.split("/").slice(0, -1).join("/") || null,
+      language: path.split(".").pop(),
+      summary,
+      patterns,
+      lastModified: minutes(index * 3),
+      lastModifiedBy: index % 3 === 0 ? "agent" : "human",
+      coverage: 50 + (index * 7) % 45,
+      complexity: 3 + (index % 6),
+      importCount: 8 - (index % 5),
+      exportCount: 2 + (index % 4),
+      x: 12 + col * (cellW + 8),
+      y: 28 + row * (cellH + 8),
+      width: cellW,
+      height: cellH,
+    };
+  });
+
+  const polygonFor = (x, y, w, h) => [
+    [x, y],
+    [x + w, y],
+    [x + w, y + h],
+    [x, y + h],
+  ];
+
+  const nodesWithPolygons = nodes.map((n) => ({
+    ...n,
+    polygon: polygonFor(n.x, n.y, n.width, n.height),
+  }));
+
+  return {
+    nodes: nodesWithPolygons,
+    edges: [
+      { source: paths[0][0], target: paths[1][0], type: "import", weight: 2 },
+      { source: paths[2][0], target: paths[0][0], type: "import", weight: 1 },
+      { source: paths[6][0], target: paths[5][0], type: "import", weight: 1 },
+    ],
+    meta: {
+      totalFiles: nodes.length,
+      totalLines: nodes.reduce((s, n) => s + n.size, 0),
+      languages: ["ts", "tsx", "js", "jsx"],
+      lastFullIndex: minutes(0),
+      districts: [
+        {
+          path: "server",
+          summary: "Backend — agents, pipeline, codebase intelligence, and APIs.",
+          fileCount: 6,
+          primaryPattern: "service-layer",
+        },
+        {
+          path: "app",
+          summary: "Frontend — visualization UI, entities, and product pages.",
+          fileCount: 4,
+          primaryPattern: "ui-component",
+        },
+      ],
+      tourSteps: [
+        {
+          id: "shape",
+          title: "The shape of this codebase",
+          narration: `Branch ${branch} is split between server (agents & APIs) and app (product UI). The server district is larger — most business automation lives there.`,
+          focusPath: null,
+          zoomLevel: "galaxy",
+        },
+        {
+          id: "server",
+          title: "Core business logic",
+          narration: "Pipeline orchestration and agents live under server/. This is where tickets become PRDs, plans, and tests.",
+          focusPath: "server",
+          zoomLevel: "district",
+          highlightPaths: nodes.filter((n) => n.path.startsWith("server")).map((n) => n.path),
+        },
+        {
+          id: "viz",
+          title: "The visualization layer",
+          narration: "The district map itself lives in app/src/features/codebase-viz — Canvas for scale, React for panels and tour mode.",
+          focusPath: "app",
+          zoomLevel: "district",
+          highlightPaths: nodes.filter((n) => n.path.includes("codebase-viz")).map((n) => n.path),
+        },
+      ],
+      quickReference: [
+        { question: "Where are the API routes?", pathPrefix: "server/src/api" },
+        { question: "Where are the agents?", pathPrefix: "server/src/agents" },
+        { question: "Where is the codebase map UI?", pathPrefix: "app/src/features/codebase-viz" },
+      ],
+      activityTimeline: {
+        minDate: minutes(220),
+        maxDate: minutes(0),
+      },
+      layoutKind: "voronoi",
+    },
+  };
+}
 
 function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));
