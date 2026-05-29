@@ -6,6 +6,7 @@ import { githubClient } from "../integrations/githubClient";
 import { logger } from "../utils/logger";
 import { withRetry } from "../utils/retry";
 import { codebaseVectorStore } from "./vectorStore";
+import { visualizationCache } from "./visualizationCache";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const claude = process.env.ANTHROPIC_API_KEY
@@ -145,6 +146,10 @@ export async function runFullIndex(branchName: string): Promise<IndexRunResult> 
       },
     });
 
+    await visualizationCache.refresh(branchName).catch((err) => {
+      logger.warn({ err, branchName }, "visualization refresh after full index failed");
+    });
+
     return {
       filesIndexed,
       filesUpdated,
@@ -213,6 +218,10 @@ export async function runIncrementalIndex(input: {
         filesDeleted,
         completedAt: new Date(),
       },
+    });
+
+    await visualizationCache.refresh(input.branchName).catch((err) => {
+      logger.warn({ err, branchName: input.branchName }, "viz refresh after incremental index failed");
     });
 
     return {
@@ -483,6 +492,7 @@ async function markDeletedFiles(activeFilePaths: string[], branchName: string): 
 }
 
 async function removeFileFromIndex(filePath: string, branchName: string): Promise<void> {
+  await visualizationCache.onFileRemoved(branchName, filePath).catch(() => undefined);
   await prismaAny.codebaseFile.updateMany({
     where: {
       repoOwner: REPO_OWNER,

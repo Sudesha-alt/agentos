@@ -1,7 +1,53 @@
 import { Router } from "express";
 import { codebaseQueryService } from "../../codebaseIntelligence/queryService";
+import { askCodebaseQuestion } from "../../codebaseIntelligence/codebaseAskService";
+import { visualizationCache } from "../../codebaseIntelligence/visualizationCache";
+import { visualizationService } from "../../codebaseIntelligence/visualizationService";
 
 const router = Router();
+
+router.get("/visualization", async (req, res, next) => {
+  try {
+    const branchName = String(req.query.branch ?? "main");
+    const refresh = req.query.refresh === "true";
+    const layout = refresh
+      ? await visualizationCache.refresh(branchName)
+      : (await visualizationCache.get(branchName)) ??
+        (await visualizationCache.refresh(branchName));
+    res.json(layout);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/visualization/file", async (req, res, next) => {
+  try {
+    const branchName = String(req.query.branch ?? "main");
+    const filePath = String(req.query.path ?? "");
+    if (!filePath) {
+      res.status(400).json({ error: "path_required" });
+      return;
+    }
+    const interior = await visualizationService.getFileInterior(branchName, filePath);
+    res.json(interior);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/ask", async (req, res, next) => {
+  try {
+    const { question, branchName = "main" } = req.body ?? {};
+    if (!question || typeof question !== "string") {
+      res.status(400).json({ error: "question_required" });
+      return;
+    }
+    const result = await askCodebaseQuestion({ question, branchName });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.post("/search", async (req, res, next) => {
   try {

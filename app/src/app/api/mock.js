@@ -476,6 +476,17 @@ const MOCK_IMPLEMENTATION = {
   confidenceScore: 0.84,
   confidenceReason:
     "Plan maps to every acceptance criterion, dependencies are owned in-house, single moderate risk has mitigation.",
+  codeEdits: [
+    {
+      filePath: "server/src/pipeline/orchestrator.ts",
+      summary: "Inject enriched PRD and codebase snapshot into Engineering agent input.",
+      diff: "@@ -236,7 +236,10 @@\n- private async runEngineeringAgent(pipelineId, jiraKey, prd)\n+ private async runEngineeringAgent(\n+   pipelineId,\n+   jiraKey,\n+   prd,\n+   enrichedPrdDocument\n+ )\n@@\n- const input = { context, prd, instruction }\n+ const input = { context, enrichedPrdDocument, codebaseIntelligence, prd, instruction }",
+      before:
+        "const input = {\n  context,\n  prd,\n  instruction: \"Produce an implementation plan mapped to every acceptance criterion.\",\n};",
+      after:
+        "const input = {\n  context,\n  enrichedPrdDocument,\n  codebaseIntelligence,\n  prd,\n  instruction: \"Produce an implementation plan mapped to every acceptance criterion.\",\n};",
+    },
+  ],
 };
 
 const MOCK_QA = {
@@ -598,6 +609,16 @@ const MOCK_AUDIT = [
     metadata: { durationMs: 45200, totalCost: 0.0327 },
     timestamp: minutes(13.6),
   },
+  {
+    event: "CODE_EDIT_APPLIED",
+    metadata: {
+      stage: "ENGINEERING_AGENT",
+      filePath: "server/src/pipeline/orchestrator.ts",
+      summary: "Engineering input now includes enriched PRD document and codebase intelligence snapshot.",
+      diff: "@@\n- const input = { context, prd, instruction }\n+ const input = { context, enrichedPrdDocument, codebaseIntelligence, prd, instruction }",
+    },
+    timestamp: minutes(13.55),
+  },
   { event: "STAGE_ADVANCED", metadata: { from: "PRODUCT_AGENT", to: "PRD_VALIDATION" }, timestamp: minutes(13.5) },
   {
     event: "AWAITING_HUMAN",
@@ -689,8 +710,255 @@ function fullPipelineDetail(id) {
   };
 }
 
+const MOCK_METRICS = {
+  metrics: [
+    { id: "in_pipeline", label: "In pipeline today", value: "3", delta: "+1 vs yesterday", deltaPositive: true },
+    { id: "completed_week", label: "Completed this week", value: "12", delta: "+4 vs last week", deltaPositive: true },
+    { id: "cycle_reduction", label: "Cycle time reduction", value: "38%", delta: "vs manual baseline", deltaPositive: true },
+    { id: "cost_today", label: "Cost today", value: "$4.82", delta: "-9% vs avg", deltaPositive: true },
+    { id: "interventions", label: "Human interventions", value: "2", delta: "1 PRD · 1 QA", deltaPositive: false },
+  ],
+};
+
+const MOCK_ACTIVITY = {
+  events: [
+    { id: "ev1", pipelineId: "pl_01J7H2", tone: "progress", message: "PLT-1287 entered QA Agent — 4 minutes ago", timestamp: minutes(4) },
+    { id: "ev2", pipelineId: "pl_01J6XP", tone: "paused", message: "PLT-1271 paused at PRD gate — confidence 61% — needs review", timestamp: minutes(14) },
+    { id: "ev3", pipelineId: "pl_01J6L1", tone: "complete", message: "PLT-1264 completed — PRD approved — PR #847 created", timestamp: minutes(38) },
+    { id: "ev4", pipelineId: "pl_01J6CK", tone: "failed", message: "PLT-1252 failed at Engineering Agent — integration timeout", timestamp: minutes(82) },
+    { id: "ev5", pipelineId: "pl_01J5W3", tone: "complete", message: "PLT-1244 completed — full pipeline without intervention", timestamp: minutes(132) },
+  ],
+};
+
+const MOCK_CYCLE_TREND = {
+  points: Array.from({ length: 30 }, (_, i) => ({
+    day: `Day ${30 - i}`,
+    hours: 48 - i * 0.9 - Math.sin(i / 3) * 2,
+  })),
+};
+
+const MOCK_QA_COVERAGE = {
+  files: [
+    { path: "server/src/pipeline/orchestrator.ts", coverage: 72, lines: 420, branches: 68 },
+    { path: "server/src/agents/productAgent.ts", coverage: 88, lines: 180, branches: 82 },
+    { path: "app/src/widgets/pipeline-explorer/PipelineCard.jsx", coverage: 45, lines: 96, branches: 40 },
+    { path: "server/src/qa/testing/testRunner.ts", coverage: 91, lines: 210, branches: 85 },
+  ],
+};
+
+const MOCK_QA_HEATMAP = {
+  features: ["PLT-1287", "PLT-1271", "PLT-1264", "PLT-1252"],
+  criteria: ["Auth boundary", "Happy path", "Error handling", "Performance"],
+  cells: [
+    ["pass", "pass", "warn", "na"],
+    ["warn", "pass", "fail", "na"],
+    ["pass", "pass", "pass", "pass"],
+    ["fail", "warn", "fail", "na"],
+  ],
+};
+
+const MOCK_QA_FAILURES = {
+  columns: [
+    { id: "critical", label: "Critical", items: [{ id: "f1", testName: "POST /exports returns 403 for member", criterion: "Non-admin receives 403", error: "Expected 403 got 200", remediation: "Add RBAC guard on route" }] },
+    { id: "high", label: "High", items: [{ id: "f2", testName: "Export hash matches bundle", criterion: "SHA-256 integrity", error: "Hash mismatch", remediation: "Stream hash during upload" }] },
+    { id: "medium", label: "Medium", items: [] },
+    { id: "low", label: "Low", items: [{ id: "f3", testName: "Rate limit headers present", criterion: "Rate limit export", error: "Missing X-RateLimit-Remaining", remediation: "Apply existing limiter middleware" }] },
+  ],
+};
+
+const MOCK_CODEBASE_STRUCTURE = {
+  nodes: [
+    { id: "server", label: "server/", size: 420, activity: "indexed", coverage: 72 },
+    { id: "app", label: "app/", size: 280, activity: "recent-human", coverage: 58 },
+    { id: "orchestrator", label: "pipeline/orchestrator.ts", size: 48, activity: "agent-modified", coverage: 72, parent: "server" },
+    { id: "qaAgent", label: "qaAgent/index.ts", size: 32, activity: "recent-index", coverage: 91, parent: "server" },
+  ],
+};
+
+const MOCK_CODEBASE_BRANCHES = {
+  branches: [
+    { name: "cursor/discovery-rag-tools", origin: "agent", jiraKey: "PLT-1271", prStatus: "open", agentCommits: 8, humanCommits: 2, humanAfterAgent: true },
+    { name: "main", origin: "human", jiraKey: null, prStatus: null, agentCommits: 0, humanCommits: 24, humanAfterAgent: false },
+  ],
+};
+
+const MOCK_COSTS = {
+  summary: {
+    monthSpend: 142.67,
+    avgPerFeature: 11.89,
+    costPerToken: 0.000018,
+  },
+  daily: [
+    { day: "Mon", product: 1.2, engineering: 2.1, qa: 0.9 },
+    { day: "Tue", product: 0.8, engineering: 1.8, qa: 1.1 },
+    { day: "Wed", product: 1.5, engineering: 2.4, qa: 0.7 },
+    { day: "Thu", product: 1.1, engineering: 1.9, qa: 1.3 },
+    { day: "Fri", product: 0.9, engineering: 2.2, qa: 1.0 },
+  ],
+  byFeature: [
+    { jiraKey: "PLT-1287", title: "Usage billing controls", tokens: 84200, cost: 14.2, hoursSaved: 18, roi: 19.1 },
+    { jiraKey: "PLT-1271", title: "Audit log export", tokens: 62100, cost: 10.8, hoursSaved: 14, roi: 15.6 },
+    { jiraKey: "PLT-1264", title: "Slack gate notifications", tokens: 38400, cost: 6.1, hoursSaved: 9, roi: 22.3 },
+  ],
+};
+
 export const mockApi = {
   wasUsed: () => used,
+  async metricsSummary() {
+    markUsed();
+    await delay(80);
+    return MOCK_METRICS;
+  },
+  async activityEvents() {
+    markUsed();
+    await delay(80);
+    return MOCK_ACTIVITY;
+  },
+  async cycleTrend() {
+    markUsed();
+    await delay(80);
+    return MOCK_CYCLE_TREND;
+  },
+  async qaCoverage() {
+    markUsed();
+    await delay(100);
+    return MOCK_QA_COVERAGE;
+  },
+  async qaHeatmap() {
+    markUsed();
+    await delay(100);
+    return MOCK_QA_HEATMAP;
+  },
+  async qaFailures() {
+    markUsed();
+    await delay(100);
+    return MOCK_QA_FAILURES;
+  },
+  async qaReports() {
+    markUsed();
+    await delay(100);
+    return {
+      reports: [
+        { ticketId: "PLT-1287", passRate: 94, recommendation: "approve_with_conditions" },
+        { ticketId: "PLT-1271", passRate: 72, recommendation: "request_changes" },
+      ],
+    };
+  },
+  async qaReport(ticketId) {
+    markUsed();
+    await delay(120);
+    return {
+      ticketId,
+      passRate: ticketId === "PLT-1271" ? 72 : 94,
+      recommendation: ticketId === "PLT-1271" ? "request_changes" : "approve_with_conditions",
+      summary: MOCK_QA.testSummary,
+      coverage: MOCK_QA.coverageReport,
+      failures: MOCK_QA_FAILURES.columns.flatMap((c) => c.items),
+    };
+  },
+  async codebaseStructure() {
+    markUsed();
+    await delay(100);
+    return MOCK_CODEBASE_STRUCTURE;
+  },
+  async codebaseBranches() {
+    markUsed();
+    await delay(100);
+    return MOCK_CODEBASE_BRANCHES;
+  },
+  async codebaseCommits() {
+    markUsed();
+    await delay(100);
+    return {
+      commits: [
+        { id: "c1", author: "agent", message: "Wire QA agentic loop", files: 12, at: minutes(20) },
+        { id: "c2", author: "human", message: "Fix test runner paths on Windows", files: 2, at: minutes(18) },
+        { id: "c3", author: "agent", message: "Add codebase intelligence snapshot", files: 8, at: minutes(45) },
+      ],
+    };
+  },
+  async codebaseSearch(query) {
+    markUsed();
+    await delay(140);
+    return {
+      query,
+      results: [
+        { path: "server/src/pipeline/orchestrator.ts", score: 0.89, snippet: "runQaAgentic pipeline stage" },
+        { path: "server/src/qaAgent/index.ts", score: 0.84, snippet: "four-phase QA workflow" },
+        { path: "server/src/codebaseIntelligence/layoutComputer.ts", score: 0.81, snippet: "treemap layout for visualization" },
+        { path: "app/src/features/codebase-viz/TreemapCanvas.jsx", score: 0.78, snippet: "canvas rendering for district map" },
+      ],
+    };
+  },
+  async codebaseVisualization(branch = "main") {
+    markUsed();
+    await delay(160);
+    return buildMockVisualization(branch);
+  },
+  async codebaseFileInterior(_branch, filePath) {
+    markUsed();
+    await delay(100);
+    return {
+      filePath,
+      summary: "Mock file interior — function blocks inside this module.",
+      blocks: [
+        { id: "fn1", name: "render", kind: "function", x: 8, y: 8, w: 940, h: 80, lineCount: 40 },
+        { id: "fn2", name: "hitTest", kind: "function", x: 8, y: 96, w: 940, h: 60, lineCount: 28 },
+        { id: "fn3", name: "paint", kind: "function", x: 8, y: 168, w: 940, h: 120, lineCount: 55 },
+      ],
+    };
+  },
+  async codebaseAsk(question) {
+    markUsed();
+    await delay(200);
+    const q = question.toLowerCase();
+    let highlightPaths = [
+      "server/src/pipeline/orchestrator.ts",
+      "server/src/qaAgent/index.ts",
+    ];
+    let answer =
+      "The pipeline orchestrator coordinates stage transitions; QA runs in a four-phase agentic loop.";
+
+    if (q.includes("auth")) {
+      highlightPaths = [
+        "server/src/api/routes/auth.ts",
+        "app/src/shared/providers/AuthProvider.jsx",
+      ];
+      answer = "Authentication spans the auth API route and the frontend AuthProvider.";
+    }
+
+    return { answer, highlightPaths, relatedSnippets: [] };
+  },
+  async costsSummary() {
+    markUsed();
+    await delay(80);
+    return MOCK_COSTS.summary;
+  },
+  async costsDaily() {
+    markUsed();
+    await delay(80);
+    return { days: MOCK_COSTS.daily };
+  },
+  async costsByFeature() {
+    markUsed();
+    await delay(80);
+    return { features: MOCK_COSTS.byFeature };
+  },
+  async costsRoi({ hourlyRate = 150, sprintWeeks = 2, reworkRate = 0.25 }) {
+    markUsed();
+    await delay(100);
+    const annualSavings = Math.round(
+      hourlyRate * 40 * 52 * (0.35 + reworkRate * 0.4) * (sprintWeeks / 2)
+    );
+    return {
+      hourlyRate,
+      sprintWeeks,
+      reworkRate,
+      annualSavings,
+      subscriptionCost: 18000,
+      netBenefit: annualSavings - 18000,
+    };
+  },
   async listPipelines(status) {
     markUsed();
     await delay(120);
@@ -725,6 +993,127 @@ export const mockApi = {
     return { status: "ready", checks: { postgres: "ok", redis: "ok" } };
   },
 };
+
+function buildMockVisualization(branch) {
+  const paths = [
+    ["server/src/pipeline/orchestrator.ts", 380, ["service-layer"], "Pipeline orchestration and stage transitions."],
+    ["server/src/agents/productAgent.ts", 240, ["service-layer"], "Product agent and PRD tool loop."],
+    ["server/src/qaAgent/index.ts", 210, ["service-layer"], "Four-phase QA agent entry point."],
+    ["server/src/codebaseIntelligence/layoutComputer.ts", 320, ["utility"], "Precomputed treemap layout for visualization API."],
+    ["server/src/codebaseIntelligence/indexer.ts", 410, ["service-layer"], "Indexes repository files with AI summaries."],
+    ["server/src/api/routes/codebase.ts", 95, ["api-route"], "Codebase intelligence REST routes."],
+    ["app/src/features/codebase-viz/CodebaseVisualization.jsx", 280, ["ui-component"], "Primary district map UI shell."],
+    ["app/src/features/codebase-viz/TreemapCanvas.jsx", 190, ["ui-component"], "Canvas renderer for file cells."],
+    ["app/src/entities/codebase/index.js", 120, ["utility"], "Client adapters for codebase APIs."],
+    ["app/src/app/pages/CodebaseIntelligence.jsx", 80, ["ui-component"], "Codebase intelligence page host."],
+  ];
+
+  const cols = 4;
+  const cellW = 240;
+  const cellH = 160;
+  const nodes = paths.map(([path, size, patterns, summary], index) => {
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    return {
+      id: path,
+      path,
+      name: path.split("/").pop(),
+      type: "file",
+      size,
+      depth: path.split("/").length,
+      parent: path.split("/").slice(0, -1).join("/") || null,
+      language: path.split(".").pop(),
+      summary,
+      patterns,
+      lastModified: minutes(index * 3),
+      lastModifiedBy: index % 3 === 0 ? "agent" : "human",
+      coverage: 50 + (index * 7) % 45,
+      complexity: 3 + (index % 6),
+      importCount: 8 - (index % 5),
+      exportCount: 2 + (index % 4),
+      x: 12 + col * (cellW + 8),
+      y: 28 + row * (cellH + 8),
+      width: cellW,
+      height: cellH,
+    };
+  });
+
+  const polygonFor = (x, y, w, h) => [
+    [x, y],
+    [x + w, y],
+    [x + w, y + h],
+    [x, y + h],
+  ];
+
+  const nodesWithPolygons = nodes.map((n) => ({
+    ...n,
+    polygon: polygonFor(n.x, n.y, n.width, n.height),
+  }));
+
+  return {
+    nodes: nodesWithPolygons,
+    edges: [
+      { source: paths[0][0], target: paths[1][0], type: "import", weight: 2 },
+      { source: paths[2][0], target: paths[0][0], type: "import", weight: 1 },
+      { source: paths[6][0], target: paths[5][0], type: "import", weight: 1 },
+    ],
+    meta: {
+      totalFiles: nodes.length,
+      totalLines: nodes.reduce((s, n) => s + n.size, 0),
+      languages: ["ts", "tsx", "js", "jsx"],
+      lastFullIndex: minutes(0),
+      districts: [
+        {
+          path: "server",
+          summary: "Backend — agents, pipeline, codebase intelligence, and APIs.",
+          fileCount: 6,
+          primaryPattern: "service-layer",
+        },
+        {
+          path: "app",
+          summary: "Frontend — visualization UI, entities, and product pages.",
+          fileCount: 4,
+          primaryPattern: "ui-component",
+        },
+      ],
+      tourSteps: [
+        {
+          id: "shape",
+          title: "The shape of this codebase",
+          narration: `Branch ${branch} is split between server (agents & APIs) and app (product UI). The server district is larger — most business automation lives there.`,
+          focusPath: null,
+          zoomLevel: "galaxy",
+        },
+        {
+          id: "server",
+          title: "Core business logic",
+          narration: "Pipeline orchestration and agents live under server/. This is where tickets become PRDs, plans, and tests.",
+          focusPath: "server",
+          zoomLevel: "district",
+          highlightPaths: nodes.filter((n) => n.path.startsWith("server")).map((n) => n.path),
+        },
+        {
+          id: "viz",
+          title: "The visualization layer",
+          narration: "The district map itself lives in app/src/features/codebase-viz — Canvas for scale, React for panels and tour mode.",
+          focusPath: "app",
+          zoomLevel: "district",
+          highlightPaths: nodes.filter((n) => n.path.includes("codebase-viz")).map((n) => n.path),
+        },
+      ],
+      quickReference: [
+        { question: "Where are the API routes?", pathPrefix: "server/src/api" },
+        { question: "Where are the agents?", pathPrefix: "server/src/agents" },
+        { question: "Where is the codebase map UI?", pathPrefix: "app/src/features/codebase-viz" },
+      ],
+      activityTimeline: {
+        minDate: minutes(220),
+        maxDate: minutes(0),
+      },
+      layoutKind: "voronoi",
+    },
+  };
+}
 
 function delay(ms) {
   return new Promise((r) => setTimeout(r, ms));

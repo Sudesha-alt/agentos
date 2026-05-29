@@ -23,6 +23,12 @@ export default defineConfig(({ mode }) => {
           target: apiUrl,
           changeOrigin: true,
         },
+        "/api/codebase/viz/ws": {
+          target: apiUrl,
+          changeOrigin: true,
+          ws: true,
+          rewrite: (path) => path.replace(/^\/api/, ""),
+        },
       },
     },
     test: {

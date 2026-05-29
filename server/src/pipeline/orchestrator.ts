@@ -1,6 +1,7 @@
 import type { Prisma, PipelineStage } from "../db/prisma";
 import { EngineeringAgent } from "../agents/engineeringAgent";
-import { QAAgent } from "../agents/qaAgent";
+import { runQaAgentic } from "../qaAgent";
+import { attachQaReportToJira } from "../qa/report/reportAttacher";
 import { codebaseQueryService } from "../codebaseIntelligence/queryService";
 import {
   DiscoveryPausedError,
@@ -24,15 +25,11 @@ import { logger } from "../utils/logger";
 import { validateImplementation } from "../validators/implementationValidator";
 import { validatePrd } from "../validators/prdValidator";
 import { validateQa } from "../validators/qaValidator";
-import {
-  buildEngineeringAgentContext,
-  buildQaAgentContext,
-} from "./contextBuilder";
+import { buildEngineeringAgentContext } from "./contextBuilder";
 import { stateManager } from "./stateManager";
 
 export class PipelineOrchestrator {
   private readonly engineeringAgent = new EngineeringAgent();
-  private readonly qaAgent = new QAAgent();
 
   async run(ticketId: string): Promise<void> {
     const ticket = await ticketRepo.findById(ticketId);
@@ -98,12 +95,13 @@ export class PipelineOrchestrator {
         implementationOutput.parsed
       );
 
-      const qaOutput = await this.runQaAgent(
+      const qaStage = await this.runQaAgent(
         pipeline.id,
         normalizedTicket.jiraKey,
         productStage.agentOutput.parsed,
         implementationOutput.parsed
       );
+      const qaOutput = qaStage.agentOutput;
       const qaValidation = await this.validateQaStage(
         pipeline.id,
         qaOutput,
@@ -112,6 +110,13 @@ export class PipelineOrchestrator {
       if (!(await this.continueOrPause(pipeline.id, "QA_VALIDATION", qaValidation))) {
         await ticketRepo.setStatus(ticket.id, "AWAITING_HUMAN");
         return;
+      }
+      if (qaStage.executionReport) {
+        await attachQaReportToJira(
+          normalizedTicket.jiraKey,
+          qaOutput.parsed,
+          qaStage.executionReport
+        );
       }
       await indexer.indexQaReport(
         normalizedTicket.jiraTicketId,
@@ -420,30 +425,41 @@ export class PipelineOrchestrator {
     jiraKey: string,
     prd: PrdOutput,
     implementation: ImplementationOutput
-  ): Promise<AgentOutput<QaOutput>> {
+  ) {
     const retrieved = await retriever.retrieveForQAAgent(prd, jiraKey);
-    const context = buildQaAgentContext(prd, implementation, retrieved);
     const input = {
-      context,
       prd,
       implementation,
-      instruction: "Generate test cases mapped directly to each acceptance criterion.",
+      retrievedContext: retrieved,
+      instruction:
+        "Four-phase QA: understand code, write tests, run tests, report findings.",
     };
     const stageLog = await pipelineRepo.startStage({
       pipelineId,
       stage: "QA_AGENT",
       inputJson: input as unknown as Prisma.InputJsonValue,
     });
-    const output = await this.qaAgent.run(pipelineId, JSON.stringify(input, null, 2));
+    const result = await runQaAgentic({
+      pipelineId,
+      jiraKey,
+      prd,
+      implementation,
+      retrievedContext: retrieved,
+    });
+    const output = result.agentOutput;
     await pipelineRepo.completeStage({
       stageLogId: stageLog.id,
-      output: output.parsed as unknown as Prisma.InputJsonValue,
+      output: {
+        qa: output.parsed,
+        executionReport: result.executionReport,
+        toolCallLog: result.toolCallLog,
+      } as unknown as Prisma.InputJsonValue,
       confidenceScore: output.parsed.confidenceScore,
       tokenCount: output.metadata.inputTokens + output.metadata.outputTokens,
       costUsd: output.metadata.costUsd,
     });
     await stateManager.advance(pipelineId, "QA_VALIDATION");
-    return output;
+    return result;
   }
 
   private async validateQaStage(

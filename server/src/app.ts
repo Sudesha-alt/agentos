@@ -63,6 +63,7 @@ export function createApp(): express.Express {
   app.use("/", healthRouter);
   app.use("/api/auth", authRouter);
   app.use("/api/codebase", codebaseRouter);
+  app.use("/codebase", codebaseRouter);
   app.use("/jira-intake", jiraIntakeRouter);
   app.use("/webhooks", webhooksRouter);
   app.use("/pipelines", pipelineRouter);

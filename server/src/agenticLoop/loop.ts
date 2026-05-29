@@ -1,7 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 import { auditRepo } from "../db/repositories/auditRepo";
 import { getClaudeClient, getClaudeModel } from "../llm/claudeClient";
-import { executeToolCall } from "../tools/executor";
+import { executeToolCall, type ToolCallInput, type ToolCallResult } from "../tools/executor";
 import { TOOL_DEFINITIONS } from "../tools/definitions";
 import { logger } from "../utils/logger";
 import { withRetry } from "../utils/retry";
@@ -23,6 +23,13 @@ export interface AgenticLoopConfig {
   pipelineId: string;
   jiraKey: string;
   maxToolCalls?: number;
+  tools?: typeof TOOL_DEFINITIONS;
+  forcedWrapUpMessage?: string;
+  executeToolCall?: (
+    toolCall: ToolCallInput,
+    pipelineId: string,
+    jiraKey: string
+  ) => Promise<ToolCallResult>;
 }
 
 export interface AgenticLoopResult {
@@ -48,6 +55,9 @@ export async function runAgenticLoop(
     pipelineId,
     jiraKey,
     maxToolCalls = MAX_TOOL_CALLS,
+    tools = TOOL_DEFINITIONS,
+    forcedWrapUpMessage,
+    executeToolCall: executeToolCallFn = executeToolCall,
   } = config;
 
   const messages = createInitialMessages(initialUserMessage);
@@ -67,7 +77,9 @@ export async function runAgenticLoop(
     if (toolCallCount >= maxToolCalls && !forcedWrapUp) {
       messages.push({
         role: "user",
-        content: `You have already used ${toolCallCount} tool calls. Produce the final PRD output now using the information gathered so far. Do not call any more tools.`,
+        content:
+          forcedWrapUpMessage ??
+          `You have already used ${toolCallCount} tool calls. Produce the final output now using the information gathered so far. Do not call any more tools.`,
       });
       forcedWrapUp = true;
     }
@@ -78,7 +90,7 @@ export async function runAgenticLoop(
           model: getClaudeModel(),
           max_tokens: 6000,
           system: systemPrompt,
-          tools: forcedWrapUp ? [] : TOOL_DEFINITIONS,
+          tools: forcedWrapUp ? [] : tools,
           tool_choice: forcedWrapUp ? { type: "none" } : { type: "auto" },
           messages,
         }),
@@ -177,7 +189,7 @@ export async function runAgenticLoop(
 
     const toolResults = await Promise.all(
       toolUses.map((toolUse) =>
-        executeToolCall(
+        executeToolCallFn(
           {
             name: toolUse.name,
             input:

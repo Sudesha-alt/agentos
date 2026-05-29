@@ -84,6 +84,19 @@ model AuditLog {
   @@index([pipelineId, timestamp])
 }
 
+model CodebaseVisualizationCache {
+  id          String   @id @default(cuid())
+  repoOwner   String
+  repoName    String
+  branchName  String
+  layoutJson  Json
+  computedAt  DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([repoOwner, repoName, branchName])
+  @@index([computedAt])
+}
+
 model CodebaseFile {
   id            String   @id @default(cuid())
   repoOwner     String

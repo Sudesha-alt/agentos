@@ -1,13 +1,17 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { APP_NAV, DATA_MODE } from "../../shared/config/app";
 import { useReadiness } from "../../entities/system";
+import { usePipelineList } from "../../entities/pipeline";
 import { useAuth } from "../../shared/providers/useAuth";
+import ReviewQueueBadge from "../../shared/components/ReviewQueueBadge";
 
 export default function TopBar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { data } = useReadiness({ pollMs: 15000 });
   const { user, logout } = useAuth();
+  const { items: pipelines } = usePipelineList(undefined, { pollMs: 12_000 });
+  const reviewCount = pipelines.filter((p) => p.status === "PAUSED").length;
 
   const segmentLabels = Object.fromEntries(
     APP_NAV.map((item) => [item.to.split("/").at(-1) || "app", item.breadcrumb])
@@ -40,6 +44,7 @@ export default function TopBar() {
       </div>
 
       <div className="flex items-center gap-3">
+        <ReviewQueueBadge count={reviewCount} className="hidden sm:inline-flex" />
         <span
           className={`hidden items-center gap-2 rounded-full border border-hairline bg-surface/60 px-3 py-1 font-mono text-[10.5px] uppercase tracking-[0.16em] sm:inline-flex ${
             DATA_MODE === "mock" ? "text-warning" : "text-success"
