@@ -1,11 +1,9 @@
-import OpenAI from "openai";
 import type { ImplementationOutput, PrdOutput, QaOutput } from "../types/agents";
 import type { NormalizedTicket } from "../types/ticket";
+import { getOpenAIClient } from "../llm/openaiClient";
 import { logger } from "../utils/logger";
 import { withRetry } from "../utils/retry";
 import { vectorStore } from "./vectorStore";
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const EMBEDDING_MODEL = "text-embedding-3-small";
 
@@ -15,7 +13,7 @@ export const embedder = {
 
     const response = await withRetry(
       () =>
-        openai.embeddings.create({
+        getOpenAIClient().embeddings.create({
           model: EMBEDDING_MODEL,
           input: cleanedText,
         }),

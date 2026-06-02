@@ -1,14 +1,13 @@
 import { createHash } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
-import OpenAI from "openai";
 import { prisma } from "../db/client";
+import { getOpenAIClient } from "../llm/openaiClient";
 import { githubClient } from "../integrations/githubClient";
 import { logger } from "../utils/logger";
 import { withRetry } from "../utils/retry";
 import { codebaseVectorStore } from "./vectorStore";
 import { visualizationCache } from "./visualizationCache";
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const claude = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null;
@@ -417,7 +416,7 @@ async function updateFileEmbeddings(
     const chunk = chunks[i];
     const embeddingResponse = await withRetry(
       () =>
-        openai.embeddings.create({
+        getOpenAIClient().embeddings.create({
           model: EMBEDDING_MODEL,
           input: chunk.slice(0, 8_000),
         }),

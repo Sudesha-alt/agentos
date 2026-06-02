@@ -1,8 +1,6 @@
-import OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { prisma } from "../db/client";
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+import { getOpenAIClient } from "../llm/openaiClient";
 const supabase = createClient(
   process.env.SUPABASE_URL ?? "",
   process.env.SUPABASE_SERVICE_KEY ?? ""
@@ -25,7 +23,7 @@ export const codebaseQueryService = {
     similarityThreshold?: number;
   }) {
     const { repoOwner, repoName } = repoDefaults();
-    const embedding = await openai.embeddings.create({
+    const embedding = await getOpenAIClient().embeddings.create({
       model: "text-embedding-3-small",
       input: input.query,
     });
