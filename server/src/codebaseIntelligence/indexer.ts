@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "../db/client";
 import { getOpenAIClient } from "../llm/openaiClient";
-import { githubClient } from "../integrations/githubClient";
+import { gitClient } from "../integrations/gitProvider";
+import { getRepoContext } from "../git-integration/gitCredentialsStore";
 import { logger } from "../utils/logger";
 import { withRetry } from "../utils/retry";
 import { codebaseVectorStore } from "./vectorStore";
@@ -12,8 +13,10 @@ const claude = process.env.ANTHROPIC_API_KEY
   ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   : null;
 
-const REPO_OWNER = process.env.GITHUB_REPO_OWNER ?? "";
-const REPO_NAME = process.env.GITHUB_REPO_NAME ?? "";
+function repoIds() {
+  const ctx = getRepoContext();
+  return { repoOwner: ctx.workspace, repoName: ctx.repoSlug };
+}
 
 const SKIP_PATTERNS = [
   "node_modules/",
@@ -85,20 +88,18 @@ export interface IndexRunResult {
   durationMs: number;
 }
 
-function assertRepoContext(): void {
-  if (!REPO_OWNER || !REPO_NAME) {
-    throw new Error("Missing GITHUB_REPO_OWNER or GITHUB_REPO_NAME");
-  }
+function assertRepoContext(): { repoOwner: string; repoName: string } {
+  return repoIds();
 }
 
 export async function runFullIndex(branchName: string): Promise<IndexRunResult> {
-  assertRepoContext();
+  const { repoOwner, repoName } = assertRepoContext();
   const startedAt = Date.now();
 
   const run = await prismaAny.codebaseIndexRun.create({
     data: {
-      repoOwner: REPO_OWNER,
-      repoName: REPO_NAME,
+      repoOwner: repoOwner,
+      repoName: repoName,
       branchName,
       runType: "full",
       status: "running",
@@ -107,7 +108,7 @@ export async function runFullIndex(branchName: string): Promise<IndexRunResult> 
   });
 
   try {
-    const tree = await githubClient.getRepoTree(branchName);
+    const tree = await gitClient.getRepoTree(branchName);
     const candidates = tree.filter(
       (item) =>
         item.type === "blob" &&
@@ -175,12 +176,12 @@ export async function runIncrementalIndex(input: {
   commitSha: string;
   triggerType: "webhook" | "manual";
 }): Promise<IndexRunResult> {
-  assertRepoContext();
+  const { repoOwner, repoName } = assertRepoContext();
   const startedAt = Date.now();
   const run = await prismaAny.codebaseIndexRun.create({
     data: {
-      repoOwner: REPO_OWNER,
-      repoName: REPO_NAME,
+      repoOwner,
+      repoName,
       branchName: input.branchName,
       runType: "incremental",
       status: "running",
@@ -246,14 +247,15 @@ async function indexFile(
   filePath: string,
   branchName: string
 ): Promise<"indexed" | "updated" | "unchanged"> {
-  const file = await githubClient.getFileContent(filePath, branchName);
+  const { repoOwner, repoName } = repoIds();
+  const file = await gitClient.getFileContent(filePath, branchName);
   const contentHash = sha256(file.content);
 
   const existing = await prismaAny.codebaseFile.findUnique({
     where: {
       repoOwner_repoName_filePath_branchName: {
-        repoOwner: REPO_OWNER,
-        repoName: REPO_NAME,
+        repoOwner: repoOwner,
+        repoName: repoName,
         filePath,
         branchName,
       },
@@ -269,15 +271,15 @@ async function indexFile(
   await prismaAny.codebaseFile.upsert({
     where: {
       repoOwner_repoName_filePath_branchName: {
-        repoOwner: REPO_OWNER,
-        repoName: REPO_NAME,
+        repoOwner: repoOwner,
+        repoName: repoName,
         filePath,
         branchName,
       },
     },
     create: {
-      repoOwner: REPO_OWNER,
-      repoName: REPO_NAME,
+      repoOwner: repoOwner,
+      repoName: repoName,
       filePath,
       branchName,
       content: file.content,
@@ -409,6 +411,7 @@ async function updateFileEmbeddings(
   },
   language: string
 ): Promise<void> {
+  const { repoOwner, repoName } = repoIds();
   const chunks = buildEmbeddingTexts(filePath, content, intelligence).slice(0, 16);
   const rows = [];
 
@@ -425,8 +428,8 @@ async function updateFileEmbeddings(
 
     rows.push({
       filePath,
-      repoOwner: REPO_OWNER,
-      repoName: REPO_NAME,
+      repoOwner: repoOwner,
+      repoName: repoName,
       branchName,
       chunkIndex: i,
       chunkContent: chunk,
@@ -444,8 +447,8 @@ async function updateFileEmbeddings(
   }
 
   await codebaseVectorStore.replaceFileEmbeddings(
-    REPO_OWNER,
-    REPO_NAME,
+    repoOwner,
+    repoName,
     branchName,
     filePath,
     rows
@@ -477,10 +480,11 @@ function buildEmbeddingTexts(
 }
 
 async function markDeletedFiles(activeFilePaths: string[], branchName: string): Promise<number> {
+  const { repoOwner, repoName } = repoIds();
   const result = await prismaAny.codebaseFile.updateMany({
     where: {
-      repoOwner: REPO_OWNER,
-      repoName: REPO_NAME,
+      repoOwner: repoOwner,
+      repoName: repoName,
       branchName,
       filePath: { notIn: activeFilePaths },
       isDeleted: false,
@@ -491,17 +495,18 @@ async function markDeletedFiles(activeFilePaths: string[], branchName: string): 
 }
 
 async function removeFileFromIndex(filePath: string, branchName: string): Promise<void> {
+  const { repoOwner, repoName } = repoIds();
   await visualizationCache.onFileRemoved(branchName, filePath).catch(() => undefined);
   await prismaAny.codebaseFile.updateMany({
     where: {
-      repoOwner: REPO_OWNER,
-      repoName: REPO_NAME,
+      repoOwner: repoOwner,
+      repoName: repoName,
       branchName,
       filePath,
     },
     data: { isDeleted: true },
   });
-  await codebaseVectorStore.deleteFile(REPO_OWNER, REPO_NAME, branchName, filePath);
+  await codebaseVectorStore.deleteFile(repoOwner, repoName, branchName, filePath);
 }
 
 function shouldSkip(path: string): boolean {

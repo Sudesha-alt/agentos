@@ -52,6 +52,7 @@ export const APP_NAV_SECTIONS = [
     label: "Admin",
     items: [
       { to: "/app/settings", label: "Configuration", breadcrumb: "Configuration" },
+      { to: "/app/git", label: "Git integration", breadcrumb: "Git" },
       { to: "/app/jira", label: "Jira integration", breadcrumb: "Jira" },
       { to: "/app/jira-search", label: "Board search", breadcrumb: "Search" },
     ],

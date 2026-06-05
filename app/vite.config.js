@@ -23,6 +23,10 @@ export default defineConfig(({ mode }) => {
           target: apiUrl,
           changeOrigin: true,
         },
+        "/git-integration": {
+          target: apiUrl,
+          changeOrigin: true,
+        },
         "/api/codebase/viz/ws": {
           target: apiUrl,
           changeOrigin: true,

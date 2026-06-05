@@ -1,9 +1,7 @@
 import crypto from "node:crypto";
 import type { Request, Response } from "express";
-import { prisma } from "../db/client";
-import { JOB_NAMES, codebaseQueue } from "../queue/jobQueue";
-import { logger } from "../utils/logger";
-const prismaAny = prisma as any;
+import { getGitWebhookSecret } from "../git-integration/gitCredentialsStore";
+import { enqueueCodebaseIndexFromPush } from "./pushWebhookHandler";
 
 type PushWebhookPayload = {
   ref?: string;
@@ -23,7 +21,7 @@ type PushWebhookPayload = {
 };
 
 function verifySignature(req: Request): boolean {
-  const secret = process.env.GITHUB_WEBHOOK_SECRET;
+  const secret = getGitWebhookSecret("github");
   if (!secret) return true;
   const sig = req.header("x-hub-signature-256");
   if (!sig) return false;
@@ -66,71 +64,26 @@ export async function handleGithubWebhook(req: Request, res: Response): Promise<
     new Set(commits.flatMap((commit) => commit.removed ?? []))
   );
 
-  await prismaAny.branchState.upsert({
-    where: {
-      repoOwner_repoName_branchName: {
-        repoOwner,
-        repoName,
-        branchName,
-      },
-    },
-    create: {
-      repoOwner,
-      repoName,
-      branchName,
-      sourceBranch: "main",
-      createdBy: "human",
-      headSha,
-      filesChanged: changedFiles,
-      lastPushAt: new Date(),
-      lastPushBy: payload.sender?.login ?? "unknown",
-    },
-    update: {
-      headSha,
-      filesChanged: changedFiles,
-      lastPushAt: new Date(),
-      lastPushBy: payload.sender?.login ?? "unknown",
-    },
-  });
-
-  for (const commit of commits) {
-    if (!commit.id) continue;
-    await prismaAny.commitHistory.upsert({
-      where: {
-        repoOwner_repoName_sha: {
-          repoOwner,
-          repoName,
-          sha: commit.id,
-        },
-      },
-      create: {
-        repoOwner,
-        repoName,
-        branchName,
-        sha: commit.id,
-        message: commit.message ?? "",
-        author: commit.author?.name ?? "unknown",
-        authoredAt: commit.timestamp ? new Date(commit.timestamp) : new Date(),
-        filesAdded: commit.added ?? [],
-        filesModified: commit.modified ?? [],
-        filesDeleted: commit.removed ?? [],
-        pushedBy: payload.sender?.login ?? "unknown",
-      },
-      update: {},
-    });
-  }
-
-  await codebaseQueue.add(JOB_NAMES.RUN_CODEBASE_INCREMENTAL, {
+  await enqueueCodebaseIndexFromPush({
+    repoOwner,
+    repoName,
     branchName,
+    headSha,
+    pushedBy: payload.sender?.login ?? "unknown",
     changedFiles,
     deletedFiles,
-    commitSha: headSha,
-    triggerType: "webhook",
+    commits: commits
+      .filter((c) => c.id)
+      .map((c) => ({
+        sha: c.id!,
+        message: c.message ?? "",
+        author: c.author?.name ?? "unknown",
+        authoredAt: c.timestamp ? new Date(c.timestamp) : new Date(),
+        added: c.added ?? [],
+        modified: c.modified ?? [],
+        removed: c.removed ?? [],
+      })),
   });
 
-  logger.info(
-    { branchName, changedCount: changedFiles.length, deletedCount: deletedFiles.length },
-    "queued codebase incremental index"
-  );
   res.status(202).json({ ok: true });
 }

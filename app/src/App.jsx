@@ -12,6 +12,7 @@ import QaCenter from "./app/pages/QaCenter";
 import CostIntelligence from "./app/pages/CostIntelligence";
 import AuditTrail from "./app/pages/AuditTrail";
 import PrdViewer from "./app/pages/PrdViewer";
+import GitIntegration from "./app/pages/GitIntegration";
 import JiraIntegration from "./app/pages/JiraIntegration";
 import JiraSearch from "./app/pages/JiraSearch";
 import {
@@ -51,6 +52,7 @@ function App() {
             <Route path="qa" element={<QaCenter />} />
             <Route path="costs" element={<CostIntelligence />} />
             <Route path="audit" element={<AuditTrail />} />
+            <Route path="git" element={<GitIntegration />} />
             <Route path="jira" element={<JiraIntegration />} />
             <Route path="ai-worker" element={<JiraIntegration />} />
             <Route path="jira-search" element={<JiraSearch />} />

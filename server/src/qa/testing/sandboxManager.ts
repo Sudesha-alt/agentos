@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
+import { gitClient } from "../../integrations/gitProvider";
 import { logger } from "../../utils/logger";
 
 const execAsync = promisify(exec);
@@ -23,17 +24,7 @@ export const sandboxManager = {
   },
 
   async cloneBranch(sandboxDir: string, branchName: string): Promise<void> {
-    const owner = process.env.GITHUB_REPO_OWNER;
-    const repo = process.env.GITHUB_REPO_NAME;
-    const token = process.env.GITHUB_TOKEN;
-
-    if (!owner || !repo || !token) {
-      throw new Error(
-        "GITHUB_REPO_OWNER, GITHUB_REPO_NAME, and GITHUB_TOKEN are required for sandbox test runs."
-      );
-    }
-
-    const repoUrl = `https://${token}@github.com/${owner}/${repo}.git`;
+    const repoUrl = gitClient.cloneUrl();
     await execAsync(
       `git clone --depth 1 --branch ${branchName} ${repoUrl} .`,
       { cwd: sandboxDir, timeout: 120_000 }

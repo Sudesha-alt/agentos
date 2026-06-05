@@ -35,3 +35,15 @@ CREATE TABLE IF NOT EXISTS jira_integration_config (
   working_statuses_json   TEXT NOT NULL DEFAULT '[]',
   updated_at              TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS git_credentials (
+  singleton_id      INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+  provider          TEXT NOT NULL,
+  workspace         TEXT NOT NULL,
+  repo_slug         TEXT NOT NULL,
+  username          TEXT,
+  token             TEXT,
+  webhook_secret    TEXT,
+  default_branch    TEXT NOT NULL DEFAULT 'main',
+  updated_at        TEXT NOT NULL
+);
