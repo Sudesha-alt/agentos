@@ -184,13 +184,11 @@ export async function runFullIndex(
       logger.warn({ err, branchName }, "visualization refresh after full index failed");
     });
 
-    void generateTour(branchName).catch((err) => {
-      logger.warn({ err, branchName }, "tour generation after full index failed");
-    });
-
-    void generateKnowledge(branchName).catch((err) => {
-      logger.warn({ err, branchName }, "knowledge generation after full index failed");
-    });
+    void generateTour(branchName)
+      .then(() => generateKnowledge(branchName))
+      .catch((err) => {
+        logger.warn({ err, branchName }, "tour/knowledge generation after full index failed");
+      });
 
     return {
       filesIndexed,
@@ -407,7 +405,12 @@ async function extractFileIntelligence(
             },
           ],
         }),
-      { maxAttempts: 2, baseDelayMs: 500, maxDelayMs: 3000 }
+      {
+        maxAttempts: 2,
+        baseDelayMs: 500,
+        maxDelayMs: 3000,
+        context: { operation: "file-intelligence", filePath },
+      }
     );
 
     const text = response.choices[0]?.message?.content ?? "";
@@ -484,6 +487,9 @@ async function updateFileEmbeddings(
   const rows = [];
 
   for (let i = 0; i < chunks.length; i += 1) {
+    if (i > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
     const chunk = chunks[i];
     const embeddingResponse = await withRetry(
       () =>
@@ -491,7 +497,12 @@ async function updateFileEmbeddings(
           model: EMBEDDING_MODEL,
           input: chunk.slice(0, 8_000),
         }),
-      { maxAttempts: 3, baseDelayMs: 500, maxDelayMs: 4000 }
+      {
+        maxAttempts: 3,
+        baseDelayMs: 1000,
+        maxDelayMs: 10000,
+        context: { operation: "embedding", filePath, chunkIndex: i },
+      }
     );
 
     rows.push({

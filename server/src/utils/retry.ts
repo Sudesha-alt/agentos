@@ -7,6 +7,8 @@ export interface RetryOptions {
   jitter?: boolean;
   onRetry?: (err: unknown, attempt: number) => void;
   maxDelayMs?: number;
+  /** Merged into retry WARN logs so callers can identify the failing operation. */
+  context?: Record<string, unknown>;
 }
 
 /**
@@ -40,9 +42,21 @@ export async function retry<T>(
       const wait = jitter
         ? cappedDelay * (0.5 + Math.random() * 0.5)
         : cappedDelay;
+      const errMessage = err instanceof Error ? err.message : String(err);
+      const errStatus =
+        err && typeof err === "object" && "status" in err
+          ? (err as { status?: number }).status
+          : undefined;
       logger.warn(
-        { attempt: i + 1, attempts, nextRetryMs: Math.round(wait) },
-        "retry"
+        {
+          attempt: i + 1,
+          attempts,
+          nextRetryMs: Math.round(wait),
+          err: errMessage,
+          status: errStatus,
+          ...options.context,
+        },
+        "retry after transient failure"
       );
       await new Promise((resolve) => setTimeout(resolve, wait));
     }
@@ -58,6 +72,7 @@ export interface WithRetryOptions {
   factor?: number;
   jitter?: boolean;
   onRetry?: (err: unknown, attempt: number) => void;
+  context?: Record<string, unknown>;
 }
 
 // Alias with the configuration shape used in the Layer 2 RAG blueprint.
@@ -72,5 +87,6 @@ export function withRetry<T>(
     factor: options.factor,
     jitter: options.jitter,
     onRetry: options.onRetry,
+    context: options.context,
   });
 }
