@@ -3,12 +3,14 @@ import * as Sentry from "@sentry/node";
 import { createApp } from "./app";
 import { loadGitCredentialsFromStore } from "./git-integration/gitCredentialsStore";
 import { loadJiraCredentialsFromStore } from "./jira-intake/jiraCredentialsStore";
+import { loadPipelineJiraCredentialsFromStore } from "./pipeline/jira/credentialsStore";
 import { initIntakeDb } from "./jira-intake/sqliteStore";
 import { initCodebaseVizWebSocket } from "./codebaseIntelligence/codebaseVizHub";
 import { logger } from "./utils/logger";
 
 initIntakeDb();
 loadJiraCredentialsFromStore();
+loadPipelineJiraCredentialsFromStore();
 try {
   loadGitCredentialsFromStore();
 } catch {

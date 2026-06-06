@@ -1,4 +1,4 @@
-import { jiraClient } from "../integrations/jiraClient";
+import { getPipelineJiraClient } from "../pipeline/jira/client";
 import { logger } from "../utils/logger";
 import { estimateStoryPoints, formatPRDComment } from "./prdFormatter";
 import type { GeneratedPRD } from "./prdGenerator";
@@ -16,11 +16,12 @@ export async function attachPRDToJira(
   logger.info({ jiraKey }, "attaching PRD to Jira");
 
   const commentBody = formatPRDComment(prd);
-  await jiraClient.addPlainTextComment(jiraKey, commentBody);
-  await jiraClient.addLabels(jiraKey, ["prd-generated", "agentos-discovery"]);
+  const client = getPipelineJiraClient();
+  await client.addPlainTextComment(jiraKey, commentBody);
+  await client.addLabels(jiraKey, ["prd-generated", "agentos-discovery"]);
 
   if (prd.complexitySummary?.score) {
-    await jiraClient.updateStoryPoints(
+    await client.updateStoryPoints(
       jiraKey,
       estimateStoryPoints(prd.complexitySummary.score)
     );

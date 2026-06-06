@@ -10,7 +10,7 @@ import {
 import { auditRepo } from "../db/repositories/auditRepo";
 import { pipelineRepo } from "../db/repositories/pipelineRepo";
 import { ticketRepo } from "../db/repositories/ticketRepo";
-import { jiraClient } from "../integrations/jiraClient";
+import { getPipelineJiraClient } from "../pipeline/jira/client";
 import { indexer } from "../rag/indexer";
 import { retriever } from "../rag/retriever";
 import type {
@@ -493,7 +493,7 @@ export class PipelineOrchestrator {
       stage: "OUTPUT",
       inputJson: { jiraKey, output } as unknown as Prisma.InputJsonValue,
     });
-    await jiraClient.addAttachmentNote(jiraKey, "Agentos pipeline output", output);
+    await getPipelineJiraClient().addAttachmentNote(jiraKey, "Agentos pipeline output", output);
     await pipelineRepo.completeStage({
       stageLogId: stageLog.id,
       output: { jiraKey, written: true },

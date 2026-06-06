@@ -1,7 +1,4 @@
-import {
-  jiraClient,
-  type JiraIssueSearchResult,
-} from "../integrations/jiraClient";
+import { getPipelineJiraClient } from "../pipeline/jira/client";
 import { logger } from "../utils/logger";
 
 type RelationshipType =
@@ -60,7 +57,7 @@ export const jiraTool = {
       "fetching related Jira tickets"
     );
 
-    const current = (await jiraClient.getIssue(input.jiraKey)) as JiraIssueRef;
+    const current = (await getPipelineJiraClient().getIssue(input.jiraKey)) as JiraIssueRef;
     const tickets = new Map<string, RelatedJiraTicket>();
     const notes: string[] = [];
 
@@ -187,7 +184,7 @@ async function runSearchWithFallback(queries: string[]): Promise<JiraIssueRef[]>
   for (const query of queries) {
     try {
       const response =
-        await jiraClient.searchIssues<JiraIssueRef>(query, {
+        await getPipelineJiraClient().searchIssues<JiraIssueRef>(query, {
           fields: RELATED_FIELDS,
           maxResults: 6,
         });

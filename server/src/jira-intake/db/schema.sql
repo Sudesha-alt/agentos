@@ -47,3 +47,14 @@ CREATE TABLE IF NOT EXISTS git_credentials (
   default_branch    TEXT NOT NULL DEFAULT 'main',
   updated_at        TEXT NOT NULL
 );
+
+-- Lane 2 pipeline Jira (separate from intake / board queue)
+CREATE TABLE IF NOT EXISTS pipeline_jira_credentials (
+  singleton_id      INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+  base_url            TEXT,
+  email               TEXT,
+  api_token           TEXT,
+  webhook_secret      TEXT,
+  project_keys_json   TEXT NOT NULL DEFAULT '[]',
+  updated_at          TEXT NOT NULL
+);

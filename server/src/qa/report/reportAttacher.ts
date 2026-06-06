@@ -1,4 +1,4 @@
-import { jiraClient } from "../../integrations/jiraClient";
+import { getPipelineJiraClient } from "../../pipeline/jira/client";
 import { logger } from "../../utils/logger";
 import type { QaOutput } from "../../types/agents";
 import { formatQaReportForJira } from "./reportFormatter";
@@ -12,8 +12,9 @@ export async function attachQaReportToJira(
   logger.info({ jiraKey }, "attaching QA report to Jira");
 
   const body = formatQaReportForJira(qaOutput, executionReport);
-  await jiraClient.addPlainTextComment(jiraKey, body);
-  await jiraClient.addLabels(jiraKey, ["qa-generated", "agentos-qa"]);
+  const client = getPipelineJiraClient();
+  await client.addPlainTextComment(jiraKey, body);
+  await client.addLabels(jiraKey, ["qa-generated", "agentos-qa"]);
 
   logger.info({ jiraKey }, "QA report attached to Jira");
 }

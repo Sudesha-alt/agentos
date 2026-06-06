@@ -27,6 +27,32 @@ model Ticket {
   pipeline       Pipeline?
 }
 
+/// Selective mirror of closed/done Jira issues for pipeline RAG (Lane 2).
+model JiraMirror {
+  id            String    @id @default(cuid())
+  jiraTicketId  String    @unique
+  jiraKey       String    @unique
+  projectKey    String
+  summary       String
+  description   String    @db.Text
+  issueType     String
+  status        String
+  priority      String?
+  labels        Json      @default("[]")
+  components    Json      @default("[]")
+  commentsText  String?   @db.Text
+  resolution    String?
+  gitContext    String?   @db.Text
+  embeddedAt    DateTime?
+  jiraUpdatedAt DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([status])
+  @@index([projectKey])
+  @@index([jiraUpdatedAt])
+}
+
 model Pipeline {
   id           String             @id @default(cuid())
   ticketId     String             @unique

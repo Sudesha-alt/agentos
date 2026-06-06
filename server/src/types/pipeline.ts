@@ -46,3 +46,8 @@ export interface CodebaseIndexJob {
   commitSha: string;
   triggerType: "webhook" | "manual";
 }
+
+export interface JiraMirrorBackfillJob {
+  projectKeys?: string[];
+  maxIssues?: number;
+}

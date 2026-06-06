@@ -10,6 +10,7 @@ import codebaseRouter from "./api/routes/codebase";
 import gitIntegrationRouter from "./api/routes/gitIntegration";
 import healthRouter from "./api/routes/health";
 import jiraIntakeRouter from "./api/routes/jiraIntake";
+import pipelineJiraRouter from "./api/routes/pipelineJira";
 import overrideRouter from "./api/routes/override";
 import pipelineRouter from "./api/routes/pipeline";
 import webhooksRouter from "./api/routes/webhooks";
@@ -67,6 +68,7 @@ export function createApp(): express.Express {
   app.use("/codebase", codebaseRouter);
   app.use("/jira-intake", jiraIntakeRouter);
   app.use("/git-integration", gitIntegrationRouter);
+  app.use("/pipeline-jira", pipelineJiraRouter);
   app.use("/webhooks", webhooksRouter);
   app.use("/pipelines", pipelineRouter);
   app.use("/pipelines", overrideRouter);
