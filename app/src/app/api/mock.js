@@ -1208,6 +1208,33 @@ export const mockApi = {
       git: { ...mockGitState.git },
     };
   },
+  async disconnectGitIntegration() {
+    markUsed();
+    await delay(100);
+    mockGitState = {
+      connected: false,
+      git: {
+        provider: null,
+        workspace: "",
+        repoSlug: "",
+        username: null,
+        hasToken: false,
+        tokenHint: null,
+        webhookSecret: "",
+        defaultBranch: "main",
+        configured: false,
+        authMethod: null,
+        installationId: null,
+        source: "none",
+      },
+    };
+    return {
+      ok: true,
+      disconnected: true,
+      postgresInstallationsRemoved: 1,
+      message: "Git integration disconnected (mock).",
+    };
+  },
 };
 
 function buildMockVisualization(branch) {

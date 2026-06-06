@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import {
   completeGithubInstall,
   connectGitIntegration,
+  disconnectGitIntegration,
   selectGithubRepository,
   startGithubAppInstall,
   useGitIntegrationSetup,
@@ -57,6 +58,7 @@ function GitIntegrationContent({ setup, refetch }) {
   const [selectedRepo, setSelectedRepo] = useState("");
   const [installPending, setInstallPending] = useState(false);
   const [selectPending, setSelectPending] = useState(false);
+  const [disconnectPending, setDisconnectPending] = useState(false);
   const [err, setErr] = useState(() => {
     const code = searchParams.get("github_error");
     if (code === "invalid_state") {
@@ -187,6 +189,29 @@ function GitIntegrationContent({ setup, refetch }) {
     return setup?.availableRepositories ?? [];
   }, [repos, setup?.availableRepositories]);
 
+  async function onDisconnect() {
+    const confirmed = window.confirm(
+      "Disconnect GitHub from AgentOS? Saved install and repository selection will be cleared. Indexed codebase data is kept. To revoke GitHub access entirely, uninstall the AgentOS app from your GitHub account settings."
+    );
+    if (!confirmed) return;
+
+    setDisconnectPending(true);
+    setErr("");
+    try {
+      const result = await disconnectGitIntegration();
+      setPendingInstallationId("");
+      setSelectedRepo("");
+      setRepos([]);
+      setIndexRunId(null);
+      setStatus(result.message ?? "GitHub disconnected.");
+      await refetch();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Could not disconnect GitHub");
+    } finally {
+      setDisconnectPending(false);
+    }
+  }
+
   async function onSelectRepo() {
     const [owner, repo] = selectedRepo.split("/");
     if (!owner || !repo || !activeInstallationId) return;
@@ -296,14 +321,26 @@ function GitIntegrationContent({ setup, refetch }) {
               ) : null}
 
               {!connected ? (
-                <button
-                  type="button"
-                  disabled={!githubAppEnabled || installPending}
-                  onClick={() => startGithubAppInstall()}
-                  className="w-full rounded-full bg-indigo py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-white disabled:opacity-50 sm:w-auto sm:px-8"
-                >
-                  {installPending ? "Finishing install…" : "Connect with GitHub"}
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    disabled={!githubAppEnabled || installPending}
+                    onClick={() => startGithubAppInstall()}
+                    className="rounded-full bg-indigo px-8 py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-white disabled:opacity-50"
+                  >
+                    {installPending ? "Finishing install…" : "Connect with GitHub"}
+                  </button>
+                  {needsRepoPick || setup?.installationDetected ? (
+                    <button
+                      type="button"
+                      onClick={onDisconnect}
+                      disabled={disconnectPending}
+                      className="rounded-full border border-danger/40 px-4 py-2 font-mono text-[10.5px] uppercase tracking-[0.16em] text-danger transition-opacity hover:bg-danger/5 disabled:opacity-50"
+                    >
+                      {disconnectPending ? "Disconnecting…" : "Disconnect GitHub"}
+                    </button>
+                  ) : null}
+                </div>
               ) : (
                 <div className="flex flex-wrap items-center gap-3">
                   <button
@@ -312,6 +349,14 @@ function GitIntegrationContent({ setup, refetch }) {
                     className="rounded-full border border-hairline px-4 py-2 font-mono text-[10.5px] uppercase tracking-[0.16em] text-ink-dim"
                   >
                     Reconfigure installation
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onDisconnect}
+                    disabled={disconnectPending}
+                    className="rounded-full border border-danger/40 px-4 py-2 font-mono text-[10.5px] uppercase tracking-[0.16em] text-danger transition-opacity hover:bg-danger/5 disabled:opacity-50"
+                  >
+                    {disconnectPending ? "Disconnecting…" : "Disconnect GitHub"}
                   </button>
                   {git?.authMethod === "github_app" ? (
                     <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-mute">

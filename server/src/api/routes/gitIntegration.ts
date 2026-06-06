@@ -1,5 +1,6 @@
 import { Router, type Request } from "express";
 import { connectGit } from "../../git-integration/connectGit";
+import { disconnectGitIntegration } from "../../git-integration/disconnectGit";
 import {
   completeGithubInstallation,
   selectGithubRepository,
@@ -300,6 +301,20 @@ router.post("/github/complete-install", async (req, res) => {
       error: "github_complete_install_failed",
       message,
     });
+  }
+});
+
+router.post("/integration/disconnect", async (_req, res, next) => {
+  try {
+    const result = await disconnectGitIntegration();
+    res.json({
+      ok: true,
+      ...result,
+      message:
+        "Git integration disconnected in AgentOS. Indexed codebase data is kept; uninstall the GitHub App on GitHub if you want to revoke access entirely.",
+    });
+  } catch (err) {
+    next(err);
   }
 });
 
