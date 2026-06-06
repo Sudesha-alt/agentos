@@ -208,13 +208,20 @@ export default function JiraSetupGuide({
                 step 2 below.
               </li>
               <li>
-                Enable events: <strong className="text-ink">Issue created</strong> and{" "}
-                <strong className="text-ink">Issue updated</strong>.
+                Enable event: <strong className="text-ink">Issue updated</strong> only (
+                <code className="font-mono text-[12px]">jira:issue_updated</code>).
               </li>
               <li>
-                Optional: add header{" "}
-                <code className="font-mono text-[12px]">x-agentos-secret</code> with the secret
-                shown on this page (for pipeline security).
+                If you set a webhook secret on the server (
+                <code className="font-mono text-[12px]">PIPELINE_JIRA_WEBHOOK_SECRET</code>
+                ), paste the <strong className="text-ink">same value</strong> in Jira&apos;s{" "}
+                <strong className="text-ink">Secret</strong> field. Jira signs deliveries with{" "}
+                <code className="font-mono text-[12px]">X-Hub-Signature</code> — do not use a
+                custom header (Jira Cloud admin webhooks do not support that).
+              </li>
+              <li>
+                Leave the Secret field empty in Jira only if the server has no webhook secret
+                configured.
               </li>
             </ol>
           </GuideSection>
