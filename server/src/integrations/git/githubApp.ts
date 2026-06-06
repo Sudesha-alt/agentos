@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { createOAuthState } from "../../git-integration/oauthState";
 
 const API_BASE = "https://api.github.com";
 
@@ -55,6 +56,23 @@ async function appFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return (await res.json()) as T;
 }
 
+export type GithubInstallationMeta = {
+  id: number;
+  account: { login: string; type: string };
+  targetType?: string;
+  permissions?: Record<string, string>;
+  events?: string[];
+  suspendedAt?: string | null;
+};
+
+export async function getInstallation(
+  installationId: string
+): Promise<GithubInstallationMeta> {
+  return appFetch<GithubInstallationMeta>(
+    `/app/installations/${encodeURIComponent(installationId)}`
+  );
+}
+
 export async function getInstallationAccessToken(
   installationId: string
 ): Promise<string> {
@@ -108,10 +126,12 @@ export async function listInstallationRepositories(
   }));
 }
 
-export function githubAppInstallUrl(): string | null {
+export function githubAppInstallUrl(state?: string): string | null {
   const config = appConfig();
   if (!config?.appSlug) return null;
-  return `https://github.com/apps/${config.appSlug}/installations/new`;
+  const oauthState = state ?? createOAuthState();
+  const params = new URLSearchParams({ state: oauthState });
+  return `https://github.com/apps/${config.appSlug}/installations/new?${params.toString()}`;
 }
 
 export function githubAppPublicConfig() {

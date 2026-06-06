@@ -92,20 +92,33 @@ function assertRepoContext(): { repoOwner: string; repoName: string } {
   return repoIds();
 }
 
-export async function runFullIndex(branchName: string): Promise<IndexRunResult> {
+export async function runFullIndex(
+  branchName: string,
+  options?: { runId?: string; triggerType?: "manual" | "webhook" }
+): Promise<IndexRunResult> {
   const { repoOwner, repoName } = assertRepoContext();
   const startedAt = Date.now();
 
-  const run = await prismaAny.codebaseIndexRun.create({
-    data: {
-      repoOwner: repoOwner,
-      repoName: repoName,
-      branchName,
-      runType: "full",
-      status: "running",
-      triggerType: "manual",
-    },
-  });
+  const prismaAny = prisma as any;
+  let runId = options?.runId;
+  if (runId) {
+    await prismaAny.codebaseIndexRun.update({
+      where: { id: runId },
+      data: { status: "running", triggerType: options?.triggerType ?? "manual" },
+    });
+  } else {
+    const run = await prismaAny.codebaseIndexRun.create({
+      data: {
+        repoOwner: repoOwner,
+        repoName: repoName,
+        branchName,
+        runType: "full",
+        status: "running",
+        triggerType: options?.triggerType ?? "manual",
+      },
+    });
+    runId = run.id;
+  }
 
   try {
     const tree = await gitClient.getRepoTree(branchName);
@@ -116,9 +129,15 @@ export async function runFullIndex(branchName: string): Promise<IndexRunResult> 
         (item.size ?? 0) <= MAX_FILE_SIZE
     );
 
+    await prismaAny.codebaseIndexRun.update({
+      where: { id: runId },
+      data: { filesTotal: candidates.length, filesProcessed: 0 },
+    });
+
     let filesIndexed = 0;
     let filesUpdated = 0;
     let filesSkipped = 0;
+    let filesProcessed = 0;
 
     for (const item of candidates) {
       const result = await indexFile(item.path, branchName).catch((err) => {
@@ -128,6 +147,18 @@ export async function runFullIndex(branchName: string): Promise<IndexRunResult> 
       if (result === "indexed") filesIndexed += 1;
       else if (result === "updated") filesUpdated += 1;
       else filesSkipped += 1;
+      filesProcessed += 1;
+
+      if (filesProcessed % 5 === 0 || filesProcessed === candidates.length) {
+        await prismaAny.codebaseIndexRun.update({
+          where: { id: runId },
+          data: {
+            filesProcessed,
+            filesIndexed,
+            filesUpdated,
+          },
+        });
+      }
     }
 
     const filesDeleted = await markDeletedFiles(
@@ -136,9 +167,10 @@ export async function runFullIndex(branchName: string): Promise<IndexRunResult> 
     );
 
     await prismaAny.codebaseIndexRun.update({
-      where: { id: run.id },
+      where: { id: runId },
       data: {
         status: "completed",
+        filesProcessed: candidates.length,
         filesIndexed,
         filesUpdated,
         filesDeleted,
@@ -159,7 +191,7 @@ export async function runFullIndex(branchName: string): Promise<IndexRunResult> 
     };
   } catch (err) {
     await prismaAny.codebaseIndexRun.update({
-      where: { id: run.id },
+      where: { id: runId },
       data: {
         status: "failed",
         error: err instanceof Error ? err.message : String(err),

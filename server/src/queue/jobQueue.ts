@@ -1,10 +1,11 @@
 import { Queue } from "bullmq";
 import IORedis from "ioredis";
-import type { CodebaseIndexJob, PipelineRunJob } from "../types/pipeline";
+import type { CodebaseFullIndexJob, CodebaseIndexJob, PipelineRunJob } from "../types/pipeline";
 
 export const JOB_NAMES = {
   RUN_PIPELINE: "run-pipeline",
   RUN_CODEBASE_INCREMENTAL: "run-codebase-incremental",
+  RUN_CODEBASE_FULL: "run-codebase-full",
 } as const;
 
 const connection = new IORedis(process.env.REDIS_URL ?? "redis://localhost:6379", {
@@ -21,7 +22,7 @@ export const jobQueue = new Queue<PipelineRunJob>("agentos-pipeline", {
   },
 });
 
-export const codebaseQueue = new Queue<CodebaseIndexJob>("agentos-codebase", {
+export const codebaseQueue = new Queue<CodebaseIndexJob | CodebaseFullIndexJob>("agentos-codebase", {
   connection,
   defaultJobOptions: {
     removeOnComplete: 250,

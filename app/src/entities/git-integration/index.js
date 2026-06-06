@@ -55,6 +55,8 @@ export async function selectGithubRepository(body) {
   return gitIntegrationAdapter.selectRepo(body);
 }
 
+export { useIndexProgress, fetchIndexStatus } from "./useIndexProgress";
+
 /** Dashboard summary: connection status and repo label. */
 export async function fetchGitIntegrationSummary() {
   const setup = await getGitIntegrationSetup();

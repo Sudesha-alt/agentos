@@ -5,6 +5,11 @@ import {
   selectGithubRepository,
 } from "../../git-integration/githubInstall";
 import {
+  getIndexRunById,
+  getLatestIndexRun,
+  indexRunProgress,
+} from "../../codebaseIntelligence/indexQueue";
+import {
   getPublicGitCredentials,
   validateGitConfig,
 } from "../../git-integration/gitCredentialsStore";
@@ -13,6 +18,7 @@ import {
   githubAppPublicConfig,
   isGithubAppConfigured,
 } from "../../integrations/git/githubApp";
+import { validateOAuthState } from "../../git-integration/oauthState";
 import type { GitProviderId } from "../../integrations/git/types";
 
 const router = Router();
@@ -115,7 +121,17 @@ router.get("/oauth/github/install", (_req, res) => {
 router.get("/oauth/github/callback", (req, res) => {
   const installationId = String(req.query.installation_id ?? "");
   const setupAction = String(req.query.setup_action ?? "");
+  const state = String(req.query.state ?? "");
   const frontend = frontendGitUrl();
+
+  if (state && !validateOAuthState(state)) {
+    if (frontend) {
+      res.redirect(`${frontend}?github_error=invalid_state`);
+      return;
+    }
+    res.status(400).json({ error: "invalid_oauth_state" });
+    return;
+  }
 
   if (frontend) {
     const params = new URLSearchParams();
@@ -158,6 +174,82 @@ router.post("/github/select-repo", async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+router.get("/index/status", async (req, res, next) => {
+  try {
+    const runId = typeof req.query.runId === "string" ? req.query.runId : undefined;
+    const branchName =
+      typeof req.query.branch === "string" ? req.query.branch : undefined;
+    const run = runId
+      ? await getIndexRunById(runId)
+      : await getLatestIndexRun({ branchName });
+    if (!run) {
+      res.json({ active: false, progress: null });
+      return;
+    }
+    res.json({
+      active: !indexRunProgress(run).done,
+      runId: run.id,
+      branchName: run.branchName,
+      progress: indexRunProgress(run),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/index/progress", async (req, res) => {
+  const runId = typeof req.query.runId === "string" ? req.query.runId : undefined;
+  const branchName =
+    typeof req.query.branch === "string" ? req.query.branch : undefined;
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.flushHeaders?.();
+
+  let closed = false;
+  req.on("close", () => {
+    closed = true;
+  });
+
+  const send = (payload: unknown) => {
+    if (closed) return;
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  };
+
+  const poll = async () => {
+    try {
+      const run = runId
+        ? await getIndexRunById(runId)
+        : await getLatestIndexRun({ branchName });
+      if (!run) {
+        send({ active: false, progress: null });
+        res.end();
+        return;
+      }
+      const progress = indexRunProgress(run);
+      send({
+        active: !progress.done,
+        runId: run.id,
+        branchName: run.branchName,
+        progress,
+      });
+      if (progress.done) {
+        res.end();
+        return;
+      }
+      if (!closed) setTimeout(poll, 1500);
+    } catch (err) {
+      send({
+        error: err instanceof Error ? err.message : "progress_poll_failed",
+      });
+      res.end();
+    }
+  };
+
+  void poll();
 });
 
 router.post("/integration/connect", async (req, res, next) => {

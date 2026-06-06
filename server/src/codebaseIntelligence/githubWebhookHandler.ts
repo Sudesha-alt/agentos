@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { Request, Response } from "express";
 import { getGitWebhookSecret } from "../git-integration/gitCredentialsStore";
 import { enqueueCodebaseIndexFromPush } from "./pushWebhookHandler";
+import { logger } from "../utils/logger";
 
 type PushWebhookPayload = {
   ref?: string;
@@ -30,7 +31,11 @@ function verifySignature(req: Request): boolean {
     .createHmac("sha256", secret)
     .update(body)
     .digest("hex")}`;
-  return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(digest));
+  try {
+    return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(digest));
+  } catch {
+    return false;
+  }
 }
 
 function parseBranch(ref?: string): string {
@@ -38,18 +43,7 @@ function parseBranch(ref?: string): string {
   return ref.replace("refs/heads/", "");
 }
 
-export async function handleGithubWebhook(req: Request, res: Response): Promise<void> {
-  if (!verifySignature(req)) {
-    res.status(401).json({ error: "invalid_signature" });
-    return;
-  }
-
-  const event = req.header("x-github-event");
-  if (event !== "push") {
-    res.status(202).json({ ok: true, ignored: event ?? "unknown" });
-    return;
-  }
-
+async function processGithubPush(req: Request): Promise<void> {
   const payload = req.body as PushWebhookPayload;
   const branchName = parseBranch(payload.ref);
   const repoOwner = payload.repository?.owner?.login ?? process.env.GITHUB_REPO_OWNER ?? "";
@@ -84,6 +78,24 @@ export async function handleGithubWebhook(req: Request, res: Response): Promise<
         removed: c.removed ?? [],
       })),
   });
+}
 
-  res.status(202).json({ ok: true });
+export async function handleGithubWebhook(req: Request, res: Response): Promise<void> {
+  if (!verifySignature(req)) {
+    res.status(401).json({ error: "invalid_signature" });
+    return;
+  }
+
+  const event = req.header("x-github-event");
+  if (event !== "push") {
+    res.status(202).json({ ok: true, ignored: event ?? "unknown" });
+    return;
+  }
+
+  // Fast ack — queue processing runs after response (two-layer webhook pattern).
+  res.status(202).json({ ok: true, queued: true });
+
+  void processGithubPush(req).catch((err) => {
+    logger.error({ err }, "github webhook async processing failed");
+  });
 }

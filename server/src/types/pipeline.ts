@@ -46,3 +46,9 @@ export interface CodebaseIndexJob {
   commitSha: string;
   triggerType: "webhook" | "manual";
 }
+
+export interface CodebaseFullIndexJob {
+  branchName: string;
+  runId: string;
+  triggerType: "webhook" | "manual";
+}

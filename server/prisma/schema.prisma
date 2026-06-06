@@ -172,20 +172,62 @@ model CommitHistory {
 }
 
 model CodebaseIndexRun {
-  id           String   @id @default(cuid())
-  repoOwner    String
-  repoName     String
-  branchName   String
-  runType      String
-  status       String
-  filesIndexed Int      @default(0)
-  filesUpdated Int      @default(0)
-  filesDeleted Int      @default(0)
-  triggerType  String
-  triggerSha   String?
-  startedAt    DateTime @default(now())
-  completedAt  DateTime?
-  error        String?
+  id              String   @id @default(cuid())
+  repoOwner       String
+  repoName        String
+  branchName      String
+  runType         String
+  status          String
+  filesTotal      Int      @default(0)
+  filesProcessed  Int      @default(0)
+  filesIndexed    Int      @default(0)
+  filesUpdated    Int      @default(0)
+  filesDeleted    Int      @default(0)
+  triggerType     String
+  triggerSha      String?
+  startedAt       DateTime @default(now())
+  completedAt     DateTime?
+  error           String?
+
+  @@index([repoOwner, repoName, status])
+  @@index([startedAt])
+}
+
+model GithubInstallation {
+  id                String             @id @default(cuid())
+  installationId    String             @unique
+  accountLogin      String
+  accountType       String
+  targetType        String?
+  permissionsJson   Json?
+  eventsJson        Json?
+  suspendedAt       DateTime?
+  selectedRepoOwner String?
+  selectedRepoName  String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  repositories      GithubRepository[]
+
+  @@index([accountLogin])
+}
+
+model GithubRepository {
+  id             String             @id @default(cuid())
+  installationId String
+  githubRepoId   Int
+  owner          String
+  name           String
+  fullName       String
+  defaultBranch  String             @default("main")
+  private        Boolean            @default(false)
+  selected       Boolean            @default(false)
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  installation   GithubInstallation @relation(fields: [installationId], references: [installationId], onDelete: Cascade)
+
+  @@unique([installationId, githubRepoId])
+  @@index([fullName])
+  @@index([installationId, selected])
 }
 
 enum TicketStatus {

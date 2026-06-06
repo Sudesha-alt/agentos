@@ -1,5 +1,6 @@
-import { runFullIndex } from "../codebaseIntelligence/indexer";
+import { enqueueFullIndex } from "../codebaseIntelligence/indexQueue";
 import {
+  getInstallation,
   getInstallationAccessToken,
   listInstallationRepositories,
   type InstallationRepo,
@@ -10,17 +11,47 @@ import {
   saveGitCredentials,
   saveGithubAppInstallation,
 } from "./gitCredentialsStore";
+import {
+  listStoredRepositories,
+  markSelectedRepository,
+  persistInstallationFlow,
+} from "./githubInstallationStore";
 
 export async function completeGithubInstallation(installationId: string) {
   const id = installationId.trim();
   if (!id) throw new Error("installationId is required");
 
-  const repositories = await listInstallationRepositories(id);
+  const [meta, repositories] = await Promise.all([
+    getInstallation(id),
+    listInstallationRepositories(id),
+  ]);
+
   saveGithubAppInstallation(id);
+
+  await persistInstallationFlow({
+    installationId: id,
+    accountLogin: meta.account.login,
+    accountType: meta.account.type,
+    targetType: meta.targetType ?? null,
+    permissionsJson: meta.permissions ?? null,
+    eventsJson: meta.events ?? null,
+    suspendedAt: meta.suspendedAt ? new Date(meta.suspendedAt) : null,
+    repositories,
+  });
+
+  let storedRepos = repositories;
+  try {
+    const fromDb = await listStoredRepositories(id);
+    if (fromDb.length) storedRepos = fromDb;
+  } catch {
+    // Postgres optional during transition
+  }
 
   return {
     installationId: id,
-    repositories,
+    accountLogin: meta.account.login,
+    accountType: meta.account.type,
+    repositories: storedRepos,
     git: getPublicGitCredentials(),
   };
 }
@@ -70,16 +101,26 @@ export async function selectGithubRepository(input: {
     defaultBranch,
   });
 
-  void runFullIndex(defaultBranch).catch((err) => {
-    logger.warn({ err, owner, repo, defaultBranch }, "initial codebase index failed");
-  });
+  try {
+    await markSelectedRepository({ installationId, owner, repo });
+  } catch (err) {
+    logger.warn({ err, installationId, owner, repo }, "mark selected repo in postgres failed");
+  }
+
+  let indexRun: { runId: string; queued: boolean } | null = null;
+  try {
+    indexRun = await enqueueFullIndex(defaultBranch, "manual");
+  } catch (err) {
+    logger.warn({ err, owner, repo, defaultBranch }, "initial codebase index enqueue failed");
+  }
 
   return {
     connected: true,
     fullName: meta.full_name,
     defaultBranch,
     git: getPublicGitCredentials(),
-    indexQueued: true,
+    indexQueued: Boolean(indexRun),
+    indexRunId: indexRun?.runId ?? null,
   };
 }
 

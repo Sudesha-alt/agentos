@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   completeGithubInstall,
@@ -10,6 +10,7 @@ import {
 import { DATA_MODE, DATA_MODES } from "../../shared/config/app";
 import EmptyState from "../components/EmptyState";
 import GitHubSetupGuideWidget from "../../widgets/github-setup-guide/GitHubSetupGuideWidget";
+import IndexProgressBar from "../../widgets/index-progress/IndexProgressBar";
 import LabelPill from "../components/LabelPill";
 import Spinner from "../components/Spinner";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
@@ -56,8 +57,14 @@ function GitIntegrationContent({ setup, refetch }) {
   const [selectedRepo, setSelectedRepo] = useState("");
   const [installPending, setInstallPending] = useState(false);
   const [selectPending, setSelectPending] = useState(false);
-  const [err, setErr] = useState("");
+  const [err, setErr] = useState(() =>
+    searchParams.get("github_error") === "invalid_state"
+      ? "GitHub install session expired or was invalid. Try Connect with GitHub again."
+      : ""
+  );
   const [status, setStatus] = useState("");
+  const [indexRunId, setIndexRunId] = useState(null);
+  const clearedGithubError = useRef(false);
 
   const githubApp = setup?.githubApp;
   const githubAppEnabled = Boolean(githubApp?.configured && githubApp?.installUrl);
@@ -71,6 +78,13 @@ function GitIntegrationContent({ setup, refetch }) {
     (isGithubApp &&
       Boolean(activeInstallationId) &&
       (!git?.workspace || !git?.repoSlug));
+
+  useEffect(() => {
+    if (clearedGithubError.current) return;
+    if (searchParams.get("github_error") !== "invalid_state") return;
+    clearedGithubError.current = true;
+    setSearchParams({}, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     const installationId = searchParams.get("installation_id");
@@ -162,8 +176,9 @@ function GitIntegrationContent({ setup, refetch }) {
         owner,
         repo,
       });
+      if (result.indexRunId) setIndexRunId(result.indexRunId);
       setStatus(
-        `Connected to ${result.fullName}. Initial codebase index started in the background.`
+        `Connected to ${result.fullName}. Initial codebase index ${result.indexQueued ? "started" : "queued"} in the background.`
       );
       await refetch();
     } catch (e) {
@@ -199,6 +214,14 @@ function GitIntegrationContent({ setup, refetch }) {
           ) : null
         }
       />
+
+      {(connected || indexRunId) && (
+        <IndexProgressBar
+          runId={indexRunId ?? undefined}
+          branch={git?.defaultBranch ?? "main"}
+          enabled={Boolean(connected || indexRunId)}
+        />
+      )}
 
       <GitHubSetupGuideWidget
         connected={connected}
