@@ -37,7 +37,7 @@ export function createApp(): express.Express {
     );
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, x-agentos-secret, x-hub-signature-256, x-github-event"
+      "Content-Type, Authorization, x-agentos-secret, x-hub-signature-256, x-github-event, x-event-key, x-hub-signature"
     );
     if (req.method === "OPTIONS") {
       res.sendStatus(204);
