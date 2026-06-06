@@ -47,12 +47,34 @@ export async function completeGithubInstallation(installationId: string) {
     // Postgres optional during transition
   }
 
+  const git = getPublicGitCredentials();
+  let autoSelected: Awaited<ReturnType<typeof selectGithubRepository>> | null = null;
+  if (storedRepos.length === 1 && (!git.workspace || !git.repoSlug)) {
+    const only = storedRepos[0]!;
+    try {
+      autoSelected = await selectGithubRepository({
+        installationId: id,
+        owner: only.owner,
+        repo: only.name,
+        defaultBranch: only.defaultBranch,
+      });
+    } catch (err) {
+      logger.warn({ err, installationId: id, repo: only.fullName }, "auto-select single repo failed");
+    }
+  }
+
   return {
     installationId: id,
     accountLogin: meta.account.login,
     accountType: meta.account.type,
     repositories: storedRepos,
-    git: getPublicGitCredentials(),
+    git: autoSelected?.git ?? getPublicGitCredentials(),
+    autoSelected: autoSelected
+      ? {
+          fullName: autoSelected.fullName,
+          indexRunId: autoSelected.indexRunId,
+        }
+      : null,
   };
 }
 

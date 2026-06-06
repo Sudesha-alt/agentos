@@ -1,6 +1,10 @@
+import { prisma } from "../db/client";
 import { getInstallationAccessToken } from "../integrations/git/githubApp";
 import { getDb } from "../jira-intake/sqliteStore";
+import { logger } from "../utils/logger";
 import type { GitProviderId, GitRepoContext } from "../integrations/git/types";
+
+const prismaAny = prisma as any;
 
 export type GitAuthMethod = "pat" | "github_app";
 
@@ -384,5 +388,62 @@ export function validateGitConfig(): void {
   }
   if (!creds.token || !creds.workspace || !creds.repoSlug) {
     throw new Error("Git credentials incomplete");
+  }
+}
+
+/** Re-hydrate SQLite/runtime creds from Postgres after Render restarts or partial installs. */
+export async function restoreGitCredentialsFromPostgres(): Promise<boolean> {
+  try {
+    const install = (await prismaAny.githubInstallation.findFirst({
+      orderBy: { updatedAt: "desc" },
+    })) as {
+      installationId: string;
+      selectedRepoOwner: string | null;
+      selectedRepoName: string | null;
+    } | null;
+
+    if (!install?.installationId) return false;
+
+    const current = runtimeCreds ?? loadGitCredentialsFromStore();
+
+    if (install.selectedRepoOwner && install.selectedRepoName) {
+      if (
+        current?.workspace === install.selectedRepoOwner &&
+        current?.repoSlug === install.selectedRepoName &&
+        current?.installationId === install.installationId
+      ) {
+        return true;
+      }
+
+      const repo = (await prismaAny.githubRepository.findFirst({
+        where: {
+          installationId: install.installationId,
+          owner: install.selectedRepoOwner,
+          name: install.selectedRepoName,
+        },
+      })) as { defaultBranch: string } | null;
+
+      const token = await getInstallationAccessToken(install.installationId);
+      saveGitCredentials({
+        provider: "github",
+        workspace: install.selectedRepoOwner,
+        repoSlug: install.selectedRepoName,
+        token,
+        authMethod: "github_app",
+        installationId: install.installationId,
+        defaultBranch: repo?.defaultBranch ?? "main",
+      });
+      return true;
+    }
+
+    if (!current?.installationId) {
+      saveGithubAppInstallation(install.installationId);
+      return true;
+    }
+
+    return false;
+  } catch (err) {
+    logger.warn({ err }, "restore git credentials from postgres failed");
+    return false;
   }
 }

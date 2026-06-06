@@ -50,7 +50,7 @@ export default function GitIntegration() {
 function GitIntegrationContent({ setup, refetch }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState("github");
-  const [repos, setRepos] = useState([]);
+  const [repos, setRepos] = useState(() => setup?.availableRepositories ?? []);
   const [pendingInstallationId, setPendingInstallationId] = useState(
     () => setup?.git?.installationId ?? ""
   );
@@ -102,7 +102,18 @@ function GitIntegrationContent({ setup, refetch }) {
         if (cancelled) return;
         setPendingInstallationId(installationId);
         setRepos(result.repositories ?? []);
-        setStatus("GitHub App installed — choose a repository below.");
+        if (result.autoSelected?.fullName) {
+          setStatus(
+            `Connected to ${result.autoSelected.fullName}. Initial codebase index started.`
+          );
+          if (result.autoSelected.indexRunId) {
+            setIndexRunId(result.autoSelected.indexRunId);
+          }
+        } else if ((result.repositories ?? []).length > 0) {
+          setStatus("GitHub App installed — choose a repository below.");
+        } else {
+          setStatus("GitHub App installed — grant repository access in GitHub if none appear below.");
+        }
         setSearchParams({}, { replace: true });
         await refetch();
       } catch (e) {
@@ -165,9 +176,14 @@ function GitIntegrationContent({ setup, refetch }) {
     return `${git.workspace}/${git.repoSlug}`;
   }, [connected, git?.workspace, git?.repoSlug]);
 
+  const displayRepos = useMemo(() => {
+    if (repos.length > 0) return repos;
+    return setup?.availableRepositories ?? [];
+  }, [repos, setup?.availableRepositories]);
+
   async function onSelectRepo() {
     const [owner, repo] = selectedRepo.split("/");
-    if (!owner || !repo || !pendingInstallationId) return;
+    if (!owner || !repo || !activeInstallationId) return;
     setSelectPending(true);
     setErr("");
     try {
@@ -303,12 +319,12 @@ function GitIntegrationContent({ setup, refetch }) {
                 body="Choose which installed repository Agentos should index and push to."
               />
               <div className="space-y-4 p-5 sm:p-6">
-                {installPending && repos.length === 0 ? (
+                {installPending && displayRepos.length === 0 ? (
                   <div className="flex items-center gap-3 text-sm text-muted">
                     <Spinner />
                     Loading repositories from GitHub…
                   </div>
-                ) : repos.length === 0 ? (
+                ) : displayRepos.length === 0 ? (
                   <p className="text-sm text-muted">
                     No repositories available for this installation. In GitHub, open the app
                     settings and grant access to at least one repository, then click
@@ -324,7 +340,7 @@ function GitIntegrationContent({ setup, refetch }) {
                         onChange={(e) => setSelectedRepo(e.target.value)}
                       >
                         <option value="">Select a repository…</option>
-                        {repos.map((repo) => (
+                        {displayRepos.map((repo) => (
                           <option key={repo.id} value={repo.fullName}>
                             {repo.fullName}
                             {repo.private ? " (private)" : ""}

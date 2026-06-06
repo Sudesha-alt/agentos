@@ -18,7 +18,11 @@ import {
   githubAppPublicConfig,
   isGithubAppConfigured,
 } from "../../integrations/git/githubApp";
+import { listStoredRepositories } from "../../git-integration/githubInstallationStore";
+import { restoreGitCredentialsFromPostgres } from "../../git-integration/gitCredentialsStore";
 import { validateOAuthState } from "../../git-integration/oauthState";
+import { listInstallationRepositories } from "../../integrations/git/githubApp";
+import { logger } from "../../utils/logger";
 import type { GitProviderId } from "../../integrations/git/types";
 
 const router = Router();
@@ -32,13 +36,23 @@ function publicApiBase(req: Request): string {
   return `${proto}://${host}`;
 }
 
-function frontendGitUrl(): string {
+function frontendBaseUrl(): string {
   const configured = process.env.FRONTEND_URL?.trim();
-  if (configured) return configured.replace(/\/$/, "") + "/app/git";
-  return "";
+  if (!configured) return "";
+  let base = configured.replace(/\/$/, "");
+  base = base.replace(/\/app(\/git)?$/i, "");
+  return base;
 }
 
-router.get("/integration/setup", (req, res) => {
+function frontendGitUrl(): string {
+  const base = frontendBaseUrl();
+  return base ? `${base}/app/git` : "";
+}
+
+router.get("/integration/setup", async (req, res, next) => {
+  try {
+  await restoreGitCredentialsFromPostgres().catch(() => {});
+
   const base = publicApiBase(req);
   const git = getPublicGitCredentials();
   let connected = false;
@@ -58,11 +72,24 @@ router.get("/integration/setup", (req, res) => {
   const installUrl = githubAppInstallUrl();
   const callbackUrl = `${base}/git-integration/oauth/github/callback`;
 
+  let availableRepositories: Awaited<ReturnType<typeof listStoredRepositories>> = [];
+  if (needsRepoSelection && git.installationId) {
+    try {
+      availableRepositories = await listStoredRepositories(git.installationId);
+      if (!availableRepositories.length) {
+        availableRepositories = await listInstallationRepositories(git.installationId);
+      }
+    } catch (err) {
+      logger.warn({ err, installationId: git.installationId }, "list repos for setup failed");
+    }
+  }
+
   res.json({
     publicApiBase: base,
     git,
     connected,
     needsRepoSelection,
+    availableRepositories,
     githubApp: {
       ...githubApp,
       installUrl,
@@ -104,6 +131,9 @@ router.get("/integration/setup", (req, res) => {
       },
     ],
   });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get("/oauth/github/install", (_req, res) => {
@@ -118,7 +148,7 @@ router.get("/oauth/github/install", (_req, res) => {
   res.redirect(url);
 });
 
-router.get("/oauth/github/callback", (req, res) => {
+router.get("/oauth/github/callback", async (req, res) => {
   const installationId = String(req.query.installation_id ?? "");
   const setupAction = String(req.query.setup_action ?? "");
   const state = String(req.query.state ?? "");
@@ -131,6 +161,14 @@ router.get("/oauth/github/callback", (req, res) => {
     }
     res.status(400).json({ error: "invalid_oauth_state" });
     return;
+  }
+
+  if (installationId) {
+    try {
+      await completeGithubInstallation(installationId);
+    } catch (err) {
+      logger.warn({ err, installationId }, "github oauth callback complete-install failed");
+    }
   }
 
   if (frontend) {

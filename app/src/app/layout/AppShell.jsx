@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { Outlet } from "react-router-dom";
 import { EASE } from "../../lib/motion";
+import GithubOAuthRedirect from "./GithubOAuthRedirect";
 import MobileNav from "./MobileNav";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
@@ -8,6 +9,7 @@ import TopBar from "./TopBar";
 export default function AppShell() {
   return (
     <div className="min-h-screen bg-canvas text-ink">
+      <GithubOAuthRedirect />
       <div className="grid-bg-fine fixed inset-0 opacity-20 pointer-events-none" />
       <div className="editorial-noise pointer-events-none fixed inset-0 opacity-[0.18]" />
       <div className="relative flex">
