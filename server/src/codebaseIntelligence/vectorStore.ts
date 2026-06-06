@@ -1,6 +1,28 @@
 import { createClient } from "@supabase/supabase-js";
 import { logger } from "../utils/logger";
 
+let warnedMissingEmbeddingsTable = false;
+
+function isMissingEmbeddingsTableError(error: { message?: string; code?: string }): boolean {
+  const msg = (error.message ?? "").toLowerCase();
+  return (
+    msg.includes("codebase_embeddings") &&
+    (msg.includes("schema cache") ||
+      msg.includes("does not exist") ||
+      msg.includes("not found") ||
+      msg.includes("could not find the table"))
+  );
+}
+
+function warnMissingEmbeddingsTable(): void {
+  if (warnedMissingEmbeddingsTable) return;
+  warnedMissingEmbeddingsTable = true;
+  logger.warn(
+    "codebase_embeddings table is missing in Supabase — semantic search and embedding writes are skipped. " +
+      "Run server/sql/codebase_embeddings.sql in the Supabase SQL Editor (Dashboard → SQL → New query)."
+  );
+}
+
 function requiredEnv(name: string): string {
   const value = process.env[name];
   if (!value) throw new Error(`Missing required env var ${name}`);
@@ -41,6 +63,10 @@ export const codebaseVectorStore = {
       .eq("file_path", filePath);
 
     if (deleteError) {
+      if (isMissingEmbeddingsTableError(deleteError)) {
+        warnMissingEmbeddingsTable();
+        return;
+      }
       throw new Error(`Delete codebase embeddings failed: ${deleteError.message}`);
     }
 
@@ -63,6 +89,10 @@ export const codebaseVectorStore = {
       .insert(payload);
 
     if (insertError) {
+      if (isMissingEmbeddingsTableError(insertError)) {
+        warnMissingEmbeddingsTable();
+        return;
+      }
       throw new Error(`Insert codebase embeddings failed: ${insertError.message}`);
     }
   },

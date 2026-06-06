@@ -514,13 +514,20 @@ async function updateFileEmbeddings(
     });
   }
 
-  await codebaseVectorStore.replaceFileEmbeddings(
-    repoOwner,
-    repoName,
-    branchName,
-    filePath,
-    rows
-  );
+  try {
+    await codebaseVectorStore.replaceFileEmbeddings(
+      repoOwner,
+      repoName,
+      branchName,
+      filePath,
+      rows
+    );
+  } catch (err) {
+    logger.warn(
+      { err, filePath, branchName },
+      "embedding write failed — file metadata still indexed; check codebase_embeddings table in Supabase"
+    );
+  }
 }
 
 function buildEmbeddingTexts(
