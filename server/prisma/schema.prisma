@@ -97,6 +97,30 @@ model CodebaseVisualizationCache {
   @@index([computedAt])
 }
 
+model CodebaseTourCache {
+  id          String   @id @default(cuid())
+  repoOwner   String
+  repoName    String
+  branchName  String
+  tourJson    Json
+  generatedAt DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([repoOwner, repoName, branchName])
+}
+
+model CodebaseKnowledgeCache {
+  id            String   @id @default(cuid())
+  repoOwner     String
+  repoName      String
+  branchName    String
+  knowledgeJson Json
+  generatedAt   DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([repoOwner, repoName, branchName])
+}
+
 model CodebaseFile {
   id            String   @id @default(cuid())
   repoOwner     String

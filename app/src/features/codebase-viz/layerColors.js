@@ -2,10 +2,59 @@ const MS_DAY = 86_400_000;
 
 export const LAYERS = {
   structure: "structure",
+  language: "language",
   activity: "activity",
   quality: "quality",
   understanding: "understanding",
+  agent: "agent",
 };
+
+const LANGUAGE_COLORS = {
+  typescript: { fill: "rgba(49, 120, 198, 0.75)", stroke: "#3178c6" },
+  ts: { fill: "rgba(49, 120, 198, 0.75)", stroke: "#3178c6" },
+  tsx: { fill: "rgba(97, 175, 239, 0.75)", stroke: "#61afef" },
+  javascript: { fill: "rgba(247, 223, 30, 0.7)", stroke: "#f7df1e" },
+  js: { fill: "rgba(247, 223, 30, 0.7)", stroke: "#f7df1e" },
+  jsx: { fill: "rgba(97, 218, 251, 0.7)", stroke: "#61dafb" },
+  python: { fill: "rgba(55, 118, 171, 0.75)", stroke: "#3776ab" },
+  py: { fill: "rgba(55, 118, 171, 0.75)", stroke: "#3776ab" },
+  go: { fill: "rgba(0, 173, 216, 0.7)", stroke: "#00add8" },
+  rust: { fill: "rgba(222, 165, 132, 0.75)", stroke: "#dea584" },
+  rs: { fill: "rgba(222, 165, 132, 0.75)", stroke: "#dea584" },
+  sql: { fill: "rgba(224, 102, 51, 0.7)", stroke: "#e06633" },
+  json: { fill: "rgba(251, 191, 36, 0.55)", stroke: "#fbbf24" },
+  yaml: { fill: "rgba(203, 166, 247, 0.6)", stroke: "#cba6f7" },
+  yml: { fill: "rgba(203, 166, 247, 0.6)", stroke: "#cba6f7" },
+  markdown: { fill: "rgba(148, 163, 184, 0.6)", stroke: "#94a3b8" },
+  md: { fill: "rgba(148, 163, 184, 0.6)", stroke: "#94a3b8" },
+  mdx: { fill: "rgba(148, 163, 184, 0.55)", stroke: "#cbd5e1" },
+  prisma: { fill: "rgba(45, 212, 191, 0.65)", stroke: "#2dd4bf" },
+  graphql: { fill: "rgba(225, 29, 72, 0.65)", stroke: "#e11d48" },
+  java: { fill: "rgba(237, 139, 0, 0.7)", stroke: "#ed8b00" },
+  css: { fill: "rgba(168, 85, 247, 0.6)", stroke: "#a855f7" },
+  html: { fill: "rgba(239, 68, 68, 0.65)", stroke: "#ef4444" },
+};
+
+export function languageColor(language) {
+  const key = (language ?? "text").toLowerCase();
+  const style = LANGUAGE_COLORS[key] ?? {
+    fill: "rgba(100, 116, 139, 0.5)",
+    stroke: "#64748b",
+  };
+  return { ...style, tag: key };
+}
+
+/** Agent activity layer — purple for agent, human heat otherwise. */
+export function agentColor(lastModified, lastModifiedBy) {
+  if (lastModifiedBy === "agent") {
+    return { fill: "rgba(168, 85, 247, 0.85)", stroke: "#c084fc", pulse: true, tag: "agent" };
+  }
+  if (lastModifiedBy === "human") {
+    const heat = activityColor(lastModified, false, "human");
+    return { ...heat, tag: "human" };
+  }
+  return { fill: "rgba(71, 85, 105, 0.45)", stroke: "#475569", tag: "unknown" };
+}
 
 export function activityColor(lastModified, agentOverlay, lastModifiedBy) {
   if (agentOverlay && lastModifiedBy === "agent") {

@@ -11,6 +11,9 @@ import { logger } from "../utils/logger";
 import { withRetry } from "../utils/retry";
 import { codebaseVectorStore } from "./vectorStore";
 import { visualizationCache } from "./visualizationCache";
+import { generateKnowledge } from "./knowledgeService";
+import { generateTour } from "./tourService";
+import type { LayoutFileInput } from "./layoutComputer";
 
 function repoIds() {
   const ctx = getRepoContext();
@@ -181,6 +184,14 @@ export async function runFullIndex(
       logger.warn({ err, branchName }, "visualization refresh after full index failed");
     });
 
+    void generateTour(branchName).catch((err) => {
+      logger.warn({ err, branchName }, "tour generation after full index failed");
+    });
+
+    void generateKnowledge(branchName).catch((err) => {
+      logger.warn({ err, branchName }, "knowledge generation after full index failed");
+    });
+
     return {
       filesIndexed,
       filesUpdated,
@@ -340,6 +351,23 @@ async function indexFile(
   });
 
   await updateFileEmbeddings(filePath, branchName, file.content, intelligence, language);
+
+  const layoutInput: LayoutFileInput = {
+    filePath,
+    size: file.size,
+    language,
+    summary: intelligence.summary,
+    patterns: intelligence.patterns,
+    imports: intelligence.imports,
+    exports: intelligence.exports,
+    lastCommitAt: existing?.lastCommitAt ?? null,
+    lastAuthor: existing?.lastAuthor ?? null,
+    lastCommitMsg: existing?.lastCommitMsg ?? null,
+  };
+  await visualizationCache.onFileIndexed(branchName, filePath, layoutInput).catch((err) => {
+    logger.warn({ filePath, branchName, err }, "viz delta after file index failed");
+  });
+
   return existing ? "updated" : "indexed";
 }
 

@@ -8,7 +8,7 @@ export const DEFAULT_SETTINGS = SettingsSchema.parse({
   jiraEmail: "",
   jiraApiToken: "",
   webhookSecret: "",
-  model: "claude-sonnet-4-20250514",
+  model: "gpt-5.1",
   prdConfidenceThreshold: 0.7,
   implementationConfidenceThreshold: 0.7,
   qaCoverageThreshold: 95,

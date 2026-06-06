@@ -50,6 +50,45 @@ export const codebaseQueryService = {
     });
   },
 
+  async getFileIntelligence(
+    branchName: string,
+    filePath: string,
+    includeContent = false
+  ) {
+    const { repoOwner, repoName } = requireRepoScope();
+    const select: Record<string, boolean> = {
+      id: true,
+      filePath: true,
+      branchName: true,
+      size: true,
+      language: true,
+      summary: true,
+      exports: true,
+      imports: true,
+      patterns: true,
+      lastCommitSha: true,
+      lastCommitMsg: true,
+      lastCommitAt: true,
+      lastAuthor: true,
+      indexedAt: true,
+      updatedAt: true,
+      isDeleted: true,
+    };
+    if (includeContent) select.content = true;
+
+    return prismaAny.codebaseFile.findUnique({
+      where: {
+        repoOwner_repoName_filePath_branchName: {
+          repoOwner,
+          repoName,
+          filePath,
+          branchName,
+        },
+      },
+      select,
+    });
+  },
+
   async getRecentChanges(branchName: string, limit = 20) {
     const { repoOwner, repoName } = requireRepoScope();
     return prismaAny.commitHistory.findMany({

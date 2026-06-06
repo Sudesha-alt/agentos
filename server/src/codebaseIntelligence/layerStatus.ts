@@ -48,7 +48,7 @@ export type CodebaseLayerStatus = {
 };
 
 function llmProviderLabel(): string {
-  return (process.env.LLM_PROVIDER ?? "anthropic").toLowerCase();
+  return "openai";
 }
 
 function fileIntelligenceAvailable(): boolean {
