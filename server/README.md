@@ -146,6 +146,13 @@ END;
 $$ LANGUAGE plpgsql;
 ```
 
+**Codebase intelligence embeddings** (separate from pipeline `vector_store`) — required for semantic search, Ask, and per-file embedding writes during indexing:
+
+1. Supabase Dashboard → **SQL Editor** → **New query**
+2. Paste and run the full script from [`sql/codebase_embeddings.sql`](sql/codebase_embeddings.sql)
+
+That creates `public.codebase_embeddings` and the `search_codebase` RPC. Without it, indexing still saves file metadata to Postgres, but search/Ask will not find semantic matches.
+
 ### OpenAI (GPT-5.1)
 
 Set `OPENAI_API_KEY` in `server/.env`. All chat completions default to `gpt-5.1`; override with `OPENAI_CHAT_MODEL` if needed.
