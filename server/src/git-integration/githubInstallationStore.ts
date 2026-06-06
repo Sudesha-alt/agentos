@@ -179,6 +179,13 @@ export async function getLatestGithubInstallState(): Promise<GithubInstallState 
   }
 }
 
+export async function removeGithubInstallation(installationId: string): Promise<void> {
+  if (!process.env.DATABASE_URL?.trim()) return;
+  await prismaAny.githubInstallation.deleteMany({
+    where: { installationId },
+  });
+}
+
 export async function persistInstallationFlow(input: {
   installationId: string;
   accountLogin: string;

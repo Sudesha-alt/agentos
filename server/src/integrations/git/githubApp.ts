@@ -93,6 +93,15 @@ export async function getInstallationAccessToken(
   return data.token;
 }
 
+/** True when GitHub no longer has this installation (uninstalled app or wrong GITHUB_APP_ID). */
+export function isGithubInstallationMissingError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  return (
+    err.message.includes("GitHub App API 404") &&
+    err.message.includes("/app/installations/")
+  );
+}
+
 export type InstallationRepo = {
   id: number;
   fullName: string;
