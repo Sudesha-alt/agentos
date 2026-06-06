@@ -21,15 +21,12 @@ const LAYER_OPTIONS = [
   { id: LAYERS.understanding, label: "Understanding" },
 ];
 
-export default function CodebaseVisualization({ branch = "main", refreshKey = null }) {
+export default function CodebaseVisualization({ branch = "main", refreshOnOpen = false }) {
   const { data, loading, error, refetch } = useCodebaseVisualization({
     branch,
-    pollMs: 30_000,
+    pollMs: 60_000,
+    refresh: refreshOnOpen,
   });
-
-  useEffect(() => {
-    if (refreshKey) refetch();
-  }, [refreshKey, refetch]);
   const [layoutOverride, setLayoutOverride] = useState(null);
   const [view, setView] = useState("map");
   const [fileView, setFileView] = useState(false);

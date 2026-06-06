@@ -1010,6 +1010,45 @@ export const mockApi = {
       ],
     };
   },
+  async codebaseInsights(branch = "main") {
+    markUsed();
+    await delay(60);
+    return {
+      repo: { owner: "acme", name: "agentos", branch },
+      totals: { files: 142, withSummary: 128 },
+      languages: [
+        { language: "typescript", count: 86 },
+        { language: "javascript", count: 34 },
+        { language: "sql", count: 12 },
+      ],
+      patterns: [
+        { pattern: "api-route", count: 18 },
+        { pattern: "database-query", count: 14 },
+        { pattern: "auth", count: 9 },
+      ],
+      topDirectories: [
+        { path: "server", fileCount: 72 },
+        { path: "app", fileCount: 48 },
+        { path: "prisma", fileCount: 8 },
+      ],
+      highlights: [
+        {
+          path: "server/src/pipeline/orchestrator.ts",
+          language: "typescript",
+          summary: "Coordinates multi-agent pipeline stages and validation gates.",
+          patterns: ["api-route"],
+          size: 420,
+        },
+        {
+          path: "server/src/codebaseIntelligence/indexer.ts",
+          language: "typescript",
+          summary: "Indexes repository files and writes embeddings to Supabase.",
+          patterns: ["database-query"],
+          size: 380,
+        },
+      ],
+    };
+  },
   async codebaseLayerStatus() {
     markUsed();
     await delay(80);

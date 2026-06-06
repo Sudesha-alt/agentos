@@ -9,6 +9,8 @@ const restCodebaseAdapter = {
     const qs = branch ? `?branch=${encodeURIComponent(branch)}` : "";
     return fetchJson(apiPath("/api", `/codebase/status${qs}`));
   },
+  insights: (branch = "main") =>
+    fetchJson(apiPath("/api", `/codebase/insights?branch=${encodeURIComponent(branch)}`)),
   triggerFullIndex: (branch) =>
     fetchJson(apiPath("/git-integration", "/index/full"), {
       method: "POST",
@@ -20,10 +22,11 @@ const restCodebaseAdapter = {
   commits: () => fetchJson(apiPath("/api", "/codebase/commits")),
   search: (query) =>
     fetchJson(apiPath("/api", `/codebase/search?q=${encodeURIComponent(query)}`)),
-  visualization: (branch = "main") =>
-    fetchJson(
-      apiPath("/api", `/codebase/visualization?branch=${encodeURIComponent(branch)}`)
-    ),
+  visualization: (branch = "main", refresh = false) => {
+    const qs = new URLSearchParams({ branch });
+    if (refresh) qs.set("refresh", "true");
+    return fetchJson(apiPath("/api", `/codebase/visualization?${qs.toString()}`));
+  },
   fileInterior: (branch, filePath) =>
     fetchJson(
       apiPath(
@@ -41,12 +44,13 @@ const restCodebaseAdapter = {
 
 const mockCodebaseAdapter = {
   status: () => mockApi.codebaseLayerStatus(),
+  insights: (branch) => mockApi.codebaseInsights(branch),
   triggerFullIndex: (branch) => mockApi.triggerFullCodebaseIndex(branch),
   structure: () => mockApi.codebaseStructure(),
   branches: () => mockApi.codebaseBranches(),
   commits: () => mockApi.codebaseCommits(),
   search: (query) => mockApi.codebaseSearch(query),
-  visualization: (branch) => mockApi.codebaseVisualization(branch),
+  visualization: (branch, refresh) => mockApi.codebaseVisualization(branch, refresh),
   fileInterior: (branch, filePath) => mockApi.codebaseFileInterior(branch, filePath),
   ask: (question, branch) => mockApi.codebaseAsk(question, branch),
 };
@@ -66,6 +70,17 @@ export function useCodebaseLayerStatus(options = {}) {
   const branch = options.branch;
   return useResource(() => fetchCodebaseLayerStatus(branch), [branch], {
     pollMs: options.pollMs ?? 12000,
+  });
+}
+
+export function fetchCodebaseInsights(branch) {
+  return codebaseAdapter.insights(branch);
+}
+
+export function useCodebaseInsights(options = {}) {
+  const branch = options.branch ?? "main";
+  return useResource(() => fetchCodebaseInsights(branch), [branch], {
+    pollMs: options.pollMs ?? 60_000,
   });
 }
 
@@ -94,7 +109,8 @@ export function useCodebaseSearch(query, options = {}) {
 
 export function useCodebaseVisualization(options = {}) {
   const branch = options.branch ?? "main";
-  return useResource(() => codebaseAdapter.visualization(branch), [branch], {
+  const refresh = Boolean(options.refresh);
+  return useResource(() => codebaseAdapter.visualization(branch, refresh), [branch, refresh], {
     pollMs: options.pollMs ?? 120_000,
   });
 }
