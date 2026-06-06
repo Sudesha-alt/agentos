@@ -378,6 +378,22 @@ export function applyGitCredentialsToProcessEnv(creds: StoredGitCredentials): vo
   }
 }
 
+export function clearGitCredentials(): void {
+  getDb().prepare(`DELETE FROM git_credentials WHERE singleton_id = 1`).run();
+  runtimeCreds = null;
+
+  delete process.env.GITHUB_TOKEN;
+  delete process.env.GITHUB_REPO_OWNER;
+  delete process.env.GITHUB_REPO_NAME;
+  delete process.env.GITHUB_APP_INSTALLATION_ID;
+  delete process.env.GITHUB_WEBHOOK_SECRET;
+  delete process.env.BITBUCKET_APP_PASSWORD;
+  delete process.env.BITBUCKET_WORKSPACE;
+  delete process.env.BITBUCKET_REPO_SLUG;
+  delete process.env.BITBUCKET_USERNAME;
+  delete process.env.BITBUCKET_WEBHOOK_SECRET;
+}
+
 export function validateGitConfig(): void {
   const creds = getGitCredentials();
   if (creds.authMethod === "github_app") {

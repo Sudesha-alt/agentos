@@ -23,6 +23,10 @@ const restGitIntegrationAdapter = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  disconnect: () =>
+    fetchJson(intake("/integration/disconnect"), {
+      method: "POST",
+    }),
 };
 
 const mockGitIntegrationAdapter = {
@@ -30,6 +34,7 @@ const mockGitIntegrationAdapter = {
   connect: (body) => mockApi.connectGitIntegration(body),
   completeInstall: (installationId) => mockApi.completeGithubInstall(installationId),
   selectRepo: (body) => mockApi.selectGithubRepository(body),
+  disconnect: () => mockApi.disconnectGitIntegration(),
 };
 
 export const gitIntegrationAdapter =
@@ -53,6 +58,10 @@ export async function completeGithubInstall(installationId) {
 
 export async function selectGithubRepository(body) {
   return gitIntegrationAdapter.selectRepo(body);
+}
+
+export async function disconnectGitIntegration() {
+  return gitIntegrationAdapter.disconnect();
 }
 
 export { useIndexProgress, fetchIndexStatus } from "./useIndexProgress";
