@@ -3,6 +3,7 @@ import { EngineeringAgent } from "../agents/engineeringAgent";
 import { runQaAgentic } from "../qaAgent";
 import { attachQaReportToJira } from "../qa/report/reportAttacher";
 import { codebaseQueryService } from "../codebaseIntelligence/queryService";
+import { resolveRepoScope } from "../codebaseIntelligence/repoScope";
 import {
   DiscoveryPausedError,
   runDiscovery,
@@ -338,7 +339,8 @@ export class PipelineOrchestrator {
     recentChanges: unknown[];
     snapshotText: string;
   }> {
-    const branch = process.env.GITHUB_DEFAULT_BRANCH ?? "main";
+    const scope = resolveRepoScope();
+    const branch = scope?.defaultBranch ?? "main";
 
     try {
       const [semanticMatches, featureFiles, recentChanges] = await Promise.all([

@@ -2,6 +2,10 @@ import OpenAI from "openai";
 
 let cached: OpenAI | undefined;
 
+export function isOpenAIConfigured(): boolean {
+  return Boolean(process.env.OPENAI_API_KEY?.trim());
+}
+
 /** Lazy OpenAI client — server boot must not require OPENAI_API_KEY. */
 export function getOpenAIClient(): OpenAI {
   if (cached) return cached;

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "../db/client";
-import { getOpenAIClient } from "../llm/openaiClient";
+import { getClaudeClient, getClaudeModel } from "../llm/claudeClient";
+import { getOpenAIClient, isOpenAIConfigured } from "../llm/openaiClient";
 import { gitClient } from "../integrations/gitProvider";
 import { getRepoContext } from "../git-integration/gitCredentialsStore";
 import { logger } from "../utils/logger";
@@ -9,9 +9,14 @@ import { withRetry } from "../utils/retry";
 import { codebaseVectorStore } from "./vectorStore";
 import { visualizationCache } from "./visualizationCache";
 
-const claude = process.env.ANTHROPIC_API_KEY
-  ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  : null;
+function claudeAvailable(): boolean {
+  try {
+    getClaudeClient();
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function repoIds() {
   const ctx = getRepoContext();
@@ -354,10 +359,11 @@ async function extractFileIntelligence(
   imports: Array<{ from: string; items: string[] }>;
   patterns: string[];
 }> {
-  if (content.length < 200 || !claude) {
+  if (content.length < 200 || !claudeAvailable()) {
     return regexIntelligence(content, filePath, language);
   }
 
+  const claude = getClaudeClient();
   const analysisContent =
     content.length > 8_000 ? `${content.slice(0, 8_000)}\n\n[TRUNCATED]` : content;
 
@@ -365,7 +371,7 @@ async function extractFileIntelligence(
     const response = await withRetry(
       () =>
         claude.messages.create({
-          model: "claude-sonnet-4-20250514",
+          model: getClaudeModel(),
           max_tokens: 900,
           system:
             "Extract structured code intelligence. Return JSON only, no markdown.",
@@ -443,6 +449,11 @@ async function updateFileEmbeddings(
   },
   language: string
 ): Promise<void> {
+  if (!isOpenAIConfigured()) {
+    logger.warn({ filePath, branchName }, "skipping embeddings — OPENAI_API_KEY not set");
+    return;
+  }
+
   const { repoOwner, repoName } = repoIds();
   const chunks = buildEmbeddingTexts(filePath, content, intelligence).slice(0, 16);
   const rows = [];

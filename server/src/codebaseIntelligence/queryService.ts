@@ -1,19 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
 import { prisma } from "../db/client";
 import { getOpenAIClient } from "../llm/openaiClient";
+import { requireRepoScope } from "./repoScope";
+
 const supabase = createClient(
   process.env.SUPABASE_URL ?? "",
   process.env.SUPABASE_SERVICE_KEY ?? ""
 );
 
 const prismaAny = prisma as any;
-
-function repoDefaults() {
-  return {
-    repoOwner: process.env.GITHUB_REPO_OWNER ?? "",
-    repoName: process.env.GITHUB_REPO_NAME ?? "",
-  };
-}
 
 export const codebaseQueryService = {
   async searchCodebaseSemantically(input: {
@@ -22,7 +17,7 @@ export const codebaseQueryService = {
     topK?: number;
     similarityThreshold?: number;
   }) {
-    const { repoOwner, repoName } = repoDefaults();
+    const { repoOwner, repoName } = requireRepoScope();
     const embedding = await getOpenAIClient().embeddings.create({
       model: "text-embedding-3-small",
       input: input.query,
@@ -42,7 +37,7 @@ export const codebaseQueryService = {
   },
 
   async getFileWithContext(branchName: string, filePath: string) {
-    const { repoOwner, repoName } = repoDefaults();
+    const { repoOwner, repoName } = requireRepoScope();
     return prismaAny.codebaseFile.findUnique({
       where: {
         repoOwner_repoName_filePath_branchName: {
@@ -56,7 +51,7 @@ export const codebaseQueryService = {
   },
 
   async getRecentChanges(branchName: string, limit = 20) {
-    const { repoOwner, repoName } = repoDefaults();
+    const { repoOwner, repoName } = requireRepoScope();
     return prismaAny.commitHistory.findMany({
       where: { repoOwner, repoName, branchName },
       orderBy: { authoredAt: "desc" },
@@ -65,7 +60,7 @@ export const codebaseQueryService = {
   },
 
   async getBranchHistory(limit = 20) {
-    const { repoOwner, repoName } = repoDefaults();
+    const { repoOwner, repoName } = requireRepoScope();
     return prismaAny.branchState.findMany({
       where: { repoOwner, repoName },
       orderBy: { updatedAt: "desc" },
@@ -74,7 +69,7 @@ export const codebaseQueryService = {
   },
 
   async getFilesTouchingFeature(pattern: string, branchName: string) {
-    const { repoOwner, repoName } = repoDefaults();
+    const { repoOwner, repoName } = requireRepoScope();
     return prismaAny.codebaseFile.findMany({
       where: {
         repoOwner,

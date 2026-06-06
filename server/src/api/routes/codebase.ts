@@ -1,10 +1,24 @@
 import { Router } from "express";
+import { getCodebaseLayerStatus } from "../../codebaseIntelligence/layerStatus";
 import { codebaseQueryService } from "../../codebaseIntelligence/queryService";
 import { askCodebaseQuestion } from "../../codebaseIntelligence/codebaseAskService";
 import { visualizationCache } from "../../codebaseIntelligence/visualizationCache";
 import { visualizationService } from "../../codebaseIntelligence/visualizationService";
 
 const router = Router();
+
+router.get("/status", async (req, res, next) => {
+  try {
+    const branchName =
+      typeof req.query.branch === "string" && req.query.branch.trim()
+        ? req.query.branch.trim()
+        : undefined;
+    const status = await getCodebaseLayerStatus(branchName);
+    res.json(status);
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.get("/visualization", async (req, res, next) => {
   try {

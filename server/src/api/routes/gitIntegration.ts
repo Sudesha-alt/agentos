@@ -5,10 +5,12 @@ import {
   selectGithubRepository,
 } from "../../git-integration/githubInstall";
 import {
+  enqueueFullIndex,
   getIndexRunById,
   getLatestIndexRun,
   indexRunProgress,
 } from "../../codebaseIntelligence/indexQueue";
+import { getRepoContext } from "../../git-integration/gitCredentialsStore";
 import { getPublicGitCredentials } from "../../git-integration/gitCredentialsStore";
 import {
   githubAppInstallUrl,
@@ -314,6 +316,31 @@ router.post("/github/select-repo", async (req, res, next) => {
     res.json(result);
   } catch (err) {
     next(err);
+  }
+});
+
+/** Fetch entire repo from GitHub → AI summaries → Postgres + vector embeddings → graph cache. */
+router.post("/index/full", async (req, res) => {
+  try {
+    const ctx = getRepoContext();
+    const branchName =
+      typeof req.body?.branch === "string" && req.body.branch.trim()
+        ? req.body.branch.trim()
+        : ctx.defaultBranch;
+    const result = await enqueueFullIndex(branchName, "manual");
+    res.json({
+      ok: true,
+      branchName,
+      repo: `${ctx.workspace}/${ctx.repoSlug}`,
+      runId: result.runId,
+      queued: result.queued,
+      message: result.queued
+        ? "Full index queued — ensure codebase worker is running (npm run worker:codebase)"
+        : "Full index started in-process on the API server",
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "index_enqueue_failed";
+    res.status(400).json({ error: "index_enqueue_failed", message });
   }
 });
 
