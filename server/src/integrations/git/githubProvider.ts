@@ -9,9 +9,12 @@ import type {
 
 const API_BASE = "https://api.github.com";
 
-function createFetch(token: string) {
-  return async function githubFetch<T>(path: string): Promise<T> {
+export function createGithubProvider(
+  getToken: () => Promise<string>
+): GitProviderClient {
+  async function githubFetch<T>(path: string): Promise<T> {
     return retry(async () => {
+      const token = await getToken();
       const res = await fetch(`${API_BASE}${path}`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -24,11 +27,7 @@ function createFetch(token: string) {
       }
       return (await res.json()) as T;
     });
-  };
-}
-
-export function createGithubProvider(token: string): GitProviderClient {
-  const githubFetch = createFetch(token);
+  }
 
   return {
     provider: "github",
@@ -82,8 +81,9 @@ export function createGithubProvider(token: string): GitProviderClient {
       } satisfies GitFileContent;
     },
 
-    cloneUrl(ctx) {
-      return `https://${encodeURIComponent(token)}@github.com/${ctx.workspace}/${ctx.repoSlug}.git`;
+    async cloneUrl(ctx) {
+      const token = await getToken();
+      return `https://x-access-token:${encodeURIComponent(token)}@github.com/${ctx.workspace}/${ctx.repoSlug}.git`;
     },
   };
 }

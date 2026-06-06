@@ -36,6 +36,8 @@ export async function connectGit(input: {
     token: token || "",
     webhookSecret: input.webhookSecret?.trim() ?? prior.webhookSecret ?? "",
     defaultBranch: input.defaultBranch?.trim() || prior.defaultBranch || "main",
+    installationId: prior.installationId ?? null,
+    authMethod: "pat",
     source: "database",
   };
 
@@ -49,7 +51,7 @@ export async function connectGit(input: {
   const client =
     draft.provider === "bitbucket"
       ? createBitbucketProvider(draft.username ?? draft.workspace, draft.token)
-      : createGithubProvider(draft.token);
+      : createGithubProvider(() => Promise.resolve(draft.token));
 
   const meta = await client.testConnection(ctx);
   const defaultBranch = input.defaultBranch?.trim() || meta.defaultBranch || draft.defaultBranch;
@@ -62,6 +64,7 @@ export async function connectGit(input: {
     token: input.token?.trim() || undefined,
     webhookSecret: input.webhookSecret,
     defaultBranch,
+    authMethod: "pat",
   });
 
   return {

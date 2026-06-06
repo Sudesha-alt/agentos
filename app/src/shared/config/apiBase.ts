@@ -8,7 +8,7 @@ export function apiOrigin(): string {
 }
 
 export function apiPath(
-  prefix: "/api" | "/jira-intake",
+  prefix: "/api" | "/jira-intake" | "/git-integration",
   path: string
 ): string {
   const segment = path.startsWith("/") ? path : `/${path}`;

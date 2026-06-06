@@ -20,7 +20,23 @@ export function initIntakeDb(): Database.Database {
     "utf8"
   );
   db.exec(schema);
+  migrateGitCredentialsTable(db);
   return db;
+}
+
+function migrateGitCredentialsTable(database: Database.Database): void {
+  const columns = database.prepare("PRAGMA table_info(git_credentials)").all() as Array<{
+    name: string;
+  }>;
+  const names = new Set(columns.map((col) => col.name));
+  if (!names.has("installation_id")) {
+    database.exec("ALTER TABLE git_credentials ADD COLUMN installation_id TEXT");
+  }
+  if (!names.has("auth_method")) {
+    database.exec(
+      "ALTER TABLE git_credentials ADD COLUMN auth_method TEXT NOT NULL DEFAULT 'pat'"
+    );
+  }
 }
 
 export function getDb(): Database.Database {

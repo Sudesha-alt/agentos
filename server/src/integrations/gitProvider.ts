@@ -1,6 +1,7 @@
 import {
   getGitCredentials,
   getRepoContext,
+  resolveGithubAccessToken,
   type StoredGitCredentials,
 } from "../git-integration/gitCredentialsStore";
 import { createBitbucketProvider } from "./git/bitbucketProvider";
@@ -14,7 +15,7 @@ function clientFor(creds: StoredGitCredentials): GitProviderClient {
     const username = creds.username?.trim() || creds.workspace;
     return createBitbucketProvider(username, creds.token);
   }
-  return createGithubProvider(creds.token);
+  return createGithubProvider(() => resolveGithubAccessToken(creds));
 }
 
 export function getGitClient(): GitProviderClient {
@@ -36,7 +37,7 @@ export const gitClient = {
     return getGitClient().getFileContent(ctx, filePath, branchName);
   },
 
-  cloneUrl(): string {
+  async cloneUrl(): Promise<string> {
     const creds = getGitCredentials();
     const ctx = getRepoContext();
     return clientFor(creds).cloneUrl(ctx);

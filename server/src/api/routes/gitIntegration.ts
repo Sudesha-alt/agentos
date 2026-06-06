@@ -1,9 +1,18 @@
 import { Router, type Request } from "express";
 import { connectGit } from "../../git-integration/connectGit";
 import {
+  completeGithubInstallation,
+  selectGithubRepository,
+} from "../../git-integration/githubInstall";
+import {
   getPublicGitCredentials,
   validateGitConfig,
 } from "../../git-integration/gitCredentialsStore";
+import {
+  githubAppInstallUrl,
+  githubAppPublicConfig,
+  isGithubAppConfigured,
+} from "../../integrations/git/githubApp";
 import type { GitProviderId } from "../../integrations/git/types";
 
 const router = Router();
@@ -17,6 +26,12 @@ function publicApiBase(req: Request): string {
   return `${proto}://${host}`;
 }
 
+function frontendGitUrl(): string {
+  const configured = process.env.FRONTEND_URL?.trim();
+  if (configured) return configured.replace(/\/$/, "") + "/app/git";
+  return "";
+}
+
 router.get("/integration/setup", (req, res) => {
   const base = publicApiBase(req);
   const git = getPublicGitCredentials();
@@ -28,15 +43,25 @@ router.get("/integration/setup", (req, res) => {
     connected = false;
   }
 
+  const githubApp = githubAppPublicConfig();
+  const installUrl = githubAppInstallUrl();
+
   res.json({
     publicApiBase: base,
     git,
     connected,
+    githubApp: {
+      ...githubApp,
+      installUrl,
+      setupUrl: frontendGitUrl() || undefined,
+      webhookUrl: `${base}/webhooks/github`,
+    },
     webhooks: {
       github: {
         url: `${base}/webhooks/github`,
-        events: ["push"],
-        secretEnv: "GITHUB_WEBHOOK_SECRET",
+        events: ["push", "pull_request"],
+        secretEnv: "GITHUB_APP_WEBHOOK_SECRET",
+        managedByApp: isGithubAppConfigured(),
       },
       bitbucket: {
         url: `${base}/webhooks/bitbucket`,
@@ -48,6 +73,7 @@ router.get("/integration/setup", (req, res) => {
       {
         id: "github",
         label: "GitHub",
+        connectMode: isGithubAppConfigured() ? "github_app" : "pat",
         workspaceLabel: "Owner (org or user)",
         repoLabel: "Repository name",
         tokenLabel: "Personal access token (repo scope)",
@@ -56,6 +82,7 @@ router.get("/integration/setup", (req, res) => {
       {
         id: "bitbucket",
         label: "Bitbucket",
+        connectMode: "pat",
         workspaceLabel: "Workspace slug",
         repoLabel: "Repository slug",
         tokenLabel: "App password (repository read)",
@@ -63,6 +90,66 @@ router.get("/integration/setup", (req, res) => {
       },
     ],
   });
+});
+
+router.get("/oauth/github/install", (_req, res) => {
+  const url = githubAppInstallUrl();
+  if (!url) {
+    res.status(503).json({
+      error: "github_app_not_configured",
+      message: "Set GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, and GITHUB_APP_SLUG on the server.",
+    });
+    return;
+  }
+  res.redirect(url);
+});
+
+router.get("/oauth/github/callback", (req, res) => {
+  const installationId = String(req.query.installation_id ?? "");
+  const setupAction = String(req.query.setup_action ?? "");
+  const frontend = frontendGitUrl();
+
+  if (frontend) {
+    const params = new URLSearchParams();
+    if (installationId) params.set("installation_id", installationId);
+    if (setupAction) params.set("setup_action", setupAction);
+    params.set("provider", "github");
+    res.redirect(`${frontend}?${params.toString()}`);
+    return;
+  }
+
+  res.json({
+    ok: true,
+    installationId: installationId || null,
+    setupAction: setupAction || null,
+    hint: "Set FRONTEND_URL on the server to redirect back to the app after install.",
+  });
+});
+
+router.post("/github/complete-install", async (req, res, next) => {
+  try {
+    const installationId = String(req.body?.installationId ?? "");
+    const result = await completeGithubInstallation(installationId);
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/github/select-repo", async (req, res, next) => {
+  try {
+    const result = await selectGithubRepository({
+      installationId: String(req.body?.installationId ?? ""),
+      owner: String(req.body?.owner ?? ""),
+      repo: String(req.body?.repo ?? ""),
+      defaultBranch: req.body?.defaultBranch
+        ? String(req.body.defaultBranch)
+        : undefined,
+    });
+    res.json(result);
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.post("/integration/connect", async (req, res, next) => {

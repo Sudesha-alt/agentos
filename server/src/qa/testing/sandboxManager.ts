@@ -24,7 +24,7 @@ export const sandboxManager = {
   },
 
   async cloneBranch(sandboxDir: string, branchName: string): Promise<void> {
-    const repoUrl = gitClient.cloneUrl();
+    const repoUrl = await gitClient.cloneUrl();
     await execAsync(
       `git clone --depth 1 --branch ${branchName} ${repoUrl} .`,
       { cwd: sandboxDir, timeout: 120_000 }

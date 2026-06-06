@@ -20,3 +20,21 @@ export async function connectGitIntegration(body) {
     body: JSON.stringify(body),
   });
 }
+
+export function startGithubAppInstall() {
+  window.location.href = intake("/oauth/github/install");
+}
+
+export async function completeGithubInstall(installationId) {
+  return fetchJson(intake("/github/complete-install"), {
+    method: "POST",
+    body: JSON.stringify({ installationId }),
+  });
+}
+
+export async function selectGithubRepository(body) {
+  return fetchJson(intake("/github/select-repo"), {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}

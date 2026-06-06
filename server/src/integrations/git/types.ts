@@ -30,5 +30,5 @@ export interface GitProviderClient {
     filePath: string,
     branchName: string
   ): Promise<GitFileContent>;
-  cloneUrl(ctx: GitRepoContext): string;
+  cloneUrl(ctx: GitRepoContext): string | Promise<string>;
 }
