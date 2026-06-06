@@ -10,7 +10,7 @@ in control at every stage transition.
 - Node.js + TypeScript, Express
 - PostgreSQL (Supabase) with `pgvector`
 - Prisma ORM
-- Redis + BullMQ for the pipeline worker
+- In-process background tasks (indexing + pipelines on the API event loop)
 - Anthropic Claude Sonnet 4 (direct API or **AWS Bedrock**) for agent reasoning
 - OpenAI `text-embedding-3-small` for RAG embeddings
 - Sentry + Pino structured logging
@@ -24,7 +24,7 @@ src/
   pipeline/      orchestrator, stateManager, contextBuilder
   integrations/  jiraClient, webhookHandler, ticketNormalizer, intentClassifier
   rag/           vectorStore, embedder, retriever, contextCompressor, indexer
-  queue/         jobQueue + workers/pipelineWorker
+  queue/         inProcessRunner (fire-and-forget pipelines)
   db/            client + repositories (ticket, pipeline, audit)
   api/routes/    webhooks, pipeline, override, health
   types/         ticket, pipeline, agents
@@ -37,7 +37,7 @@ prisma/schema.prisma
 
 ```bash
 cp .env.example .env
-# fill in DATABASE_URL, SUPABASE_URL, SUPABASE_SERVICE_KEY, REDIS_URL,
+# fill in DATABASE_URL, SUPABASE_URL, SUPABASE_SERVICE_KEY,
 # LLM_PROVIDER + (ANTHROPIC_API_KEY or AWS Bedrock creds), OPENAI_API_KEY, JIRA_*
 
 npm install
@@ -163,11 +163,10 @@ Bedrock uses **IAM access keys** (or `~/.aws/credentials`), not an Anthropic API
 
 To keep using [console.anthropic.com](https://console.anthropic.com/) keys instead, leave `LLM_PROVIDER=anthropic` (default) and set `ANTHROPIC_API_KEY`.
 
-Run the API and worker side by side:
+Run the API (indexing and pipelines run in-process on the same process):
 
 ```bash
-npm run dev      # Express + REST endpoints
-npm run worker   # BullMQ pipeline worker
+npm run dev      # Express + REST endpoints + background tasks
 ```
 
 ## Endpoints
@@ -175,7 +174,7 @@ npm run worker   # BullMQ pipeline worker
 | Method | Path                                | Purpose                                            |
 | ------ | ----------------------------------- | -------------------------------------------------- |
 | GET    | `/healthz`                          | Liveness                                           |
-| GET    | `/readyz`                           | Postgres + Redis readiness                         |
+| GET    | `/readyz`                           | Postgres readiness                                 |
 | POST   | `/webhooks/jira`                    | Jira `issue_created` ingress                       |
 | GET    | `/pipelines`                        | List recent pipelines                              |
 | GET    | `/pipelines/:id`                    | Pipeline detail with stages, overrides, audit log  |

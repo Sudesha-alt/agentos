@@ -72,7 +72,7 @@ export default function IndexProgressBar({
       </div>
       <p className="mt-2 text-xs text-muted">
         {progress?.status === "queued"
-          ? "Queued — waiting for worker…"
+          ? "Starting index…"
           : "Embedding and analyzing files. Visualization updates when complete."}
       </p>
     </div>

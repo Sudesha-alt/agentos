@@ -334,9 +334,7 @@ router.post("/index/full", async (req, res) => {
       repo: `${ctx.workspace}/${ctx.repoSlug}`,
       runId: result.runId,
       queued: result.queued,
-      message: result.queued
-        ? "Full index queued — ensure codebase worker is running (npm run worker:codebase)"
-        : "Full index started in-process on the API server",
+      message: "Full index started in-process on the API server",
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "index_enqueue_failed";

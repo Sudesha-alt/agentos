@@ -107,16 +107,6 @@ export default function CodebaseIntelligenceStatusWidget({
             />
           </dl>
 
-          {data?.configuration?.workerHint ? (
-            <p className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-ink-dim">
-              Worker required: run{" "}
-              <code className="font-mono text-[11px] text-ink">
-                {data.configuration.workerHint}
-              </code>{" "}
-              in <code className="font-mono text-[11px] text-ink">server/</code>
-            </p>
-          ) : null}
-
           {!data?.configuration?.openaiConfigured ? (
             <p className="rounded-md border border-warning/30 bg-warning/5 px-3 py-2 text-xs text-ink-dim">
               Set <code className="font-mono text-[11px] text-ink">OPENAI_API_KEY</code> for
