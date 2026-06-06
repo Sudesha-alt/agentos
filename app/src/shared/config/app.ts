@@ -19,7 +19,7 @@ export const APP_NAV = [
   { to: "/app/costs", label: "Cost Intelligence", breadcrumb: "Costs" },
   { to: "/app/audit", label: "Audit Trail", breadcrumb: "Audit" },
   { to: "/app/settings", label: "Configuration", breadcrumb: "Configuration" },
-  { to: "/app/git", label: "Git integration", breadcrumb: "Git" },
+  { to: "/app/git", label: "GitHub integration", breadcrumb: "GitHub" },
   { to: "/app/jira", label: "Jira integration", breadcrumb: "Jira" },
   { to: "/app/jira-search", label: "Board search", breadcrumb: "Search" },
 ] as const;
@@ -53,7 +53,7 @@ export const APP_NAV_SECTIONS = [
     label: "Admin",
     items: [
       { to: "/app/settings", label: "Configuration", breadcrumb: "Configuration" },
-      { to: "/app/git", label: "Git integration", breadcrumb: "Git" },
+      { to: "/app/git", label: "GitHub integration", breadcrumb: "GitHub" },
       { to: "/app/jira", label: "Jira integration", breadcrumb: "Jira" },
       { to: "/app/jira-search", label: "Board search", breadcrumb: "Search" },
     ],

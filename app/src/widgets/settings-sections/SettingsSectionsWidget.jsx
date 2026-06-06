@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import { EASE } from "../../lib/motion";
 
@@ -16,6 +17,32 @@ export default function SettingsSectionsWidget({
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, ease: EASE }}
+      >
+        <Panel>
+          <PanelHeader
+            kicker="Integrations"
+            title="Integrations hub"
+            body="Connect external services for ticket intake and repository access."
+          />
+          <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
+            <IntegrationCard
+              to="/app/jira"
+              title="Jira integration"
+              description="AI Worker queue, board webhooks, column mapping, and pipeline ingress from Jira tickets."
+            />
+            <IntegrationCard
+              to="/app/git"
+              title="GitHub integration"
+              description="GitHub App or PAT for codebase indexing, branch push, pull requests, and QA sandboxes."
+            />
+          </div>
+        </Panel>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: EASE, delay: 0.04 }}
       >
         <Panel>
           <PanelHeader
@@ -57,7 +84,7 @@ export default function SettingsSectionsWidget({
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: EASE, delay: 0.04 }}
+        transition={{ duration: 0.35, ease: EASE, delay: 0.08 }}
       >
         <Panel>
           <PanelHeader
@@ -119,6 +146,21 @@ function clamp(value, min, max) {
   const next = Number(value);
   if (Number.isNaN(next)) return min;
   return Math.max(min, Math.min(max, next));
+}
+
+function IntegrationCard({ to, title, description }) {
+  return (
+    <Link
+      to={to}
+      className="block rounded-[1rem] border border-hairline bg-surface/40 p-4 transition-colors hover:border-indigo/40 hover:bg-surface/60"
+    >
+      <p className="font-display text-[1.05rem] tracking-tight text-ink">{title}</p>
+      <p className="mt-2 text-[13px] leading-relaxed text-ink-dim">{description}</p>
+      <p className="mt-3 font-mono text-[10px] uppercase tracking-[0.14em] text-indigo">
+        Open →
+      </p>
+    </Link>
+  );
 }
 
 function Field({ label, value, onChange, type = "text", placeholder }) {

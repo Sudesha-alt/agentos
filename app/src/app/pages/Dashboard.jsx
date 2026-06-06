@@ -1,4 +1,5 @@
 import CommandCenterWidget from "../../widgets/command-center/CommandCenterWidget";
+import IntegrationsOverviewWidget from "../../widgets/integrations-overview/IntegrationsOverviewWidget";
 import { PageIntro } from "../../shared/ui/Panel";
 
 export default function Dashboard() {
@@ -9,6 +10,7 @@ export default function Dashboard() {
         title="What is happening right now"
         body="Five metrics, live activity, and cycle-time trend — built for engineering leadership, not agent debug logs."
       />
+      <IntegrationsOverviewWidget />
       <CommandCenterWidget />
     </div>
   );

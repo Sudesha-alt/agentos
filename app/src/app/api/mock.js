@@ -782,6 +782,108 @@ const MOCK_CODEBASE_BRANCHES = {
   ],
 };
 
+const MOCK_GIT_API_BASE = "https://api.agentos.mock";
+
+const MOCK_GIT_REPOS = [
+  {
+    id: 1,
+    fullName: "acme-corp/agentos",
+    owner: "acme-corp",
+    name: "agentos",
+    defaultBranch: "main",
+    private: false,
+  },
+  {
+    id: 2,
+    fullName: "acme-corp/platform-api",
+    owner: "acme-corp",
+    name: "platform-api",
+    defaultBranch: "main",
+    private: true,
+  },
+];
+
+let mockGitState = {
+  connected: false,
+  git: {
+    provider: null,
+    workspace: "",
+    repoSlug: "",
+    username: null,
+    hasToken: false,
+    tokenHint: null,
+    webhookSecret: "",
+    defaultBranch: "main",
+    configured: false,
+    authMethod: null,
+    installationId: null,
+    source: "none",
+  },
+};
+
+function buildMockGitIntegrationSetup() {
+  const webhookUrl = `${MOCK_GIT_API_BASE}/webhooks/github`;
+  return {
+    publicApiBase: MOCK_GIT_API_BASE,
+    git: { ...mockGitState.git },
+    connected: mockGitState.connected,
+    githubApp: {
+      configured: true,
+      appSlug: "agentos-dev",
+      permissions: [
+        "Contents (read & write)",
+        "Pull requests (read & write)",
+        "Metadata (read)",
+        "Webhooks (read & write)",
+        "Actions (read)",
+      ],
+      events: ["push", "pull_request"],
+      capabilities: [
+        "Codebase index & visualization",
+        "Semantic search & Ask",
+        "Branch push & pull requests",
+        "QA sandbox clone",
+      ],
+      installUrl: "https://github.com/apps/agentos-dev/installations/new",
+      setupUrl: "/app/git",
+      webhookUrl,
+    },
+    webhooks: {
+      github: {
+        url: webhookUrl,
+        events: ["push", "pull_request"],
+        secretEnv: "GITHUB_APP_WEBHOOK_SECRET",
+        managedByApp: true,
+      },
+      bitbucket: {
+        url: `${MOCK_GIT_API_BASE}/webhooks/bitbucket`,
+        events: ["repo:push"],
+        secretEnv: "BITBUCKET_WEBHOOK_SECRET",
+      },
+    },
+    providers: [
+      {
+        id: "github",
+        label: "GitHub",
+        connectMode: "github_app",
+        workspaceLabel: "Owner (org or user)",
+        repoLabel: "Repository name",
+        tokenLabel: "Personal access token (repo scope)",
+        needsUsername: false,
+      },
+      {
+        id: "bitbucket",
+        label: "Bitbucket",
+        connectMode: "pat",
+        workspaceLabel: "Workspace slug",
+        repoLabel: "Repository slug",
+        tokenLabel: "App password (repository read)",
+        needsUsername: true,
+      },
+    ],
+  };
+}
+
 const MOCK_COSTS = {
   summary: {
     monthSpend: 142.67,
@@ -991,6 +1093,75 @@ export const mockApi = {
     markUsed();
     await delay(60);
     return { status: "ready", checks: { postgres: "ok", redis: "ok" } };
+  },
+  async gitIntegrationSetup() {
+    markUsed();
+    await delay(80);
+    return buildMockGitIntegrationSetup();
+  },
+  async connectGitIntegration(body) {
+    markUsed();
+    await delay(120);
+    const provider = body?.provider ?? "github";
+    const workspace = String(body?.workspace ?? "").trim();
+    const repoSlug = String(body?.repoSlug ?? "").trim();
+    mockGitState = {
+      connected: true,
+      git: {
+        provider,
+        workspace,
+        repoSlug,
+        username: body?.username ?? null,
+        hasToken: Boolean(body?.token),
+        tokenHint: body?.token ? `${String(body.token).slice(0, 4)}…` : null,
+        webhookSecret: body?.webhookSecret ?? "",
+        defaultBranch: body?.defaultBranch ?? "main",
+        configured: true,
+        authMethod: "pat",
+        installationId: null,
+        source: "database",
+      },
+    };
+    return {
+      connected: true,
+      fullName: `${workspace}/${repoSlug}`,
+      defaultBranch: mockGitState.git.defaultBranch,
+      git: { ...mockGitState.git },
+    };
+  },
+  async completeGithubInstall(installationId) {
+    markUsed();
+    await delay(140);
+    mockGitState.git.installationId = String(installationId);
+    mockGitState.git.authMethod = "github_app";
+    return { repositories: MOCK_GIT_REPOS };
+  },
+  async selectGithubRepository(body) {
+    markUsed();
+    await delay(120);
+    const owner = String(body?.owner ?? "").trim();
+    const repo = String(body?.repo ?? "").trim();
+    const installationId = String(body?.installationId ?? mockGitState.git.installationId ?? "");
+    mockGitState = {
+      connected: true,
+      git: {
+        ...mockGitState.git,
+        provider: "github",
+        workspace: owner,
+        repoSlug: repo,
+        configured: true,
+        authMethod: "github_app",
+        installationId,
+        hasToken: true,
+        source: "database",
+      },
+    };
+    return {
+      connected: true,
+      fullName: `${owner}/${repo}`,
+      defaultBranch: body?.defaultBranch ?? "main",
+      git: { ...mockGitState.git },
+    };
   },
 };
 

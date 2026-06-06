@@ -10,6 +10,7 @@ const NAV_ICONS = {
   "/app/qa": IconQa,
   "/app/costs": IconCosts,
   "/app/audit": IconAudit,
+  "/app/git": IconGitHub,
   "/app/jira": IconAiWorker,
   "/app/jira-search": IconSearch,
   "/app/settings": IconSettings,
@@ -124,6 +125,17 @@ function IconSettings() {
       <path
         d="M7 1.5v1.4M7 11.1v1.4M1.5 7h1.4M11.1 7h1.4M3.2 3.2l1 1M9.8 9.8l1 1M9.8 4.2l1-1M3.2 10.8l1-1"
         stroke="currentColor"
+      />
+    </svg>
+  );
+}
+function IconGitHub() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+      <path
+        d="M7 1.5C4.5 1.5 2.5 3.5 2.5 6c0 2 1.3 3.7 3.1 4.3.2.1.3 0 .3-.2v-1.2c-1.3.3-1.5-.6-1.5-.6-.2-.4-.5-.6-.5-.6-.4-.3 0-.3 0-.3.5 0 .7.3.7.6 0 .3.5 1 .9.5.2-.2.4-.6.4-.9v-.5c-1-.1-2.1-.5-2.1-2.3 0-.5.2-1 .5-1.3 0-.5-.1-1 .1-1.2.1-.1.4-.2 1 .2.3-.1.6-.1.9-.1.3 0 .6 0 .9.1.6-.4.9-.3 1-.2.2.2.3.7.2 1.2.3.3.5.8.5 1.3 0 1.8-1.2 2.2-2.2 2.3.2.2.3.5.3.8v1.2c0 .2.1.3.3.2 1.8-.6 3.1-2.3 3.1-4.3 0-2.5-2-4.5-4.5-4.5z"
+        stroke="currentColor"
+        strokeWidth="0.85"
       />
     </svg>
   );

@@ -3,21 +3,19 @@ import { useSearchParams } from "react-router-dom";
 import {
   completeGithubInstall,
   connectGitIntegration,
-  getGitIntegrationSetup,
   selectGithubRepository,
   startGithubAppInstall,
+  useGitIntegrationSetup,
 } from "../../entities/git-integration";
-import { useResource } from "../../shared/lib/useResource";
+import { DATA_MODE, DATA_MODES } from "../../shared/config/app";
 import EmptyState from "../components/EmptyState";
+import GitHubSetupGuideWidget from "../../widgets/github-setup-guide/GitHubSetupGuideWidget";
 import LabelPill from "../components/LabelPill";
 import Spinner from "../components/Spinner";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
 
 export default function GitIntegration() {
-  const { data: setup, error, loading, refetch } = useResource(
-    () => getGitIntegrationSetup(),
-    []
-  );
+  const { data: setup, error, loading, refetch } = useGitIntegrationSetup();
 
   if (loading && !setup) {
     return (
@@ -27,11 +25,20 @@ export default function GitIntegration() {
     );
   }
 
-  if (error) {
+  if (error && DATA_MODE !== DATA_MODES.MOCK) {
     return (
       <EmptyState
         title="Cannot reach API"
         body="Set VITE_API_URL on Vercel to your Render URL and redeploy."
+      />
+    );
+  }
+
+  if (error && !setup) {
+    return (
+      <EmptyState
+        title="Git integration unavailable"
+        body="Could not load integration setup. Check the server or switch to mock mode for local UI development."
       />
     );
   }
@@ -123,7 +130,7 @@ function GitIntegrationContent({ setup, refetch }) {
   return (
     <div className="mx-auto w-full max-w-[82rem] space-y-6 pb-16">
       <PageIntro
-        kicker="Git integration"
+        kicker="GitHub integration"
         title={connected ? "GitHub connected" : "Connect GitHub"}
         body={
           connected
@@ -135,6 +142,13 @@ function GitIntegrationContent({ setup, refetch }) {
             <LabelPill label={connectedLabel ?? "Connected"} tone="success" />
           ) : null
         }
+      />
+
+      <GitHubSetupGuideWidget
+        connected={connected}
+        webhookUrl={githubApp?.webhookUrl ?? setup?.webhooks?.github?.url}
+        githubApp={githubApp}
+        defaultOpen={!connected}
       />
 
       <div className="flex gap-2">
