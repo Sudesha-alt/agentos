@@ -318,7 +318,7 @@ function buildDistricts(files: LayoutFileInput[]): VisualizationDistrict[] {
   });
 }
 
-function buildTourSteps(
+export function buildTourSteps(
   districts: VisualizationDistrict[],
   nodes: VisualizationNode[],
   branchName: string
@@ -384,7 +384,7 @@ function buildTourSteps(
   ];
 }
 
-function buildQuickReference(
+export function buildQuickReference(
   districts: VisualizationDistrict[]
 ): Array<{ question: string; pathPrefix: string }> {
   const api = districts.find((d) => /api|app|route/i.test(d.path))?.path ?? "app";

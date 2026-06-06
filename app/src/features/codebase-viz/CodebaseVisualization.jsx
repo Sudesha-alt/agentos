@@ -5,7 +5,9 @@ import {
   useCodebaseSearch,
   askCodebase,
 } from "../../entities/codebase";
+import { consumeMapHighlights } from "../../widgets/codebase-search/codebaseSearchUtils";
 import TreemapCanvas from "./TreemapCanvas";
+import MapMinimap from "./MapMinimap";
 import ModuleGraphView from "./ModuleGraphView";
 import TourOverlay from "./TourOverlay";
 import ActivityTimeSlider from "./ActivityTimeSlider";
@@ -16,12 +18,29 @@ import Spinner from "../../app/components/Spinner";
 
 const LAYER_OPTIONS = [
   { id: LAYERS.structure, label: "Structure" },
+  { id: LAYERS.language, label: "Language" },
   { id: LAYERS.activity, label: "Activity" },
   { id: LAYERS.quality, label: "Quality" },
   { id: LAYERS.understanding, label: "Understanding" },
+  { id: LAYERS.agent, label: "Agent activity" },
 ];
 
-export default function CodebaseVisualization({ branch = "main", refreshOnOpen = false }) {
+export default function CodebaseVisualization({
+  branch = "main",
+  refreshOnOpen = false,
+  tourMode = false,
+  tourDefinition = null,
+  tourOpen: controlledTourOpen,
+  tourStep: controlledTourStep,
+  onTourOpenChange,
+  onTourStepChange,
+  onOpenFile,
+  onQuizAttempt,
+  quizFeedback = null,
+  hideWelcome = false,
+  compact = false,
+  mapNavigation = null,
+}) {
   const { data, loading, error, refetch } = useCodebaseVisualization({
     branch,
     pollMs: 60_000,
@@ -31,23 +50,31 @@ export default function CodebaseVisualization({ branch = "main", refreshOnOpen =
   const [view, setView] = useState("map");
   const [fileView, setFileView] = useState(false);
   const [layer, setLayer] = useState(LAYERS.activity);
-  const [agentOverlay, setAgentOverlay] = useState(false);
   const [focusPath, setFocusPath] = useState(null);
   const [selectedFile, setSelectedFile] = useState(null);
   const [hovered, setHovered] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [question, setQuestion] = useState("");
   const [questionAnswer, setQuestionAnswer] = useState(null);
-  const [manualHighlights, setManualHighlights] = useState(null);
-  const [tourOpen, setTourOpen] = useState(false);
-  const [tourStep, setTourStep] = useState(0);
-  const [welcome, setWelcome] = useState(() => !localStorage.getItem("agentos-viz-tour-seen"));
+  const [manualHighlights, setManualHighlights] = useState(() => {
+    const paths = consumeMapHighlights();
+    return paths?.length ? new Set(paths) : null;
+  });
+  const [internalTourOpen, setInternalTourOpen] = useState(false);
+  const [internalTourStep, setInternalTourStep] = useState(0);
+  const tourOpen = controlledTourOpen ?? internalTourOpen;
+  const setTourOpen = onTourOpenChange ?? setInternalTourOpen;
+  const tourStep = controlledTourStep ?? internalTourStep;
+  const setTourStep = onTourStepChange ?? setInternalTourStep;
+  const [welcome, setWelcome] = useState(
+    () => !hideWelcome && !tourMode && !localStorage.getItem("agentos-viz-tour-seen")
+  );
   const [activityAsOf, setActivityAsOf] = useState(null);
   const [asking, setAsking] = useState(false);
 
   const { data: searchData } = useCodebaseSearch(searchQuery, { pollMs: 0 });
 
-  useCodebaseVizWs(branch, (message) => {
+  const { status: wsStatus, reconnect: wsReconnect } = useCodebaseVizWs(branch, (message) => {
     if (message.type === "layout_refresh") {
       setLayoutOverride(message.layout);
       return;
@@ -87,37 +114,54 @@ export default function CodebaseVisualization({ branch = "main", refreshOnOpen =
     [activeLayout]
   );
 
-  const visibleNodes = useMemo(() => {
-    if (!focusPath) return fileNodes;
-    const prefix = focusPath.endsWith("/") ? focusPath : `${focusPath}/`;
-    return fileNodes.filter((n) => n.path === focusPath || n.path.startsWith(prefix));
-  }, [fileNodes, focusPath]);
+  const effectiveFocusPath =
+    mapNavigation?.key != null ? (mapNavigation.focusPath ?? null) : focusPath;
+  const effectiveManualHighlights = useMemo(() => {
+    if (mapNavigation?.key == null) return manualHighlights;
+    return mapNavigation.highlightPaths?.length
+      ? new Set(mapNavigation.highlightPaths)
+      : null;
+  }, [mapNavigation, manualHighlights]);
+
+  const focusPrefix = useMemo(() => {
+    if (!effectiveFocusPath) return null;
+    return effectiveFocusPath.endsWith("/") ? effectiveFocusPath : `${effectiveFocusPath}/`;
+  }, [effectiveFocusPath]);
+
+  const zoomLevel = fileView ? "file" : effectiveFocusPath ? "district" : "galaxy";
 
   const breadcrumb = useMemo(() => {
-    if (!focusPath) return ["repository"];
-    return ["repository", ...focusPath.split("/").filter(Boolean)];
-  }, [focusPath]);
+    if (!effectiveFocusPath) return ["repository"];
+    return ["repository", ...effectiveFocusPath.split("/").filter(Boolean)];
+  }, [effectiveFocusPath]);
 
   const highlights = useMemo(() => {
-    if (manualHighlights) return manualHighlights;
+    if (effectiveManualHighlights) return effectiveManualHighlights;
     if (searchQuery.trim() && searchData?.results?.length) {
-      return new Set(searchData.results.map((r) => r.path));
+      return new Set(searchData.results.map((r) => r.path ?? r.file_path));
     }
     return new Set();
-  }, [manualHighlights, searchQuery, searchData]);
+  }, [effectiveManualHighlights, searchQuery, searchData]);
 
   useEffect(() => {
     const onKey = (e) => {
       if (e.key === "Escape") {
-        setFocusPath(null);
+        if (fileView) {
+          setFileView(false);
+        } else if (focusPath) {
+          const parts = focusPath.split("/").filter(Boolean);
+          setFocusPath(parts.length > 1 ? parts.slice(0, -1).join("/") : null);
+        }
         setSelectedFile(null);
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [fileView, focusPath]);
 
-  const tourSteps = activeLayout?.meta?.tourSteps ?? [];
+  const tourSteps = tourDefinition?.steps ?? activeLayout?.meta?.tourSteps ?? [];
+  const quickReference =
+    tourDefinition?.cheatSheet ?? activeLayout?.meta?.quickReference ?? [];
   const currentTourStep = tourSteps[tourStep];
 
   function applyTourStep(step) {
@@ -130,24 +174,45 @@ export default function CodebaseVisualization({ branch = "main", refreshOnOpen =
     }
   }
 
-  const handleSelectNode = useCallback((node) => {
-    const parts = node.path.split("/").filter(Boolean);
-    const segment = parts[0];
+  const handleSelectNode = useCallback(
+    (node) => {
+      const parts = node.path.split("/").filter(Boolean);
 
-    if (!focusPath) {
-      setFocusPath(segment);
-      return;
-    }
+      if (tourOpen && currentTourStep?.quiz && onQuizAttempt) {
+        onQuizAttempt(parts[0] ?? node.path);
+      }
 
-    const focusDepth = focusPath.split("/").filter(Boolean).length;
-    if (parts.length > focusDepth || node.path === focusPath) {
-      setSelectedFile(node);
-      setFileView(true);
-      return;
-    }
+      if (!effectiveFocusPath) {
+        setFocusPath(parts[0]);
+        return;
+      }
 
-    setFocusPath(parts.slice(0, -1).join("/") || segment);
-  }, [focusPath]);
+      const prefix = effectiveFocusPath.endsWith("/")
+        ? effectiveFocusPath
+        : `${effectiveFocusPath}/`;
+      const inFocus = node.path === effectiveFocusPath || node.path.startsWith(prefix);
+      if (!inFocus) {
+        setFocusPath(parts[0]);
+        return;
+      }
+
+      const focusDepth = effectiveFocusPath.split("/").filter(Boolean).length;
+      if (parts.length > focusDepth) {
+        setSelectedFile(node);
+        setFileView(true);
+        return;
+      }
+
+      if (parts.length === focusDepth) {
+        setSelectedFile(node);
+        setFileView(true);
+        return;
+      }
+
+      setFocusPath(parts.slice(0, focusDepth + 1).join("/"));
+    },
+    [effectiveFocusPath, tourOpen, currentTourStep, onQuizAttempt]
+  );
 
   async function handleAskQuestion(e) {
     e.preventDefault();
@@ -231,6 +296,20 @@ export default function CodebaseVisualization({ branch = "main", refreshOnOpen =
             </ViewToggle>
           </div>
 
+          <span
+            className={`shrink-0 rounded-full px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.14em] ${
+              zoomLevel === "galaxy"
+                ? "bg-indigo/10 text-indigo"
+                : zoomLevel === "district"
+                  ? "bg-amber-500/10 text-amber-200"
+                  : "bg-emerald-500/10 text-emerald-300"
+            }`}
+          >
+            {zoomLevel === "galaxy" ? "Galaxy" : zoomLevel === "district" ? "District" : "File"}
+          </span>
+
+          <LiveBadge status={wsStatus} onReconnect={wsReconnect} />
+
           <nav className="flex min-w-0 flex-1 flex-wrap items-center gap-1 font-mono text-[11px] text-ink-mute">
             {breadcrumb.map((crumb, i) => (
               <span key={crumb} className="flex items-center gap-1">
@@ -239,6 +318,8 @@ export default function CodebaseVisualization({ branch = "main", refreshOnOpen =
                   type="button"
                   className="hover:text-ink"
                   onClick={() => {
+                    setFileView(false);
+                    setSelectedFile(null);
                     if (i === 0) setFocusPath(null);
                     else setFocusPath(breadcrumb.slice(1, i + 1).join("/"));
                   }}
@@ -249,37 +330,41 @@ export default function CodebaseVisualization({ branch = "main", refreshOnOpen =
             ))}
           </nav>
 
-          <button
-            type="button"
-            onClick={() => setTourOpen(true)}
-            className="rounded-full border border-hairline px-3 py-1.5 text-[12px] text-ink-dim hover:text-ink"
-          >
-            Replay tour
-          </button>
+          {!compact ? (
+            <button
+              type="button"
+              onClick={() => setTourOpen(true)}
+              className="rounded-full border border-hairline px-3 py-1.5 text-[12px] text-ink-dim hover:text-ink"
+            >
+              Replay tour
+            </button>
+          ) : null}
         </div>
 
-        <div className="mt-3 grid gap-2 lg:grid-cols-[1fr_1fr]">
-          <input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Semantic search — e.g. where is authentication handled"
-            className="h-10 rounded-full border border-hairline bg-canvas/60 px-4 text-[13px] outline-none focus:border-indigo/40"
-          />
-          <form onSubmit={handleAskQuestion} className="flex gap-2">
+        {!compact ? (
+          <div className="mt-3 grid gap-2 lg:grid-cols-[1fr_1fr]">
             <input
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Ask a question about this codebase"
-              className="h-10 min-w-0 flex-1 rounded-full border border-hairline bg-canvas/60 px-4 text-[13px] outline-none focus:border-indigo/40"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Semantic search — e.g. where is authentication handled"
+              className="h-10 rounded-full border border-hairline bg-canvas/60 px-4 text-[13px] outline-none focus:border-indigo/40"
             />
-            <button
-              type="submit"
-              className="shrink-0 rounded-full border border-indigo/40 bg-indigo/10 px-4 text-[13px]"
-            >
-              {asking ? "…" : "Ask"}
-            </button>
-          </form>
-        </div>
+            <form onSubmit={handleAskQuestion} className="flex gap-2">
+              <input
+                value={question}
+                onChange={(e) => setQuestion(e.target.value)}
+                placeholder="Ask a question about this codebase"
+                className="h-10 min-w-0 flex-1 rounded-full border border-hairline bg-canvas/60 px-4 text-[13px] outline-none focus:border-indigo/40"
+              />
+              <button
+                type="submit"
+                className="shrink-0 rounded-full border border-indigo/40 bg-indigo/10 px-4 text-[13px]"
+              >
+                {asking ? "…" : "Ask"}
+              </button>
+            </form>
+          </div>
+        ) : null}
 
         {view === "map" ? (
           <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -297,14 +382,6 @@ export default function CodebaseVisualization({ branch = "main", refreshOnOpen =
                 {opt.label}
               </button>
             ))}
-            <label className="ml-2 flex items-center gap-2 text-[12px] text-ink-dim">
-              <input
-                type="checkbox"
-                checked={agentOverlay}
-                onChange={(e) => setAgentOverlay(e.target.checked)}
-              />
-              Agent changes (purple)
-            </label>
             {activeLayout?.meta?.layoutKind === "voronoi" ? (
               <span className="font-mono text-[10px] text-indigo">Voronoi layout</span>
             ) : null}
@@ -334,7 +411,9 @@ export default function CodebaseVisualization({ branch = "main", refreshOnOpen =
               <button
                 type="button"
                 className="text-[12px] text-ink-dim hover:text-ink"
-                onClick={() => setFileView(false)}
+                onClick={() => {
+                  setFileView(false);
+                }}
               >
                 ← Back to map
               </button>
@@ -344,16 +423,27 @@ export default function CodebaseVisualization({ branch = "main", refreshOnOpen =
             </div>
           </div>
         ) : view === "map" ? (
-          <TreemapCanvas
-            nodes={visibleNodes}
-            layer={layer}
-            agentOverlay={agentOverlay}
-            activityAsOfMs={layer === LAYERS.activity ? activityAsOfMs : undefined}
-            highlightPaths={highlights}
-            dimmed={highlights.size > 0}
-            onHover={setHovered}
-            onSelect={handleSelectNode}
-          />
+          <>
+            <TreemapCanvas
+              nodes={fileNodes}
+              layer={layer}
+              activityAsOfMs={layer === LAYERS.activity ? activityAsOfMs : undefined}
+              highlightPaths={highlights}
+              dimmed={highlights.size > 0}
+              focusPrefix={focusPrefix}
+              onHover={setHovered}
+              onSelect={handleSelectNode}
+            />
+            <MapMinimap
+              nodes={fileNodes}
+              focusPath={effectiveFocusPath}
+              onNavigate={(path) => {
+                setFileView(false);
+                setSelectedFile(null);
+                setFocusPath(path);
+              }}
+            />
+          </>
         ) : (
           <ModuleGraphView
             nodes={fileNodes}
@@ -385,6 +475,8 @@ export default function CodebaseVisualization({ branch = "main", refreshOnOpen =
           step={currentTourStep}
           stepIndex={tourStep}
           totalSteps={tourSteps.length}
+          onOpenFile={onOpenFile}
+          quizFeedback={quizFeedback}
           onNext={() => {
             if (tourStep >= tourSteps.length - 1) {
               setTourOpen(false);
@@ -403,7 +495,7 @@ export default function CodebaseVisualization({ branch = "main", refreshOnOpen =
           onClose={() => setTourOpen(false)}
         />
 
-        {welcome ? (
+        {welcome && !tourMode ? (
           <div className="absolute inset-0 z-40 flex items-center justify-center bg-canvas/80 backdrop-blur-sm">
             <div className="max-w-md rounded-2xl border border-hairline bg-surface p-8 text-center">
               <h2 className="font-display text-2xl text-ink">Welcome to your codebase</h2>
@@ -437,14 +529,18 @@ export default function CodebaseVisualization({ branch = "main", refreshOnOpen =
             Quick reference
           </p>
           <ul className="mt-2 space-y-1">
-            {(activeLayout?.meta?.quickReference ?? []).map((item) => (
+            {(quickReference ?? []).map((item) => (
               <li key={item.question}>
                 <button
                   type="button"
                   className="text-left text-[12px] text-ink-dim hover:text-indigo"
                   onClick={() => {
                     setFocusPath(item.pathPrefix);
-                    setManualHighlights(null);
+                    if (item.highlightPaths?.length) {
+                      setManualHighlights(new Set(item.highlightPaths));
+                    } else {
+                      setManualHighlights(null);
+                    }
                   }}
                 >
                   {item.question}
@@ -473,6 +569,32 @@ export default function CodebaseVisualization({ branch = "main", refreshOnOpen =
         </div>
       </aside>
     </div>
+  );
+}
+
+function LiveBadge({ status, onReconnect }) {
+  const live = status === "live";
+  const connecting = status === "connecting";
+  return (
+    <button
+      type="button"
+      onClick={status === "offline" ? onReconnect : undefined}
+      title={status === "offline" ? "Click to reconnect" : undefined}
+      className={`flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] ${
+        live
+          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+          : connecting
+            ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
+            : "cursor-pointer border-hairline bg-surface/40 text-ink-mute hover:text-ink"
+      }`}
+    >
+      <span
+        className={`inline-block h-1.5 w-1.5 rounded-full ${
+          live ? "bg-emerald-400 animate-pulse" : connecting ? "bg-amber-400" : "bg-ink-mute"
+        }`}
+      />
+      {live ? "Live" : connecting ? "Connecting" : "Offline"}
+    </button>
   );
 }
 

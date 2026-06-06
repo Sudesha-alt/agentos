@@ -766,6 +766,185 @@ const MOCK_QA_FAILURES = {
   ],
 };
 
+const MOCK_CODEBASE_FILES = {
+  "server/src/pipeline/orchestrator.ts": {
+    filePath: "server/src/pipeline/orchestrator.ts",
+    language: "typescript",
+    size: 380,
+    summary: "Coordinates multi-agent pipeline stages and validation gates.",
+    exports: [{ name: "PipelineOrchestrator", type: "class" }],
+    imports: [
+      { from: "./stages", items: ["runProductStage", "runEngineeringStage"] },
+      { from: "../agents/productAgent", items: ["ProductAgent"] },
+    ],
+    patterns: ["service-layer"],
+    lastCommitSha: "abc123",
+    lastCommitMsg: "Wire QA agentic loop",
+    lastCommitAt: minutes(20),
+    lastAuthor: "agent",
+    indexedAt: minutes(45),
+  },
+  "server/src/codebaseIntelligence/indexer.ts": {
+    filePath: "server/src/codebaseIntelligence/indexer.ts",
+    language: "typescript",
+    size: 410,
+    summary: "Indexes repository files and writes embeddings to Supabase.",
+    exports: [{ name: "indexRepository", type: "function" }],
+    imports: [
+      { from: "../db/client", items: ["prisma"] },
+      { from: "./queryService", items: ["codebaseQueryService"] },
+    ],
+    patterns: ["service-layer", "database-query"],
+    lastCommitSha: "def456",
+    lastCommitMsg: "Add codebase intelligence snapshot",
+    lastCommitAt: minutes(45),
+    lastAuthor: "agent",
+    indexedAt: minutes(40),
+  },
+  "server/src/codebaseIntelligence/layoutComputer.ts": {
+    filePath: "server/src/codebaseIntelligence/layoutComputer.ts",
+    language: "typescript",
+    size: 320,
+    summary: "Precomputed treemap layout for visualization API.",
+    exports: [{ name: "computeVisualizationLayout", type: "function" }],
+    imports: [{ from: "d3-hierarchy", items: ["hierarchy", "treemap"] }],
+    patterns: ["utility"],
+    lastCommitSha: "ghi789",
+    lastCommitMsg: "Add voronoi district map",
+    lastCommitAt: minutes(60),
+    lastAuthor: "human",
+    indexedAt: minutes(55),
+  },
+  "server/src/api/routes/codebase.ts": {
+    filePath: "server/src/api/routes/codebase.ts",
+    language: "typescript",
+    size: 95,
+    summary: "Codebase intelligence REST routes.",
+    exports: [{ name: "default", type: "router" }],
+    imports: [
+      { from: "../../codebaseIntelligence/queryService", items: ["codebaseQueryService"] },
+      { from: "../../codebaseIntelligence/directoryService", items: ["getDirectoryListing"] },
+    ],
+    patterns: ["api-route"],
+    lastCommitSha: "jkl012",
+    lastCommitMsg: "Add directory and file intelligence endpoints",
+    lastCommitAt: minutes(5),
+    lastAuthor: "human",
+    indexedAt: minutes(3),
+  },
+  "app/src/features/codebase-viz/CodebaseVisualization.jsx": {
+    filePath: "app/src/features/codebase-viz/CodebaseVisualization.jsx",
+    language: "javascript",
+    size: 280,
+    summary: "Primary district map UI shell.",
+    exports: [{ name: "default", type: "component" }],
+    imports: [
+      { from: "../../entities/codebase", items: ["useCodebaseVisualization"] },
+      { from: "./TreemapCanvas", items: ["default"] },
+    ],
+    patterns: ["ui-component"],
+    lastCommitSha: "mno345",
+    lastCommitMsg: "Lazy-load visualization bundle",
+    lastCommitAt: minutes(30),
+    lastAuthor: "agent",
+    indexedAt: minutes(28),
+  },
+  "app/src/entities/codebase/index.js": {
+    filePath: "app/src/entities/codebase/index.js",
+    language: "javascript",
+    size: 120,
+    summary: "Client adapters for codebase APIs.",
+    exports: [{ name: "codebaseAdapter", type: "object" }],
+    imports: [{ from: "../../shared/lib/fetchJson", items: ["fetchJson"] }],
+    patterns: ["utility"],
+    lastCommitSha: "pqr678",
+    lastCommitMsg: "Add directory and file hooks",
+    lastCommitAt: minutes(2),
+    lastAuthor: "human",
+    indexedAt: minutes(1),
+  },
+};
+
+function buildMockDirectoryListing(dirPath = "") {
+  const normalized = dirPath.trim().replace(/\/+$/, "");
+  const prefix = normalized ? `${normalized}/` : "";
+  const allPaths = Object.keys(MOCK_CODEBASE_FILES);
+
+  const dirCounts = new Map();
+  const dirNames = new Map();
+  const files = [];
+
+  for (const filePath of allPaths) {
+    const relative = normalized ? filePath.slice(prefix.length) : filePath;
+    if (!relative || (normalized && !filePath.startsWith(prefix))) continue;
+
+    const slash = relative.indexOf("/");
+    if (slash === -1) {
+      const record = MOCK_CODEBASE_FILES[filePath];
+      files.push({
+        name: relative,
+        path: filePath,
+        language: record.language,
+        size: record.size,
+        hasSummary: Boolean(record.summary),
+      });
+    } else {
+      const name = relative.slice(0, slash);
+      const childPath = normalized ? `${normalized}/${name}` : name;
+      dirNames.set(name, childPath);
+      dirCounts.set(name, (dirCounts.get(name) ?? 0) + 1);
+    }
+  }
+
+  const directories = [...dirNames.entries()]
+    .map(([name, path]) => ({
+      name,
+      path,
+      fileCount: dirCounts.get(name) ?? 0,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  files.sort((a, b) => a.name.localeCompare(b.name));
+
+  return { path: normalized, directories, files };
+}
+
+function buildMockFileConnections(filePath) {
+  const record = MOCK_CODEBASE_FILES[filePath];
+  const allPaths = new Set(Object.keys(MOCK_CODEBASE_FILES));
+
+  const outgoing = [];
+  if (record) {
+    for (const imp of record.imports ?? []) {
+      const base = filePath.split("/").slice(0, -1);
+      const candidate = [...base, imp.from.replace(/^\.\//, "")].join("/");
+      const resolved = allPaths.has(imp.from)
+        ? imp.from
+        : allPaths.has(candidate)
+          ? candidate
+          : null;
+      if (resolved) outgoing.push({ path: resolved, items: imp.items });
+    }
+  }
+
+  const incoming = [];
+  for (const [otherPath, other] of Object.entries(MOCK_CODEBASE_FILES)) {
+    if (otherPath === filePath) continue;
+    for (const imp of other.imports ?? []) {
+      const base = otherPath.split("/").slice(0, -1);
+      const candidate = [...base, imp.from.replace(/^\.\//, "")].join("/");
+      const resolved = allPaths.has(imp.from)
+        ? imp.from
+        : allPaths.has(candidate)
+          ? candidate
+          : null;
+      if (resolved === filePath) incoming.push({ path: otherPath, items: imp.items });
+    }
+  }
+
+  return { path: filePath, outgoing, incoming };
+}
+
 const MOCK_CODEBASE_STRUCTURE = {
   nodes: [
     { id: "server", label: "server/", size: 420, activity: "indexed", coverage: 72 },
@@ -979,18 +1158,52 @@ export const mockApi = {
       ],
     };
   },
-  async codebaseSearch(query) {
+  async codebaseSearch(query, branch = "main") {
     markUsed();
     await delay(140);
-    return {
-      query,
-      results: [
-        { path: "server/src/pipeline/orchestrator.ts", score: 0.89, snippet: "runQaAgentic pipeline stage" },
-        { path: "server/src/qaAgent/index.ts", score: 0.84, snippet: "four-phase QA workflow" },
-        { path: "server/src/codebaseIntelligence/layoutComputer.ts", score: 0.81, snippet: "treemap layout for visualization" },
-        { path: "app/src/features/codebase-viz/TreemapCanvas.jsx", score: 0.78, snippet: "canvas rendering for district map" },
-      ],
-    };
+    const q = query.toLowerCase();
+    const files = [
+      { path: "server/src/pipeline/orchestrator.ts", score: 0.89, snippet: "runQaAgentic pipeline stage" },
+      { path: "server/src/qaAgent/index.ts", score: 0.84, snippet: "four-phase QA workflow" },
+      { path: "server/src/codebaseIntelligence/layoutComputer.ts", score: 0.81, snippet: "treemap layout for visualization" },
+      { path: "app/src/features/codebase-viz/TreemapCanvas.jsx", score: 0.78, snippet: "canvas rendering for district map" },
+    ].filter(
+      (f) =>
+        !q ||
+        f.path.toLowerCase().includes(q) ||
+        f.snippet.toLowerCase().includes(q) ||
+        q.length < 3
+    );
+
+    const patterns = [];
+    if (/\bauth\b|\bjwt\b|authentication/.test(q)) {
+      patterns.push({
+        pattern: "auth",
+        files: [
+          { path: "server/src/api/routes/auth.ts", summary: "Auth API routes" },
+          { path: "app/src/shared/providers/AuthProvider.jsx", summary: "Frontend auth context" },
+        ],
+      });
+    }
+    if (/\bapi\b|\broute\b|endpoint/.test(q)) {
+      patterns.push({
+        pattern: "api-route",
+        files: [
+          { path: "server/src/api/routes/codebase.ts", summary: "Codebase intelligence REST routes" },
+          { path: "server/src/api/routes/pipeline.ts", summary: "Pipeline REST routes" },
+        ],
+      });
+    }
+    if (/\bdatabase\b|\bquery\b|prisma/.test(q)) {
+      patterns.push({
+        pattern: "database-query",
+        files: [
+          { path: "server/src/codebaseIntelligence/indexer.ts", summary: "Indexes files and writes embeddings" },
+        ],
+      });
+    }
+
+    return { query, branch, files, patterns, results: files };
   },
   async codebaseVisualization(branch = "main") {
     markUsed();
@@ -1008,6 +1221,115 @@ export const mockApi = {
         { id: "fn2", name: "hitTest", kind: "function", x: 8, y: 96, w: 940, h: 60, lineCount: 28 },
         { id: "fn3", name: "paint", kind: "function", x: 8, y: 168, w: 940, h: 120, lineCount: 55 },
       ],
+    };
+  },
+  async codebaseDirectory(dirPath = "", branch = "main") {
+    markUsed();
+    await delay(80);
+    const listing = buildMockDirectoryListing(dirPath);
+    return { ...listing, branch };
+  },
+  async codebaseFileIntelligence(filePath) {
+    markUsed();
+    await delay(90);
+    const file = MOCK_CODEBASE_FILES[filePath] ?? null;
+    return { file };
+  },
+  async codebaseFileConnections(filePath, branch = "main") {
+    markUsed();
+    await delay(70);
+    const connections = buildMockFileConnections(filePath);
+    return { ...connections, branch };
+  },
+  async codebaseTour(branch = "main") {
+    markUsed();
+    await delay(120);
+    return buildMockTour(branch);
+  },
+  async generateCodebaseTour(branch = "main") {
+    markUsed();
+    await delay(400);
+    return buildMockTour(branch, "openai");
+  },
+  async codebaseHealth(branch = "main") {
+    markUsed();
+    await delay(90);
+    return {
+      branchName: branch,
+      totals: {
+        files: 142,
+        avgCoverage: 62.4,
+        zeroCoveragePct: 18.3,
+        avgComplexity: 5.8,
+        highComplexityCount: 11,
+        modifiedLast7Days: { total: 24, agent: 9, human: 15 },
+        technicalDebtScore: 34,
+      },
+      coverageHistogram: [
+        { bucket: "0-10%", count: 8 },
+        { bucket: "10-20%", count: 6 },
+        { bucket: "40-50%", count: 22 },
+        { bucket: "50-60%", count: 38 },
+        { bucket: "60-70%", count: 28 },
+        { bucket: "90-100%", count: 18 },
+      ],
+      complexityHotspots: [
+        { path: "server/src/pipeline/orchestrator.ts", complexity: 9, coverage: 72 },
+        { path: "server/src/codebaseIntelligence/indexer.ts", complexity: 8, coverage: 58 },
+      ],
+    };
+  },
+  async codebaseHealthTimeline(branch = "main", days = 30) {
+    markUsed();
+    await delay(80);
+    void branch;
+    const out = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86_400_000).toISOString().slice(0, 10);
+      const agent = i % 5 === 0 ? 4 : i % 3 === 0 ? 2 : 0;
+      const human = i % 2 === 0 ? 6 : 3;
+      out.push({ date: d, totalFiles: agent + human, agentFiles: agent, humanFiles: human });
+    }
+    return { days: out };
+  },
+  async codebaseKnowledge(branch = "main") {
+    markUsed();
+    await delay(100);
+    return buildMockKnowledge(branch);
+  },
+  async generateCodebaseKnowledge(branch = "main") {
+    markUsed();
+    await delay(450);
+    return buildMockKnowledge(branch, "openai");
+  },
+  async codebaseImpact({ filePaths = [], changeDescription = "", branchName = "main" }) {
+    markUsed();
+    await delay(220);
+    const targets = filePaths.length ? filePaths : ["server/src/payment/service.ts"];
+    return {
+      branchName,
+      changeDescription: changeDescription || "Mock change",
+      targets,
+      directImpact: [
+        { path: "server/src/api/routes/payment.ts", via: targets[0], probability: "certain" },
+        { path: "server/src/pipeline/orchestrator.ts", via: targets[0], probability: "certain" },
+      ],
+      indirectImpact: [
+        { path: "app/src/entities/payment/index.js", via: "server/src/api/routes/payment.ts", probability: "likely" },
+      ],
+      testImpact: [
+        { path: "server/src/payment/service.test.ts", reason: "Test file likely covers the changed module" },
+      ],
+      risk: {
+        level: "medium",
+        reasoning: "Two direct API dependents and one indirect client adapter may need updates.",
+      },
+      mapHighlights: {
+        changed: targets,
+        direct: ["server/src/api/routes/payment.ts", "server/src/pipeline/orchestrator.ts"],
+        indirect: ["app/src/entities/payment/index.js"],
+        tests: ["server/src/payment/service.test.ts"],
+      },
     };
   },
   async codebaseInsights(branch = "main") {
@@ -1076,7 +1398,7 @@ export const mockApi = {
       graph: { ready: true, computedAt: new Date(Date.now() - 900_000).toISOString(), nodeCount: 142 },
       configuration: {
         openaiConfigured: true,
-        llmProvider: "bedrock",
+        llmProvider: "openai",
         fileIntelligenceAvailable: true,
       },
       blockers: [],
@@ -1094,7 +1416,7 @@ export const mockApi = {
       message: "Full index started in-process (mock mode).",
     };
   },
-  async codebaseAsk(question) {
+  async codebaseAsk(question, branch = "main") {
     markUsed();
     await delay(200);
     const q = question.toLowerCase();
@@ -1103,17 +1425,27 @@ export const mockApi = {
       "server/src/qaAgent/index.ts",
     ];
     let answer =
-      "The pipeline orchestrator coordinates stage transitions; QA runs in a four-phase agentic loop.";
+      "The pipeline orchestrator coordinates stage transitions; QA runs in a four-phase agentic loop. See [server/src/pipeline/orchestrator.ts] and [server/src/qaAgent/index.ts].";
 
     if (q.includes("auth")) {
       highlightPaths = [
         "server/src/api/routes/auth.ts",
         "app/src/shared/providers/AuthProvider.jsx",
       ];
-      answer = "Authentication spans the auth API route and the frontend AuthProvider.";
+      answer =
+        "Authentication spans [server/src/api/routes/auth.ts] and the frontend [app/src/shared/providers/AuthProvider.jsx].";
     }
 
-    return { answer, highlightPaths, relatedSnippets: [] };
+    return {
+      answer,
+      highlightPaths,
+      branch,
+      relatedSnippets: highlightPaths.map((path, i) => ({
+        path,
+        snippet: `Mock snippet for ${path}`,
+        score: 0.9 - i * 0.05,
+      })),
+    };
   },
   async costsSummary() {
     markUsed();
@@ -1275,6 +1607,208 @@ export const mockApi = {
     };
   },
 };
+
+function buildMockKnowledge(branch = "main", source = "cache") {
+  return {
+    branchName: branch,
+    generatedAt: new Date().toISOString(),
+    source,
+    architecture: {
+      title: "AgentOS architecture",
+      purpose: "Multi-agent Jira pipeline with codebase intelligence, GitHub indexing, and QA automation.",
+      sections: [
+        {
+          heading: "System purpose",
+          body: "AgentOS orchestrates Product → Engineering → QA agents with human gates, while indexing connected repositories for semantic search and documentation.",
+          fileRefs: ["server/src/pipeline/orchestrator.ts"],
+        },
+        {
+          heading: "Major components",
+          body: "server/ hosts the API, agents, and indexing. app/ is the React dashboard. prisma/ defines the Postgres schema.",
+          fileRefs: ["server/", "app/", "server/prisma/schema.prisma"],
+        },
+        {
+          heading: "Data flows",
+          body: "Jira webhooks trigger pipelines. GitHub connect triggers codebase indexing. Embeddings land in Supabase for search.",
+          fileRefs: ["server/src/codebaseIntelligence/indexer.ts"],
+        },
+      ],
+    },
+    components: [
+      {
+        path: "server",
+        title: "Backend API & agents",
+        summary: "Express API, pipeline orchestration, codebase intelligence, and Git integration.",
+        responsibilities: ["Agentic pipeline", "Codebase indexing", "Jira intake"],
+        inputs: ["Jira webhooks", "GitHub App events"],
+        outputs: ["REST API", "Indexed intelligence"],
+        dependencies: ["app"],
+        keyFiles: [
+          {
+            path: "server/src/pipeline/orchestrator.ts",
+            summary: "Coordinates multi-agent pipeline stages.",
+          },
+        ],
+      },
+      {
+        path: "app",
+        title: "Frontend dashboard",
+        summary: "React UI for pipelines, codebase intelligence, and Git connect.",
+        responsibilities: ["Operator UX", "Codebase explorer & map"],
+        inputs: ["REST API"],
+        outputs: ["Human review surfaces"],
+        dependencies: ["server"],
+        keyFiles: [
+          {
+            path: "app/src/app/pages/CodebaseIntelligence.jsx",
+            summary: "Codebase intelligence module shell.",
+          },
+        ],
+      },
+    ],
+    runbooks: [
+      {
+        task: "add-api-endpoint",
+        title: "Add a new API endpoint",
+        summary: "Follow existing Express route patterns under server/src/api/routes.",
+        steps: [
+          { order: 1, instruction: "Create or extend a route module.", fileRef: "server/src/api/routes/codebase.ts" },
+          { order: 2, instruction: "Mount the router in app.ts if new." },
+          { order: 3, instruction: "Add a frontend adapter in entities/ if exposed to UI." },
+        ],
+        exampleFiles: ["server/src/api/routes/codebase.ts"],
+      },
+      {
+        task: "add-database-migration",
+        title: "Add a database migration",
+        summary: "Update Prisma schema and add a SQL migration.",
+        steps: [
+          { order: 1, instruction: "Edit schema.prisma.", fileRef: "server/prisma/schema.prisma" },
+          { order: 2, instruction: "Add migration SQL under prisma/migrations." },
+          { order: 3, instruction: "Run prisma migrate deploy on Render." },
+        ],
+        exampleFiles: ["server/prisma/schema.prisma"],
+      },
+    ],
+  };
+}
+
+function buildMockTour(branch = "main", source = "cache") {
+  const viz = buildMockVisualization(branch);
+  const nodes = viz.nodes ?? [];
+  return {
+    branchName: branch,
+    source,
+    generatedAt: minutes(0),
+    steps: [
+      {
+        id: "welcome",
+        title: "Welcome to AgentOS",
+        narration: `This tour walks branch ${branch} from the galaxy view down into the districts that matter most — server automation, product UI, and codebase intelligence.`,
+        focusPath: null,
+        zoomLevel: "galaxy",
+      },
+      {
+        id: "server-core",
+        title: "Backend & agents",
+        narration:
+          "Pipeline orchestration, validation gates, and agent loops live under server/. Most ticket-to-PR automation is coordinated here.",
+        focusPath: "server",
+        zoomLevel: "district",
+        highlightPaths: nodes.filter((n) => n.path.startsWith("server")).map((n) => n.path),
+        spotlights: [
+          {
+            path: "server/src/pipeline/orchestrator.ts",
+            summary: "Stages tickets through product, engineering, and QA agents.",
+          },
+          {
+            path: "server/src/codebaseIntelligence/indexer.ts",
+            summary: "Indexes files, refreshes the map, and triggers tour generation.",
+          },
+        ],
+      },
+      {
+        id: "frontend",
+        title: "Product UI",
+        narration:
+          "The app/ district renders dashboards, codebase intelligence tabs, and the district map you are viewing now.",
+        focusPath: "app",
+        zoomLevel: "district",
+        highlightPaths: nodes.filter((n) => n.path.includes("codebase")).map((n) => n.path),
+        spotlights: [
+          {
+            path: "app/src/features/codebase-viz/CodebaseVisualization.jsx",
+            summary: "Treemap map, tour overlay, and live WebSocket updates.",
+          },
+        ],
+      },
+      {
+        id: "quiz-routes",
+        title: "Checkpoint: API routes",
+        narration: "Where would you add a new REST endpoint for codebase features?",
+        focusPath: "server",
+        zoomLevel: "district",
+        quiz: {
+          prompt: "Click the district that contains HTTP route handlers.",
+          correctPathPrefix: "server",
+          explanation:
+            "REST routes live under server/src/api/routes — keep handlers thin and push logic into services.",
+        },
+      },
+      {
+        id: "quiz-viz",
+        title: "Checkpoint: visualization",
+        narration: "The guided tour reuses the same map component as the Map tab.",
+        focusPath: null,
+        zoomLevel: "galaxy",
+        quiz: {
+          prompt: "Which district holds the codebase map React components?",
+          correctPathPrefix: "app",
+          explanation: "Visualization UI is under app/src/features/codebase-viz.",
+        },
+      },
+      {
+        id: "quiz-data",
+        title: "Checkpoint: persistence",
+        narration: "Schema and migrations define what gets stored long-term.",
+        focusPath: null,
+        zoomLevel: "galaxy",
+        quiz: {
+          prompt: "Where are Prisma models and SQL migrations defined?",
+          correctPathPrefix: "server",
+          explanation: "Database schema lives in server/prisma — tour cache uses CodebaseTourCache.",
+        },
+      },
+    ],
+    cheatSheet: [
+      {
+        question: "Where are API routes?",
+        pathPrefix: "server/src/api/routes",
+        highlightPaths: ["server/src/api/routes/codebase.ts"],
+      },
+      { question: "Where is the pipeline orchestrator?", pathPrefix: "server/src/pipeline" },
+      { question: "Where are agents defined?", pathPrefix: "server/src/agents" },
+      {
+        question: "Where is the codebase map UI?",
+        pathPrefix: "app/src/features/codebase-viz",
+        highlightPaths: ["app/src/features/codebase-viz/CodebaseVisualization.jsx"],
+      },
+      { question: "Where is the guided tour tab?", pathPrefix: "app/src/widgets/codebase-tour" },
+      {
+        question: "Where does indexing happen?",
+        pathPrefix: "server/src/codebaseIntelligence",
+        highlightPaths: ["server/src/codebaseIntelligence/indexer.ts"],
+      },
+      {
+        question: "Where is the tour service?",
+        pathPrefix: "server/src/codebaseIntelligence/tourService.ts",
+      },
+      { question: "Where are Prisma models?", pathPrefix: "server/prisma" },
+      { question: "Where is semantic search UI?", pathPrefix: "app/src/widgets/codebase-search" },
+      { question: "Where is the file explorer?", pathPrefix: "app/src/widgets/codebase-explorer" },
+    ],
+  };
+}
 
 function buildMockVisualization(branch) {
   const paths = [

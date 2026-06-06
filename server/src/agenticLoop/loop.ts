@@ -1,20 +1,19 @@
-import type Anthropic from "@anthropic-ai/sdk";
 import { auditRepo } from "../db/repositories/auditRepo";
-import { getClaudeClient, getClaudeModel } from "../llm/claudeClient";
+import { getOpenAIChatModel, getOpenAIClient } from "../llm/openaiClient";
+import type { AgenticMessage } from "../llm/openaiCompletion";
+import { anthropicToolsToOpenAI } from "../llm/openaiTools";
 import { executeToolCall, type ToolCallInput, type ToolCallResult } from "../tools/executor";
 import { TOOL_DEFINITIONS } from "../tools/definitions";
 import { logger } from "../utils/logger";
 import { withRetry } from "../utils/retry";
 import {
-  appendAssistantResponse,
-  buildToolResultMessage,
+  buildToolResultMessages,
   createInitialMessages,
   extractTextContent,
-  extractToolUses,
 } from "./messageBuilder";
 
-const INPUT_COST_PER_TOKEN = 0.000003;
-const OUTPUT_COST_PER_TOKEN = 0.000015;
+const INPUT_COST_PER_TOKEN = 0.00000125;
+const OUTPUT_COST_PER_TOKEN = 0.00001;
 const MAX_TOOL_CALLS = 12;
 
 export interface AgenticLoopConfig {
@@ -38,7 +37,7 @@ export interface AgenticLoopResult {
   totalInputTokens: number;
   totalOutputTokens: number;
   totalCostUsd: number;
-  messageHistory: Anthropic.MessageParam[];
+  messageHistory: AgenticMessage[];
   toolCallLog: Array<{
     tool: string;
     query: string;
@@ -61,6 +60,7 @@ export async function runAgenticLoop(
   } = config;
 
   const messages = createInitialMessages(initialUserMessage);
+  const openaiTools = anthropicToolsToOpenAI(tools);
   const toolCallLog: AgenticLoopResult["toolCallLog"] = [];
 
   let toolCallCount = 0;
@@ -86,13 +86,12 @@ export async function runAgenticLoop(
 
     const response = await withRetry(
       () =>
-        getClaudeClient().messages.create({
-          model: getClaudeModel(),
+        getOpenAIClient().chat.completions.create({
+          model: getOpenAIChatModel(),
           max_tokens: 6000,
-          system: systemPrompt,
-          tools: forcedWrapUp ? [] : tools,
-          tool_choice: forcedWrapUp ? { type: "none" } : { type: "auto" },
-          messages,
+          messages: [{ role: "system", content: systemPrompt }, ...messages],
+          tools: forcedWrapUp ? undefined : openaiTools,
+          tool_choice: forcedWrapUp ? "none" : "auto",
         }),
       {
         maxAttempts: 3,
@@ -101,20 +100,25 @@ export async function runAgenticLoop(
       }
     );
 
-    totalInputTokens += response.usage.input_tokens;
-    totalOutputTokens += response.usage.output_tokens;
+    totalInputTokens += response.usage?.prompt_tokens ?? 0;
+    totalOutputTokens += response.usage?.completion_tokens ?? 0;
 
-    await auditRepo.log(pipelineId, "CLAUDE_RESPONSE_RECEIVED", {
-      stopReason: response.stop_reason,
-      inputTokens: response.usage.input_tokens,
-      outputTokens: response.usage.output_tokens,
-      contentBlocks: response.content.length,
+    const choice = response.choices[0];
+    if (!choice?.message) {
+      throw new Error("Agentic loop received empty model response.");
+    }
+
+    await auditRepo.log(pipelineId, "LLM_RESPONSE_RECEIVED", {
+      finishReason: choice.finish_reason,
+      inputTokens: response.usage?.prompt_tokens ?? 0,
+      outputTokens: response.usage?.completion_tokens ?? 0,
+      toolCalls: choice.message.tool_calls?.length ?? 0,
     });
 
-    appendAssistantResponse(messages, response.content);
+    const toolCalls = choice.message.tool_calls ?? [];
 
-    if (response.stop_reason === "end_turn" || response.stop_reason === "pause_turn") {
-      const finalResponse = extractTextContent(response.content);
+    if (choice.finish_reason === "stop" || toolCalls.length === 0) {
+      const finalResponse = extractTextContent(choice.message);
       if (!finalResponse) {
         throw new Error("Agentic loop ended without a text response.");
       }
@@ -141,78 +145,50 @@ export async function runAgenticLoop(
       };
     }
 
-    if (response.stop_reason !== "tool_use") {
-      const finalResponse = extractTextContent(response.content);
-      if (finalResponse) {
-        const totalCostUsd =
-          totalInputTokens * INPUT_COST_PER_TOKEN +
-          totalOutputTokens * OUTPUT_COST_PER_TOKEN;
+    messages.push(choice.message);
 
-        await auditRepo.log(pipelineId, "AGENTIC_LOOP_COMPLETED", {
-          toolCallCount,
-          totalInputTokens,
-          totalOutputTokens,
-          totalCostUsd,
-          stopReason: response.stop_reason,
-        });
-
-        return {
-          finalResponse,
-          toolCallCount,
-          totalInputTokens,
-          totalOutputTokens,
-          totalCostUsd,
-          messageHistory: messages,
-          toolCallLog,
-        };
-      }
-
-      throw new Error(`Unexpected stop reason in agentic loop: ${response.stop_reason}`);
-    }
-
-    const toolUses = extractToolUses(response.content);
-    if (toolUses.length === 0) {
-      throw new Error("Claude requested tool use but no tool_use blocks were returned.");
-    }
-
-    toolCallCount += toolUses.length;
+    toolCallCount += toolCalls.length;
 
     logger.info(
       {
         pipelineId,
         jiraKey,
-        toolNames: toolUses.map((toolUse) => toolUse.name),
+        toolNames: toolCalls.map((tc) => tc.function.name),
         toolCallCount,
       },
       "executing agentic tool calls"
     );
 
     const toolResults = await Promise.all(
-      toolUses.map((toolUse) =>
-        executeToolCallFn(
+      toolCalls.map((toolCall) => {
+        let input: Record<string, unknown> = {};
+        try {
+          input = JSON.parse(toolCall.function.arguments || "{}") as Record<string, unknown>;
+        } catch {
+          input = {};
+        }
+
+        return executeToolCallFn(
           {
-            name: toolUse.name,
-            input:
-              typeof toolUse.input === "object" && toolUse.input !== null
-                ? (toolUse.input as Record<string, unknown>)
-                : {},
-            toolUseId: toolUse.id,
+            name: toolCall.function.name,
+            input,
+            toolUseId: toolCall.id,
           },
           pipelineId,
           jiraKey
-        )
-      )
+        );
+      })
     );
 
     for (const [index, result] of toolResults.entries()) {
-      const toolUse = toolUses[index];
+      const toolCall = toolCalls[index];
       toolCallLog.push({
-        tool: toolUse.name,
-        query: result.meta?.query ?? toolUse.name,
+        tool: toolCall.function.name,
+        query: result.meta?.query ?? toolCall.function.name,
         resultsFound: result.meta?.resultsFound ?? 0,
       });
     }
 
-    messages.push(buildToolResultMessage(toolResults));
+    messages.push(...buildToolResultMessages(toolResults));
   }
 }

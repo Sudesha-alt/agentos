@@ -1,18 +1,18 @@
 import { auditRepo } from "../db/repositories/auditRepo";
-import { getClaudeClient, getClaudeModel } from "../llm/claudeClient";
+import { chatCompletionText } from "../llm/openaiCompletion";
+import { getOpenAIChatModel } from "../llm/openaiClient";
 import type { AgentOutput } from "../types/agents";
 import { AgentParseError } from "../utils/errors";
 import { logger } from "../utils/logger";
 import { retry } from "../utils/retry";
 
-// Claude Sonnet 4 pricing per token (May 2025): $3/Mtok input, $15/Mtok output.
-const INPUT_COST_PER_TOKEN = 0.000003;
-const OUTPUT_COST_PER_TOKEN = 0.000015;
+const INPUT_COST_PER_TOKEN = 0.00000125;
+const OUTPUT_COST_PER_TOKEN = 0.00001;
 
 export abstract class BaseAgent<TParsed = Record<string, unknown>> {
   abstract name: string;
   abstract systemPrompt: string;
-  protected model = getClaudeModel();
+  protected model = getOpenAIChatModel();
   protected maxTokens = 4000;
 
   async run(pipelineId: string, userPrompt: string): Promise<AgentOutput<TParsed>> {
@@ -22,44 +22,37 @@ export abstract class BaseAgent<TParsed = Record<string, unknown>> {
       promptLength: userPrompt.length,
     });
 
-    const response = await retry(
+    const { text, usage } = await retry(
       () =>
-        getClaudeClient().messages.create({
-          model: this.model,
-          max_tokens: this.maxTokens,
+        chatCompletionText({
           system: this.systemPrompt,
-          messages: [{ role: "user", content: userPrompt }],
+          user: userPrompt,
+          maxTokens: this.maxTokens,
         }),
       { attempts: 3, baseDelayMs: 1200 }
     );
 
-    const content = response.content[0];
-    if (!content || content.type !== "text") {
-      throw new Error(`${this.name}: unexpected response type`);
-    }
-
-    const parsed = this.parseOutput(content.text);
+    const parsed = this.parseOutput(text);
     const durationMs = Date.now() - startTime;
-    const inputTokens = response.usage.input_tokens;
-    const outputTokens = response.usage.output_tokens;
-    const costUsd =
-      inputTokens * INPUT_COST_PER_TOKEN +
-      outputTokens * OUTPUT_COST_PER_TOKEN;
+    const inputTokens = usage.inputTokens;
+    const outputTokens = usage.outputTokens;
+    const costUsd = usage.costUsd;
 
     await auditRepo.log(pipelineId, `${this.name}_COMPLETED`, {
       inputTokens,
       outputTokens,
       costUsd,
       durationMs,
+      model: this.model,
     });
 
     logger.info(
-      { agent: this.name, inputTokens, outputTokens, costUsd, durationMs },
+      { agent: this.name, model: this.model, inputTokens, outputTokens, costUsd, durationMs },
       "agent run"
     );
 
     return {
-      raw: content.text,
+      raw: text,
       parsed,
       metadata: { inputTokens, outputTokens, costUsd, durationMs },
     };

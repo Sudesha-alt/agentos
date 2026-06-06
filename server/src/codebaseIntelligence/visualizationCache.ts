@@ -101,14 +101,32 @@ export const visualizationCache = {
     if (!updatedNode) return;
 
     const index = layout.nodes.findIndex((n) => n.path === filePath);
-    if (index >= 0) layout.nodes[index] = { ...layout.nodes[index], ...updatedNode };
-    else layout.nodes.push(updatedNode);
+    if (index < 0) {
+      await this.refresh(branchName);
+      return;
+    }
+
+    const existing = layout.nodes[index];
+    layout.nodes[index] = {
+      ...existing,
+      language: updatedNode.language,
+      summary: updatedNode.summary,
+      patterns: updatedNode.patterns,
+      lastModified: updatedNode.lastModified,
+      lastModifiedBy: updatedNode.lastModifiedBy,
+      coverage: updatedNode.coverage,
+      complexity: updatedNode.complexity,
+      importCount: updatedNode.importCount,
+      exportCount: updatedNode.exportCount,
+      size: updatedNode.size,
+      name: updatedNode.name,
+    };
 
     await this.set(branchName, layout);
     publishDelta({
       type: "node_update",
       branchName,
-      nodes: [layout.nodes[index >= 0 ? index : layout.nodes.length - 1]],
+      nodes: [layout.nodes[index]],
     });
   },
 

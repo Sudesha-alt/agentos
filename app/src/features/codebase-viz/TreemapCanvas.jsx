@@ -1,6 +1,8 @@
 import { useEffect, useRef, useCallback } from "react";
 import {
   activityColor,
+  agentColor,
+  languageColor,
   LAYERS,
   qualityStyle,
   structureColor,
@@ -12,11 +14,12 @@ import { pointInPolygon } from "./pointInPolygon";
 const LAYOUT_W = 1000;
 const LAYOUT_H = 700;
 
-function drawCell(ctx, node, style, sx, sy, isHighlight, isDimmed, layer) {
+function drawCell(ctx, node, style, sx, sy, isHighlight, isDimmed, isFocusDimmed, layer) {
   const scalePolygon = (poly) =>
     poly.map(([px, py]) => [px * sx, py * sy]);
 
-  ctx.globalAlpha = isDimmed ? 0.12 : isHighlight ? 1 : 0.92;
+  const alpha = isDimmed ? 0.12 : isFocusDimmed ? 0.22 : isHighlight ? 1 : 0.92;
+  ctx.globalAlpha = alpha;
   ctx.fillStyle = style.fill;
   ctx.strokeStyle = isHighlight ? "#f8fafc" : style.stroke;
   ctx.lineWidth = isHighlight ? 2 : style.border ?? 1;
@@ -50,11 +53,12 @@ function drawCell(ctx, node, style, sx, sy, isHighlight, isDimmed, layer) {
 
   const nw = node.width * sx;
   const nh = node.height * sy;
-  if (nw > 56 && nh > 22 && !isDimmed) {
+  if (nw > 56 && nh > 22 && !isDimmed && !isFocusDimmed) {
     ctx.fillStyle = "rgba(248, 250, 252, 0.92)";
     ctx.font = `${Math.min(11, nh / 3)}px ui-monospace, monospace`;
     const label =
-      layer === LAYERS.understanding && style.tag
+      (layer === LAYERS.understanding || layer === LAYERS.language || layer === LAYERS.agent) &&
+      style.tag
         ? style.tag
         : node.name.length > 18
           ? `${node.name.slice(0, 16)}…`
@@ -70,6 +74,7 @@ export default function TreemapCanvas({
   activityAsOfMs,
   highlightPaths,
   dimmed,
+  focusPrefix,
   onHover,
   onSelect,
   className = "",
@@ -106,9 +111,17 @@ export default function TreemapCanvas({
 
       const isHighlight = highlights.has(node.path);
       const isDimmed = dimmed && highlights.size > 0 && !isHighlight;
+      const isFocusDimmed =
+        focusPrefix &&
+        node.path !== focusPrefix.replace(/\/$/, "") &&
+        !node.path.startsWith(focusPrefix);
 
       let style;
-      if (layer === LAYERS.activity) {
+      if (layer === LAYERS.language) {
+        style = languageColor(node.language);
+      } else if (layer === LAYERS.agent) {
+        style = agentColor(node.lastModified, node.lastModifiedBy);
+      } else if (layer === LAYERS.activity) {
         style =
           typeof activityAsOfMs === "number"
             ? activityColorAtDate(
@@ -126,11 +139,11 @@ export default function TreemapCanvas({
         style = structureColor(node.depth);
       }
 
-      drawCell(ctx, node, style, sx, sy, isHighlight, isDimmed, layer);
+      drawCell(ctx, node, style, sx, sy, isHighlight, isDimmed, isFocusDimmed, layer);
     }
 
     ctx.globalAlpha = 1;
-  }, [nodes, layer, agentOverlay, activityAsOfMs, highlightPaths, dimmed]);
+  }, [nodes, layer, agentOverlay, activityAsOfMs, highlightPaths, dimmed, focusPrefix]);
 
   useEffect(() => {
     paint();

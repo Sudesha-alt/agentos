@@ -11,7 +11,7 @@ in control at every stage transition.
 - PostgreSQL (Supabase) with `pgvector`
 - Prisma ORM
 - In-process background tasks (indexing + pipelines on the API event loop)
-- Anthropic Claude Sonnet 4 (direct API or **AWS Bedrock**) for agent reasoning
+- OpenAI **GPT-5.1** for all agent reasoning, codebase ask/tour, and file summaries
 - OpenAI `text-embedding-3-small` for RAG embeddings
 - Sentry + Pino structured logging
 
@@ -38,7 +38,7 @@ prisma/schema.prisma
 ```bash
 cp .env.example .env
 # fill in DATABASE_URL, SUPABASE_URL, SUPABASE_SERVICE_KEY,
-# LLM_PROVIDER + (ANTHROPIC_API_KEY or AWS Bedrock creds), OPENAI_API_KEY, JIRA_*
+# OPENAI_API_KEY (GPT-5.1), JIRA_*
 
 npm install
 npm run prisma:generate
@@ -146,22 +146,16 @@ END;
 $$ LANGUAGE plpgsql;
 ```
 
-### AWS Bedrock (Claude agents)
+**Codebase intelligence embeddings** (separate from pipeline `vector_store`) — required for semantic search, Ask, and per-file embedding writes during indexing:
 
-1. In [Amazon Bedrock console](https://console.aws.amazon.com/bedrock/), enable **Claude Sonnet 4** (or your chosen model) for your region.
-2. In `server/.env`:
+1. Supabase Dashboard → **SQL Editor** → **New query**
+2. Paste and run the full script from [`sql/codebase_embeddings.sql`](sql/codebase_embeddings.sql)
 
-```ini
-LLM_PROVIDER=bedrock
-AWS_ACCESS_KEY_ID=your-access-key
-AWS_SECRET_ACCESS_KEY=your-secret-key
-AWS_REGION=us-east-1
-BEDROCK_MODEL_ID=anthropic.claude-sonnet-4-20250514-v1:0
-```
+That creates `public.codebase_embeddings` and the `search_codebase` RPC. Without it, indexing still saves file metadata to Postgres, but search/Ask will not find semantic matches.
 
-Bedrock uses **IAM access keys** (or `~/.aws/credentials`), not an Anthropic API key. Model ids must match Bedrock’s `anthropic.*` inference profile for your region.
+### OpenAI (GPT-5.1)
 
-To keep using [console.anthropic.com](https://console.anthropic.com/) keys instead, leave `LLM_PROVIDER=anthropic` (default) and set `ANTHROPIC_API_KEY`.
+Set `OPENAI_API_KEY` in `server/.env`. All chat completions default to `gpt-5.1`; override with `OPENAI_CHAT_MODEL` if needed.
 
 Run the API (indexing and pipelines run in-process on the same process):
 
