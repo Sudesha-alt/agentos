@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { Request, Response } from "express";
 import { logger } from "../../utils/logger";
 import { getPipelineWebhookSecret } from "./credentialsStore";
@@ -7,11 +8,33 @@ import { type PipelineJiraWebhookPayload } from "./ticketNormalizer";
 import { syncMirroredIssue } from "./mirror/syncService";
 import { enqueueIntakeFromWebhook } from "./intakeEnqueueService";
 
+/** Jira Cloud signs with X-Hub-Signature; legacy manual tests may use x-agentos-secret. */
 function verifyPipelineWebhook(req: Request): boolean {
   const expected = getPipelineWebhookSecret();
   if (!expected) return true;
-  const provided = req.header("x-agentos-secret");
-  return provided === expected;
+
+  const agentosSecret = req.header("x-agentos-secret");
+  if (agentosSecret === expected) return true;
+
+  const rawBody = (req as Request & { rawBody?: string }).rawBody ?? "";
+  const hubSignature =
+    req.header("x-hub-signature") ?? req.header("X-Hub-Signature");
+  if (hubSignature && rawBody) {
+    const provided = hubSignature.startsWith("sha256=")
+      ? hubSignature
+      : `sha256=${hubSignature}`;
+    const computed = `sha256=${crypto
+      .createHmac("sha256", expected)
+      .update(rawBody)
+      .digest("hex")}`;
+    try {
+      return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(computed));
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
 }
 
 function enteredIntakeStatus(payload: PipelineJiraWebhookPayload): boolean {
