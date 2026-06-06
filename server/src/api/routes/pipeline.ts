@@ -2,7 +2,7 @@ import { Router } from "express";
 import { prisma } from "../../db/client";
 import { pipelineRepo } from "../../db/repositories/pipelineRepo";
 import { ticketRepo } from "../../db/repositories/ticketRepo";
-import { jobQueue, JOB_NAMES } from "../../queue/jobQueue";
+import { runPipelineInBackground } from "../../queue/inProcessRunner";
 import { NotFoundError, ValidationError } from "../../utils/errors";
 
 const router = Router();
@@ -35,10 +35,8 @@ router.post("/:ticketId/run", async (req, res, next) => {
     if (ticket.status === "PROCESSING") {
       throw new ValidationError("Ticket already processing");
     }
-    const job = await jobQueue.add(JOB_NAMES.RUN_PIPELINE, {
-      ticketId: ticket.id,
-    });
-    res.status(202).json({ jobId: job.id, ticketId: ticket.id });
+    const { started } = runPipelineInBackground(ticket.id);
+    res.status(202).json({ ticketId: ticket.id, started });
   } catch (err) {
     next(err);
   }

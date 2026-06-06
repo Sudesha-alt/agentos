@@ -6,7 +6,6 @@
     "dev": "powershell -ExecutionPolicy Bypass -File scripts/start.ps1",
     "dev:app": "npm run dev --prefix app",
     "dev:api": "npm run dev --prefix server",
-    "dev:worker": "npm run worker --prefix server",
     "tunnel": "powershell -ExecutionPolicy Bypass -File scripts/tunnel.ps1",
     "build": "npm run build --prefix app",
     "build:app": "npm run build --prefix app",

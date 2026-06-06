@@ -1039,9 +1039,6 @@ export const mockApi = {
         openaiConfigured: true,
         llmProvider: "bedrock",
         fileIntelligenceAvailable: true,
-        redisQueue: false,
-        workerRequired: false,
-        workerHint: null,
       },
       blockers: [],
     };
@@ -1130,7 +1127,7 @@ export const mockApi = {
   async runPipeline(ticketId) {
     markUsed();
     await delay(140);
-    return { jobId: "mock-job", ticketId };
+    return { ticketId, started: true };
   },
   async submitOverride(pipelineId, payload) {
     markUsed();
@@ -1140,7 +1137,7 @@ export const mockApi = {
   async readiness() {
     markUsed();
     await delay(60);
-    return { status: "ready", checks: { postgres: "ok", redis: "ok" } };
+    return { status: "ready", checks: { postgres: "ok" } };
   },
   async gitIntegrationSetup() {
     markUsed();

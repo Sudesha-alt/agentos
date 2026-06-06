@@ -1,5 +1,5 @@
+import { EventEmitter } from "node:events";
 import { prisma } from "../db/client";
-import { redisConnection } from "../queue/jobQueue";
 import { logger } from "../utils/logger";
 import type { VisualizationLayout, VisualizationNode } from "./layoutComputer";
 import { computeVisualizationLayout, type LayoutFileInput } from "./layoutComputer";
@@ -7,8 +7,8 @@ import { visualizationService } from "./visualizationService";
 import { resolveRepoScope } from "./repoScope";
 
 const prismaAny = prisma as any;
-const REDIS_LAYOUT_TTL_SEC = 60 * 60 * 24 * 7;
-const CHANNEL = "codebase:viz:delta";
+const vizEmitter = new EventEmitter();
+vizEmitter.setMaxListeners(100);
 
 export type VizDeltaMessage =
   | {
@@ -27,23 +27,12 @@ export type VizDeltaMessage =
       paths: string[];
     };
 
-function cacheKey(branchName: string): string {
-  const scope = resolveRepoScope();
-  const repoOwner = scope?.repoOwner ?? "_";
-  const repoName = scope?.repoName ?? "_";
-  return `codebase:viz:layout:${repoOwner}:${repoName}:${branchName}`;
+function publishDelta(message: VizDeltaMessage): void {
+  vizEmitter.emit("delta", message);
 }
 
 export const visualizationCache = {
   async get(branchName: string): Promise<VisualizationLayout | null> {
-    const key = cacheKey(branchName);
-    try {
-      const cached = await redisConnection.get(key);
-      if (cached) return JSON.parse(cached) as VisualizationLayout;
-    } catch (err) {
-      logger.warn({ err, branchName }, "redis viz cache read failed");
-    }
-
     const scope = resolveRepoScope();
     if (!scope) return null;
 
@@ -61,15 +50,6 @@ export const visualizationCache = {
   },
 
   async set(branchName: string, layout: VisualizationLayout): Promise<void> {
-    const key = cacheKey(branchName);
-    const payload = JSON.stringify(layout);
-
-    try {
-      await redisConnection.setex(key, REDIS_LAYOUT_TTL_SEC, payload);
-    } catch (err) {
-      logger.warn({ err, branchName }, "redis viz cache write failed");
-    }
-
     const scope = resolveRepoScope();
     if (!scope) return;
 
@@ -97,7 +77,7 @@ export const visualizationCache = {
   async refresh(branchName: string): Promise<VisualizationLayout> {
     const layout = await visualizationService.computeVisualization(branchName);
     await this.set(branchName, layout);
-    await publishDelta({ type: "layout_refresh", branchName, layout });
+    publishDelta({ type: "layout_refresh", branchName, layout });
     logger.info(
       { branchName, files: layout.meta.totalFiles, kind: layout.meta.layoutKind },
       "visualization layout cached"
@@ -125,7 +105,7 @@ export const visualizationCache = {
     else layout.nodes.push(updatedNode);
 
     await this.set(branchName, layout);
-    await publishDelta({
+    publishDelta({
       type: "node_update",
       branchName,
       nodes: [layout.nodes[index >= 0 ? index : layout.nodes.length - 1]],
@@ -138,31 +118,13 @@ export const visualizationCache = {
 
     layout.nodes = layout.nodes.filter((n) => n.path !== filePath);
     await this.set(branchName, layout);
-    await publishDelta({ type: "node_remove", branchName, paths: [filePath] });
+    publishDelta({ type: "node_remove", branchName, paths: [filePath] });
   },
 
   subscribe(handler: (message: VizDeltaMessage) => void): () => void {
-    const sub = redisConnection.duplicate();
-    sub.subscribe(CHANNEL).catch((err) => {
-      logger.error({ err }, "viz delta subscribe failed");
-    });
-    sub.on("message", (_channel, payload) => {
-      try {
-        handler(JSON.parse(payload) as VizDeltaMessage);
-      } catch {
-        /* ignore malformed */
-      }
-    });
+    vizEmitter.on("delta", handler);
     return () => {
-      sub.unsubscribe(CHANNEL).finally(() => sub.quit());
+      vizEmitter.off("delta", handler);
     };
   },
 };
-
-async function publishDelta(message: VizDeltaMessage): Promise<void> {
-  try {
-    await redisConnection.publish(CHANNEL, JSON.stringify(message));
-  } catch (err) {
-    logger.warn({ err }, "viz delta publish failed");
-  }
-}

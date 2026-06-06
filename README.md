@@ -7,14 +7,14 @@ Multi-AI agent SaaS: Jira → Product → Engineering → QA, with human gates a
 ```
 agentos/
   app/          # React + Vite → deploy to Vercel (root directory: app)
-  server/       # Express + Prisma + BullMQ + Jira intake → deploy to Render
+  server/       # Express + Prisma + Jira intake → deploy to Render
   scripts/      # Local dev helpers (start.ps1, tunnel.ps1)
 ```
 
 | Folder | Host | Purpose |
 |--------|------|---------|
 | **app** | [Vercel](https://vercel.com) | Marketing site + product UI (`/app/*`) |
-| **server** | [Render](https://render.com) | API, webhooks, Jira intake, pipeline worker |
+| **server** | [Render](https://render.com) | API, webhooks, Jira intake, in-process indexing |
 
 ## Local development
 
@@ -24,9 +24,6 @@ npm run install:all
 
 # API + app (from repo root)
 npm run dev
-
-# Optional: BullMQ worker (second terminal)
-npm run dev:worker
 
 # Optional: ngrok for Jira webhooks
 npm run tunnel

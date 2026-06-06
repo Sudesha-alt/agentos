@@ -1,6 +1,6 @@
 import { prisma } from "../db/client";
-import { JOB_NAMES, codebaseQueue } from "../queue/jobQueue";
 import { logger } from "../utils/logger";
+import { runIncrementalIndex } from "./indexer";
 
 const prismaAny = prisma as any;
 
@@ -86,16 +86,18 @@ export async function enqueueCodebaseIndexFromPush(input: {
     });
   }
 
-  await codebaseQueue.add(JOB_NAMES.RUN_CODEBASE_INCREMENTAL, {
+  void runIncrementalIndex({
     branchName,
     changedFiles,
     deletedFiles,
     commitSha: headSha,
     triggerType: "webhook",
+  }).catch((err) => {
+    logger.warn({ err, branchName }, "in-process incremental index failed");
   });
 
   logger.info(
     { branchName, changedCount: changedFiles.length, deletedCount: deletedFiles.length },
-    "queued codebase incremental index"
+    "started codebase incremental index in-process"
   );
 }

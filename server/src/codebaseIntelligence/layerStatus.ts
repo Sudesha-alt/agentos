@@ -43,9 +43,6 @@ export type CodebaseLayerStatus = {
     openaiConfigured: boolean;
     llmProvider: string;
     fileIntelligenceAvailable: boolean;
-    redisQueue: boolean;
-    workerRequired: boolean;
-    workerHint: string | null;
   };
   blockers: string[];
 };
@@ -152,7 +149,6 @@ export async function getCodebaseLayerStatus(
   const scope = resolveRepoScope();
   const connected = Boolean(git.configured);
   const branch = branchName ?? scope?.defaultBranch ?? git.defaultBranch ?? "main";
-  const redisQueue = Boolean(process.env.REDIS_URL?.trim());
   const openaiConfigured = isOpenAIConfigured();
   const blockers: string[] = [];
 
@@ -194,9 +190,6 @@ export async function getCodebaseLayerStatus(
         openaiConfigured,
         llmProvider: llmProviderLabel(),
         fileIntelligenceAvailable: fileIntelligenceAvailable(),
-        redisQueue,
-        workerRequired: redisQueue,
-        workerHint: redisQueue ? "npm run worker:codebase" : null,
       },
       blockers,
     };
@@ -225,9 +218,6 @@ export async function getCodebaseLayerStatus(
   const indexStatus =
     (progress?.status as CodebaseLayerStatus["index"]["status"]) ?? "none";
 
-  if (indexStatus === "queued" && redisQueue) {
-    blockers.push("Index job is queued — start the codebase worker.");
-  }
   if (indexStatus === "failed" && progress?.error) {
     blockers.push(`Last index failed: ${progress.error}`);
   }
@@ -237,8 +227,6 @@ export async function getCodebaseLayerStatus(
   if (openaiConfigured && embeddingCount === 0 && fileStats.count > 0) {
     blockers.push("Files indexed but no embeddings — check OPENAI_API_KEY and re-index.");
   }
-
-  const workerRequired = redisQueue && indexStatus === "queued";
 
   const ready =
     connected &&
@@ -271,9 +259,6 @@ export async function getCodebaseLayerStatus(
       openaiConfigured,
       llmProvider: llmProviderLabel(),
       fileIntelligenceAvailable: fileIntelligenceAvailable(),
-      redisQueue,
-      workerRequired,
-      workerHint: workerRequired ? "npm run worker:codebase" : null,
     },
     blockers: [...new Set(blockers)],
   };
