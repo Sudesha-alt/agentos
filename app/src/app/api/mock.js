@@ -1010,6 +1010,54 @@ export const mockApi = {
       ],
     };
   },
+  async codebaseLayerStatus() {
+    markUsed();
+    await delay(80);
+    return {
+      connected: true,
+      repo: {
+        owner: "acme",
+        name: "agentos",
+        fullName: "acme/agentos",
+        defaultBranch: "main",
+      },
+      ready: true,
+      index: {
+        status: "completed",
+        runId: "mock-run-1",
+        filesTotal: 142,
+        filesProcessed: 142,
+        filesIndexed: 128,
+        percent: 100,
+        lastCompletedAt: new Date(Date.now() - 3600_000).toISOString(),
+        lastIndexedAt: new Date(Date.now() - 1800_000).toISOString(),
+        error: null,
+      },
+      counts: { filesIndexed: 142, embeddings: 890 },
+      graph: { ready: true, computedAt: new Date(Date.now() - 900_000).toISOString(), nodeCount: 142 },
+      configuration: {
+        openaiConfigured: true,
+        llmProvider: "bedrock",
+        fileIntelligenceAvailable: true,
+        redisQueue: false,
+        workerRequired: false,
+        workerHint: null,
+      },
+      blockers: [],
+    };
+  },
+  async triggerFullCodebaseIndex(branch = "main") {
+    markUsed();
+    await delay(120);
+    return {
+      ok: true,
+      branchName: branch,
+      repo: "acme/agentos",
+      runId: "mock-run-reindex",
+      queued: false,
+      message: "Full index started in-process (mock mode).",
+    };
+  },
   async codebaseAsk(question) {
     markUsed();
     await delay(200);

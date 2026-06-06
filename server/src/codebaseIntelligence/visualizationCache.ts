@@ -4,6 +4,7 @@ import { logger } from "../utils/logger";
 import type { VisualizationLayout, VisualizationNode } from "./layoutComputer";
 import { computeVisualizationLayout, type LayoutFileInput } from "./layoutComputer";
 import { visualizationService } from "./visualizationService";
+import { resolveRepoScope } from "./repoScope";
 
 const prismaAny = prisma as any;
 const REDIS_LAYOUT_TTL_SEC = 60 * 60 * 24 * 7;
@@ -26,15 +27,10 @@ export type VizDeltaMessage =
       paths: string[];
     };
 
-function repoDefaults() {
-  return {
-    repoOwner: process.env.GITHUB_REPO_OWNER ?? "",
-    repoName: process.env.GITHUB_REPO_NAME ?? "",
-  };
-}
-
 function cacheKey(branchName: string): string {
-  const { repoOwner, repoName } = repoDefaults();
+  const scope = resolveRepoScope();
+  const repoOwner = scope?.repoOwner ?? "_";
+  const repoName = scope?.repoName ?? "_";
   return `codebase:viz:layout:${repoOwner}:${repoName}:${branchName}`;
 }
 
@@ -48,12 +44,16 @@ export const visualizationCache = {
       logger.warn({ err, branchName }, "redis viz cache read failed");
     }
 
-    const { repoOwner, repoName } = repoDefaults();
-    if (!repoOwner || !repoName) return null;
+    const scope = resolveRepoScope();
+    if (!scope) return null;
 
     const row = await prismaAny.codebaseVisualizationCache.findUnique({
       where: {
-        repoOwner_repoName_branchName: { repoOwner, repoName, branchName },
+        repoOwner_repoName_branchName: {
+          repoOwner: scope.repoOwner,
+          repoName: scope.repoName,
+          branchName,
+        },
       },
     });
     if (!row?.layoutJson) return null;
@@ -70,16 +70,20 @@ export const visualizationCache = {
       logger.warn({ err, branchName }, "redis viz cache write failed");
     }
 
-    const { repoOwner, repoName } = repoDefaults();
-    if (!repoOwner || !repoName) return;
+    const scope = resolveRepoScope();
+    if (!scope) return;
 
     await prismaAny.codebaseVisualizationCache.upsert({
       where: {
-        repoOwner_repoName_branchName: { repoOwner, repoName, branchName },
+        repoOwner_repoName_branchName: {
+          repoOwner: scope.repoOwner,
+          repoName: scope.repoName,
+          branchName,
+        },
       },
       create: {
-        repoOwner,
-        repoName,
+        repoOwner: scope.repoOwner,
+        repoName: scope.repoName,
         branchName,
         layoutJson: layout,
       },

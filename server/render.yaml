@@ -24,3 +24,13 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+
+  - type: worker
+    name: agentos-codebase-worker
+    runtime: node
+    rootDir: server
+    buildCommand: npm install && npm run build
+    startCommand: npm run worker:codebase
+    envVars:
+      - key: NODE_ENV
+        value: production

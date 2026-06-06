@@ -5,6 +5,16 @@ import { useResource } from "../../shared/lib/useResource";
 import { mockApi } from "../../app/api/mock";
 
 const restCodebaseAdapter = {
+  status: (branch) => {
+    const qs = branch ? `?branch=${encodeURIComponent(branch)}` : "";
+    return fetchJson(apiPath("/api", `/codebase/status${qs}`));
+  },
+  triggerFullIndex: (branch) =>
+    fetchJson(apiPath("/git-integration", "/index/full"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(branch ? { branch } : {}),
+    }),
   structure: () => fetchJson(apiPath("/api/codebase/structure")),
   branches: () => fetchJson(apiPath("/api/codebase/branches")),
   commits: () => fetchJson(apiPath("/api/codebase/commits")),
@@ -27,6 +37,8 @@ const restCodebaseAdapter = {
 };
 
 const mockCodebaseAdapter = {
+  status: () => mockApi.codebaseLayerStatus(),
+  triggerFullIndex: (branch) => mockApi.triggerFullCodebaseIndex(branch),
   structure: () => mockApi.codebaseStructure(),
   branches: () => mockApi.codebaseBranches(),
   commits: () => mockApi.codebaseCommits(),
@@ -38,6 +50,21 @@ const mockCodebaseAdapter = {
 
 export const codebaseAdapter =
   DATA_MODE === "rest" ? restCodebaseAdapter : mockCodebaseAdapter;
+
+export function fetchCodebaseLayerStatus(branch) {
+  return codebaseAdapter.status(branch);
+}
+
+export function triggerFullCodebaseIndex(branch) {
+  return codebaseAdapter.triggerFullIndex(branch);
+}
+
+export function useCodebaseLayerStatus(options = {}) {
+  const branch = options.branch;
+  return useResource(() => fetchCodebaseLayerStatus(branch), [branch], {
+    pollMs: options.pollMs ?? 12000,
+  });
+}
 
 export function useCodebaseStructure(options = {}) {
   return useResource(() => codebaseAdapter.structure(), [], { pollMs: options.pollMs });
