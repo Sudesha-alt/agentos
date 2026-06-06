@@ -14,11 +14,6 @@ import { resolveRepoScope } from "./repoScope";
 
 const prismaAny = prisma as any;
 
-function lineCount(content: string, storedSize: number): number {
-  if (storedSize > 0) return storedSize;
-  return content.split("\n").length;
-}
-
 export const visualizationService = {
   async computeVisualization(branchName = "main"): Promise<VisualizationLayout> {
     const files = await loadIndexedFiles(branchName);
@@ -84,7 +79,6 @@ async function loadIndexedFiles(branchName: string): Promise<LayoutFileInput[]> 
       lastCommitAt: true,
       lastAuthor: true,
       lastCommitMsg: true,
-      content: true,
     },
     take: 2000,
   });
@@ -100,10 +94,9 @@ async function loadIndexedFiles(branchName: string): Promise<LayoutFileInput[]> 
     lastCommitAt: Date | null;
     lastAuthor: string | null;
     lastCommitMsg: string | null;
-    content: string;
   }) => ({
     filePath: row.filePath,
-    size: lineCount(row.content, row.size),
+    size: row.size > 0 ? row.size : 1,
     language: row.language,
     summary: row.summary,
     patterns: row.patterns,
