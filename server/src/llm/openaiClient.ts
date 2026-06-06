@@ -2,6 +2,15 @@ import OpenAI from "openai";
 
 let cached: OpenAI | undefined;
 
+export function isOpenAIConfigured(): boolean {
+  return Boolean(process.env.OPENAI_API_KEY?.trim());
+}
+
+/** Chat model for per-file codebase summaries during indexing. */
+export function getOpenAISummaryModel(): string {
+  return process.env.OPENAI_SUMMARY_MODEL?.trim() || "gpt-4o-mini";
+}
+
 /** Lazy OpenAI client — server boot must not require OPENAI_API_KEY. */
 export function getOpenAIClient(): OpenAI {
   if (cached) return cached;

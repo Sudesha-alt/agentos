@@ -1,6 +1,5 @@
 import { runFullIndex } from "./indexer";
 import { getRepoContext } from "../git-integration/gitCredentialsStore";
-import { JOB_NAMES, codebaseQueue } from "../queue/jobQueue";
 import { prisma } from "../db/client";
 import { logger } from "../utils/logger";
 
@@ -10,10 +9,6 @@ export type EnqueueFullIndexResult = {
   runId: string;
   queued: boolean;
 };
-
-function hasRedisQueue(): boolean {
-  return Boolean(process.env.REDIS_URL?.trim());
-}
 
 export async function enqueueFullIndex(
   branchName: string,
@@ -27,24 +22,16 @@ export async function enqueueFullIndex(
       repoName,
       branchName,
       runType: "full",
-      status: hasRedisQueue() ? "queued" : "running",
+      status: "running",
       triggerType,
     },
   });
 
-  if (hasRedisQueue()) {
-    await codebaseQueue.add(
-      JOB_NAMES.RUN_CODEBASE_FULL,
-      { branchName, runId: run.id, triggerType },
-      { jobId: `full-${run.id}` }
-    );
-    logger.info({ runId: run.id, branchName }, "queued full codebase index");
-    return { runId: run.id, queued: true };
-  }
-
   void runFullIndex(branchName, { runId: run.id, triggerType }).catch((err) => {
     logger.warn({ err, runId: run.id, branchName }, "in-process full index failed");
   });
+
+  logger.info({ runId: run.id, branchName }, "started full codebase index in-process");
   return { runId: run.id, queued: false };
 }
 

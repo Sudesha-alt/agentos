@@ -1,47 +1,65 @@
-import { Link } from "react-router-dom";
-import CodebaseVisualization from "../../features/codebase-viz/CodebaseVisualization";
+import { lazy, Suspense, useState } from "react";
 import IndexProgressBar from "../../widgets/index-progress/IndexProgressBar";
+import CodebaseInsightsPanel from "../../widgets/codebase-insights/CodebaseInsightsPanel";
+import CodebaseIntelligenceStatusWidget from "../../widgets/codebase-intelligence-status/CodebaseIntelligenceStatusWidget";
 import { useGitIntegrationSetup } from "../../entities/git-integration";
-import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
+import Spinner from "../components/Spinner";
+import { PageIntro } from "../../shared/ui/Panel";
+
+const CodebaseVisualization = lazy(
+  () => import("../../features/codebase-viz/CodebaseVisualization")
+);
 
 export default function CodebaseIntelligence() {
   const { data: setup } = useGitIntegrationSetup({ pollMs: 30000 });
   const git = setup?.git;
   const branch = git?.defaultBranch ?? "main";
   const connected = Boolean(setup?.connected);
-  const needsRepo = Boolean(setup?.needsRepoSelection);
+  const [indexRunId, setIndexRunId] = useState(null);
+  const [showMap, setShowMap] = useState(false);
 
   return (
     <div className="mx-auto w-full max-w-[96rem] space-y-6">
       <PageIntro
         kicker="Codebase Intelligence"
-        title="A living map of understanding"
-        body="Five toggleable layers — structure, relationships, activity, quality, and AI-generated meaning. Built for seniors scanning heat and interns taking the guided tour."
+        title="Insights from your repository"
+        body="Summaries, patterns, and readiness for ticket workflows — without loading the entire codebase into the browser."
       />
-      {!connected ? (
-        <Panel>
-          <PanelHeader
-            kicker="GitHub required"
-            title={needsRepo ? "Finish GitHub setup" : "Connect a repository first"}
-            body={
-              needsRepo
-                ? "Your GitHub App is installed but no repository is selected yet. Pick one to start indexing."
-                : "Codebase intelligence indexes your connected GitHub repository. Connect GitHub, select a repo, and indexing will begin automatically."
-            }
-          />
-          <div className="px-5 py-4 sm:px-6">
-            <Link
-              to="/app/git"
-              className="text-[13px] text-indigo underline hover:text-ink"
+      <CodebaseIntelligenceStatusWidget
+        branch={branch}
+        onIndexStarted={({ runId }) => setIndexRunId(runId)}
+      />
+      {connected ? (
+        <IndexProgressBar
+          runId={indexRunId ?? undefined}
+          branch={branch}
+          enabled
+          title="Building codebase map"
+        />
+      ) : null}
+      {connected ? <CodebaseInsightsPanel branch={branch} /> : null}
+      {connected ? (
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={() => setShowMap((v) => !v)}
+            className="rounded-full border border-indigo/50 bg-indigo/10 px-5 py-2.5 font-mono text-[11px] uppercase tracking-[0.14em] text-ink transition-all hover:shadow-glow-indigo"
+          >
+            {showMap ? "Hide interactive map" : "Open interactive map (heavy)"}
+          </button>
+          {showMap ? (
+            <Suspense
+              fallback={
+                <div className="flex h-48 items-center justify-center rounded-[1.25rem] border border-hairline">
+                  <Spinner label="Loading map…" />
+                </div>
+              }
             >
-              Open GitHub integration →
-            </Link>
-          </div>
-        </Panel>
-      ) : (
-        <IndexProgressBar branch={branch} enabled title="Building codebase map" />
-      )}
-      {connected ? <CodebaseVisualization /> : null}
+              <CodebaseVisualization branch={branch} refreshOnOpen />
+            </Suspense>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

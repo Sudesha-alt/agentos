@@ -15,7 +15,7 @@ import {
   getMirrorStats,
   runMirrorBackfill,
 } from "../../pipeline/jira/mirror/syncService";
-import { jobQueue, JOB_NAMES } from "../../queue/jobQueue";
+import { runMirrorBackfillInBackground } from "../../queue/inProcessRunner";
 
 const router = Router();
 
@@ -134,11 +134,8 @@ router.post("/mirror/backfill", async (req, res, next) => {
     const async = req.body?.async !== false;
 
     if (async) {
-      const job = await jobQueue.add(JOB_NAMES.RUN_JIRA_MIRROR_BACKFILL, {
-        projectKeys,
-        maxIssues,
-      });
-      res.status(202).json({ jobId: job.id, status: "queued" });
+      const { started } = runMirrorBackfillInBackground({ projectKeys, maxIssues });
+      res.status(202).json({ status: started ? "started" : "already_running" });
       return;
     }
 

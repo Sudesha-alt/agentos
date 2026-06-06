@@ -35,3 +35,6 @@ server/.env
 app/dist
 app/.env
 app/.env.local
+
+# Local demo clone (published separately on GitHub)
+demo/horizon-commerce-platform/

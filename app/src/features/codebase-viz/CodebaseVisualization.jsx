@@ -21,10 +21,12 @@ const LAYER_OPTIONS = [
   { id: LAYERS.understanding, label: "Understanding" },
 ];
 
-const BRANCH = "main";
-
-export default function CodebaseVisualization() {
-  const { data, loading } = useCodebaseVisualization({ pollMs: 120_000 });
+export default function CodebaseVisualization({ branch = "main", refreshOnOpen = false }) {
+  const { data, loading, error, refetch } = useCodebaseVisualization({
+    branch,
+    pollMs: 60_000,
+    refresh: refreshOnOpen,
+  });
   const [layoutOverride, setLayoutOverride] = useState(null);
   const [view, setView] = useState("map");
   const [fileView, setFileView] = useState(false);
@@ -45,7 +47,7 @@ export default function CodebaseVisualization() {
 
   const { data: searchData } = useCodebaseSearch(searchQuery, { pollMs: 0 });
 
-  useCodebaseVizWs(BRANCH, (message) => {
+  useCodebaseVizWs(branch, (message) => {
     if (message.type === "layout_refresh") {
       setLayoutOverride(message.layout);
       return;
@@ -152,7 +154,7 @@ export default function CodebaseVisualization() {
     if (!question.trim()) return;
     setAsking(true);
     try {
-      const result = await askCodebase(question, BRANCH);
+      const result = await askCodebase(question, branch);
       setManualHighlights(new Set(result.highlightPaths ?? []));
       setQuestionAnswer(result.answer);
     } catch {
@@ -172,8 +174,46 @@ export default function CodebaseVisualization() {
 
   if (loading && !activeLayout) {
     return (
-      <div className="flex h-[560px] items-center justify-center">
+      <div className="flex h-[560px] items-center justify-center rounded-[1.25rem] border border-hairline bg-canvas/50">
         <Spinner label="Computing codebase map" />
+      </div>
+    );
+  }
+
+  if (error && !activeLayout) {
+    return (
+      <div className="flex h-[560px] flex-col items-center justify-center gap-3 rounded-[1.25rem] border border-danger/30 bg-danger/5 px-6 text-center">
+        <p className="text-sm text-danger">Could not load the codebase map.</p>
+        <p className="text-xs text-ink-dim">
+          {error instanceof Error ? error.message : "Visualization API error"}
+        </p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="rounded-full border border-indigo/50 bg-indigo/10 px-4 py-2 text-[13px] text-ink"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (!loading && (!activeLayout?.nodes?.length || fileNodes.length === 0)) {
+    return (
+      <div className="flex h-[560px] flex-col items-center justify-center gap-3 rounded-[1.25rem] border border-hairline bg-canvas/50 px-6 text-center">
+        <p className="font-display text-lg text-ink">Map not ready yet</p>
+        <p className="max-w-md text-sm text-ink-dim">
+          Indexing may still be running, or the graph has not been built for branch{" "}
+          <code className="font-mono text-[12px] text-ink">{branch}</code>. Use{" "}
+          <strong>Fetch &amp; index codebase</strong> above, then reload the map.
+        </p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="rounded-full bg-indigo px-5 py-2 font-mono text-[11px] uppercase tracking-[0.14em] text-white"
+        >
+          Reload map
+        </button>
       </div>
     );
   }
@@ -300,7 +340,7 @@ export default function CodebaseVisualization() {
               </button>
             </div>
             <div className="min-h-0 flex-1 p-3">
-              <FileInteriorView filePath={selectedFile.path} branch={BRANCH} />
+              <FileInteriorView filePath={selectedFile.path} branch={branch} />
             </div>
           </div>
         ) : view === "map" ? (

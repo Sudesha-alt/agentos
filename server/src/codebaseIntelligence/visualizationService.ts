@@ -10,20 +10,9 @@ import {
   extractFunctionBlocks,
   layoutFunctionBlocks,
 } from "./functionBlocks";
+import { resolveRepoScope } from "./repoScope";
 
 const prismaAny = prisma as any;
-
-function repoDefaults() {
-  return {
-    repoOwner: process.env.GITHUB_REPO_OWNER ?? "",
-    repoName: process.env.GITHUB_REPO_NAME ?? "",
-  };
-}
-
-function lineCount(content: string, storedSize: number): number {
-  if (storedSize > 0) return storedSize;
-  return content.split("\n").length;
-}
 
 export const visualizationService = {
   async computeVisualization(branchName = "main"): Promise<VisualizationLayout> {
@@ -38,12 +27,15 @@ export const visualizationService = {
   },
 
   async getFileInterior(branchName: string, filePath: string) {
-    const { repoOwner, repoName } = repoDefaults();
+    const scope = resolveRepoScope();
+    if (!scope) {
+      return { filePath, blocks: [], summary: null };
+    }
     const row = await prismaAny.codebaseFile.findUnique({
       where: {
         repoOwner_repoName_filePath_branchName: {
-          repoOwner,
-          repoName,
+          repoOwner: scope.repoOwner,
+          repoName: scope.repoName,
           filePath,
           branchName,
         },
@@ -66,11 +58,16 @@ export const visualizationService = {
 };
 
 async function loadIndexedFiles(branchName: string): Promise<LayoutFileInput[]> {
-  const { repoOwner, repoName } = repoDefaults();
-  if (!repoOwner || !repoName) return [];
+  const scope = resolveRepoScope();
+  if (!scope) return [];
 
   const rows = await prismaAny.codebaseFile.findMany({
-    where: { repoOwner, repoName, branchName, isDeleted: false },
+    where: {
+      repoOwner: scope.repoOwner,
+      repoName: scope.repoName,
+      branchName,
+      isDeleted: false,
+    },
     select: {
       filePath: true,
       size: true,
@@ -82,7 +79,6 @@ async function loadIndexedFiles(branchName: string): Promise<LayoutFileInput[]> 
       lastCommitAt: true,
       lastAuthor: true,
       lastCommitMsg: true,
-      content: true,
     },
     take: 2000,
   });
@@ -98,10 +94,9 @@ async function loadIndexedFiles(branchName: string): Promise<LayoutFileInput[]> 
     lastCommitAt: Date | null;
     lastAuthor: string | null;
     lastCommitMsg: string | null;
-    content: string;
   }) => ({
     filePath: row.filePath,
-    size: lineCount(row.content, row.size),
+    size: row.size > 0 ? row.size : 1,
     language: row.language,
     summary: row.summary,
     patterns: row.patterns,

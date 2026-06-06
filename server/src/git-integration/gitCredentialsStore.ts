@@ -1,5 +1,9 @@
 import { prisma } from "../db/client";
-import { getInstallationAccessToken } from "../integrations/git/githubApp";
+import {
+  getInstallationAccessToken,
+  isGithubInstallationMissingError,
+} from "../integrations/git/githubApp";
+import { removeGithubInstallation } from "./githubInstallationStore";
 import { getDb } from "../jira-intake/sqliteStore";
 import { logger } from "../utils/logger";
 import type { GitProviderId, GitRepoContext } from "../integrations/git/types";
@@ -378,6 +382,22 @@ export function applyGitCredentialsToProcessEnv(creds: StoredGitCredentials): vo
   }
 }
 
+export function clearGitCredentials(): void {
+  getDb().prepare(`DELETE FROM git_credentials WHERE singleton_id = 1`).run();
+  runtimeCreds = null;
+
+  delete process.env.GITHUB_TOKEN;
+  delete process.env.GITHUB_REPO_OWNER;
+  delete process.env.GITHUB_REPO_NAME;
+  delete process.env.GITHUB_APP_INSTALLATION_ID;
+  delete process.env.GITHUB_WEBHOOK_SECRET;
+  delete process.env.BITBUCKET_APP_PASSWORD;
+  delete process.env.BITBUCKET_WORKSPACE;
+  delete process.env.BITBUCKET_REPO_SLUG;
+  delete process.env.BITBUCKET_USERNAME;
+  delete process.env.BITBUCKET_WEBHOOK_SECRET;
+}
+
 export function validateGitConfig(): void {
   const creds = getGitCredentials();
   if (creds.authMethod === "github_app") {
@@ -393,6 +413,7 @@ export function validateGitConfig(): void {
 
 /** Re-hydrate SQLite/runtime creds from Postgres after Render restarts or partial installs. */
 export async function restoreGitCredentialsFromPostgres(): Promise<boolean> {
+  let installationId: string | null = null;
   try {
     const install = (await prismaAny.githubInstallation.findFirst({
       orderBy: { updatedAt: "desc" },
@@ -403,6 +424,7 @@ export async function restoreGitCredentialsFromPostgres(): Promise<boolean> {
     } | null;
 
     if (!install?.installationId) return false;
+    installationId = install.installationId;
 
     const current = runtimeCreds ?? loadGitCredentialsFromStore();
 
@@ -443,6 +465,20 @@ export async function restoreGitCredentialsFromPostgres(): Promise<boolean> {
 
     return false;
   } catch (err) {
+    if (isGithubInstallationMissingError(err) && installationId) {
+      await removeGithubInstallation(installationId).catch(() => {});
+      clearGitCredentials();
+
+      logger.warn(
+        {
+          installationId,
+          hint: "Reconnect GitHub on /app/git — installation was removed on GitHub or GITHUB_APP_ID does not match this install.",
+        },
+        "stale github installation cleared from postgres"
+      );
+      return false;
+    }
+
     logger.warn({ err }, "restore git credentials from postgres failed");
     return false;
   }

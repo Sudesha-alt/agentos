@@ -1,4 +1,6 @@
 import { Router } from "express";
+import { getCodebaseInsights } from "../../codebaseIntelligence/insightsService";
+import { getCodebaseLayerStatus } from "../../codebaseIntelligence/layerStatus";
 import { codebaseQueryService } from "../../codebaseIntelligence/queryService";
 import { askCodebaseQuestion } from "../../codebaseIntelligence/codebaseAskService";
 import { visualizationCache } from "../../codebaseIntelligence/visualizationCache";
@@ -6,14 +8,57 @@ import { visualizationService } from "../../codebaseIntelligence/visualizationSe
 
 const router = Router();
 
+router.get("/status", async (req, res, next) => {
+  try {
+    const branchName =
+      typeof req.query.branch === "string" && req.query.branch.trim()
+        ? req.query.branch.trim()
+        : undefined;
+    const status = await getCodebaseLayerStatus(branchName);
+    res.json(status);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/insights", async (req, res, next) => {
+  try {
+    const branchName = String(req.query.branch ?? "main");
+    const insights = await getCodebaseInsights(branchName);
+    res.json(insights);
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get("/visualization", async (req, res, next) => {
   try {
     const branchName = String(req.query.branch ?? "main");
     const refresh = req.query.refresh === "true";
-    const layout = refresh
+    let layout = refresh
       ? await visualizationCache.refresh(branchName)
-      : (await visualizationCache.get(branchName)) ??
-        (await visualizationCache.refresh(branchName));
+      : await visualizationCache.get(branchName);
+
+    if (!layout) {
+      if (refresh) {
+        layout = await visualizationCache.refresh(branchName);
+      } else {
+        res.json({
+          nodes: [],
+          edges: [],
+          districts: [],
+          tourSteps: [],
+          meta: {
+            totalFiles: 0,
+            layoutKind: "treemap",
+            pending: true,
+            message: "Map not built yet — open after indexing completes or pass refresh=true",
+          },
+        });
+        return;
+      }
+    }
+
     res.json(layout);
   } catch (err) {
     next(err);

@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import type { Prisma } from "../db/prisma";
 import { ticketRepo } from "../db/repositories/ticketRepo";
-import { jobQueue, JOB_NAMES } from "../queue/jobQueue";
+import { runPipelineInBackground } from "../queue/inProcessRunner";
 import { logger } from "../utils/logger";
 import { classifyIntent } from "./intentClassifier";
 import { normalizeTicket, type JiraWebhookPayload } from "./ticketNormalizer";
@@ -47,13 +47,9 @@ export async function handleJiraWebhook(
       status: "RECEIVED",
     });
 
-    await jobQueue.add(
-      JOB_NAMES.RUN_PIPELINE,
-      { ticketId: ticket.id },
-      { attempts: 3, backoff: { type: "exponential", delay: 5000 } }
-    );
+    runPipelineInBackground(ticket.id);
 
-    logger.info({ ticketId: ticket.id }, "pipeline job queued");
+    logger.info({ ticketId: ticket.id }, "pipeline started in-process");
   } catch (error) {
     logger.error({ err: error }, "webhook processing failed");
   }

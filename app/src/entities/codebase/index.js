@@ -5,17 +5,33 @@ import { useResource } from "../../shared/lib/useResource";
 import { mockApi } from "../../app/api/mock";
 
 const restCodebaseAdapter = {
-  structure: () => fetchJson(apiPath("/api/codebase/structure")),
-  branches: () => fetchJson(apiPath("/api/codebase/branches")),
-  commits: () => fetchJson(apiPath("/api/codebase/commits")),
+  status: (branch) => {
+    const qs = branch ? `?branch=${encodeURIComponent(branch)}` : "";
+    return fetchJson(apiPath("/api", `/codebase/status${qs}`));
+  },
+  insights: (branch = "main") =>
+    fetchJson(apiPath("/api", `/codebase/insights?branch=${encodeURIComponent(branch)}`)),
+  triggerFullIndex: (branch) =>
+    fetchJson(apiPath("/git-integration", "/index/full"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(branch ? { branch } : {}),
+    }),
+  structure: () => fetchJson(apiPath("/api", "/codebase/structure")),
+  branches: () => fetchJson(apiPath("/api", "/codebase/branches")),
+  commits: () => fetchJson(apiPath("/api", "/codebase/commits")),
   search: (query) =>
-    fetchJson(apiPath(`/api/codebase/search?q=${encodeURIComponent(query)}`)),
-  visualization: (branch = "main") =>
-    fetchJson(apiPath(`/api/codebase/visualization?branch=${encodeURIComponent(branch)}`)),
+    fetchJson(apiPath("/api", `/codebase/search?q=${encodeURIComponent(query)}`)),
+  visualization: (branch = "main", refresh = false) => {
+    const qs = new URLSearchParams({ branch });
+    if (refresh) qs.set("refresh", "true");
+    return fetchJson(apiPath("/api", `/codebase/visualization?${qs.toString()}`));
+  },
   fileInterior: (branch, filePath) =>
     fetchJson(
       apiPath(
-        `/api/codebase/visualization/file?branch=${encodeURIComponent(branch)}&path=${encodeURIComponent(filePath)}`
+        "/api",
+        `/codebase/visualization/file?branch=${encodeURIComponent(branch)}&path=${encodeURIComponent(filePath)}`
       )
     ),
   ask: (question, branch = "main") =>
@@ -27,17 +43,46 @@ const restCodebaseAdapter = {
 };
 
 const mockCodebaseAdapter = {
+  status: () => mockApi.codebaseLayerStatus(),
+  insights: (branch) => mockApi.codebaseInsights(branch),
+  triggerFullIndex: (branch) => mockApi.triggerFullCodebaseIndex(branch),
   structure: () => mockApi.codebaseStructure(),
   branches: () => mockApi.codebaseBranches(),
   commits: () => mockApi.codebaseCommits(),
   search: (query) => mockApi.codebaseSearch(query),
-  visualization: (branch) => mockApi.codebaseVisualization(branch),
+  visualization: (branch, refresh) => mockApi.codebaseVisualization(branch, refresh),
   fileInterior: (branch, filePath) => mockApi.codebaseFileInterior(branch, filePath),
   ask: (question, branch) => mockApi.codebaseAsk(question, branch),
 };
 
 export const codebaseAdapter =
   DATA_MODE === "rest" ? restCodebaseAdapter : mockCodebaseAdapter;
+
+export function fetchCodebaseLayerStatus(branch) {
+  return codebaseAdapter.status(branch);
+}
+
+export function triggerFullCodebaseIndex(branch) {
+  return codebaseAdapter.triggerFullIndex(branch);
+}
+
+export function useCodebaseLayerStatus(options = {}) {
+  const branch = options.branch;
+  return useResource(() => fetchCodebaseLayerStatus(branch), [branch], {
+    pollMs: options.pollMs ?? 12000,
+  });
+}
+
+export function fetchCodebaseInsights(branch) {
+  return codebaseAdapter.insights(branch);
+}
+
+export function useCodebaseInsights(options = {}) {
+  const branch = options.branch ?? "main";
+  return useResource(() => fetchCodebaseInsights(branch), [branch], {
+    pollMs: options.pollMs ?? 60_000,
+  });
+}
 
 export function useCodebaseStructure(options = {}) {
   return useResource(() => codebaseAdapter.structure(), [], { pollMs: options.pollMs });
@@ -64,7 +109,8 @@ export function useCodebaseSearch(query, options = {}) {
 
 export function useCodebaseVisualization(options = {}) {
   const branch = options.branch ?? "main";
-  return useResource(() => codebaseAdapter.visualization(branch), [branch], {
+  const refresh = Boolean(options.refresh);
+  return useResource(() => codebaseAdapter.visualization(branch, refresh), [branch, refresh], {
     pollMs: options.pollMs ?? 120_000,
   });
 }

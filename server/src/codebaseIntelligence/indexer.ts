@@ -1,17 +1,16 @@
 import { createHash } from "node:crypto";
-import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "../db/client";
-import { getOpenAIClient } from "../llm/openaiClient";
+import {
+  getOpenAIClient,
+  getOpenAISummaryModel,
+  isOpenAIConfigured,
+} from "../llm/openaiClient";
 import { gitClient } from "../integrations/gitProvider";
 import { getRepoContext } from "../git-integration/gitCredentialsStore";
 import { logger } from "../utils/logger";
 import { withRetry } from "../utils/retry";
 import { codebaseVectorStore } from "./vectorStore";
 import { visualizationCache } from "./visualizationCache";
-
-const claude = process.env.ANTHROPIC_API_KEY
-  ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  : null;
 
 function repoIds() {
   const ctx = getRepoContext();
@@ -354,7 +353,7 @@ async function extractFileIntelligence(
   imports: Array<{ from: string; items: string[] }>;
   patterns: string[];
 }> {
-  if (content.length < 200 || !claude) {
+  if (content.length < 200 || !isOpenAIConfigured()) {
     return regexIntelligence(content, filePath, language);
   }
 
@@ -364,12 +363,16 @@ async function extractFileIntelligence(
   try {
     const response = await withRetry(
       () =>
-        claude.messages.create({
-          model: "claude-sonnet-4-20250514",
+        getOpenAIClient().chat.completions.create({
+          model: getOpenAISummaryModel(),
           max_tokens: 900,
-          system:
-            "Extract structured code intelligence. Return JSON only, no markdown.",
+          response_format: { type: "json_object" },
           messages: [
+            {
+              role: "system",
+              content:
+                "Extract structured code intelligence. Return JSON only with keys summary, exports, imports, patterns.",
+            },
             {
               role: "user",
               content: `File: ${filePath}\nLanguage: ${language}\n\n${analysisContent}\n\nReturn JSON: {"summary":string,"exports":[{"name":string,"type":string}],"imports":[{"from":string,"items":[string]}],"patterns":[string]}`,
@@ -379,9 +382,9 @@ async function extractFileIntelligence(
       { maxAttempts: 2, baseDelayMs: 500, maxDelayMs: 3000 }
     );
 
-    const text = response.content.find((item) => item.type === "text");
+    const text = response.choices[0]?.message?.content ?? "";
     const parsed = JSON.parse(
-      (text?.text ?? "").replace(/```json/gi, "").replace(/```/g, "").trim()
+      text.replace(/```json/gi, "").replace(/```/g, "").trim()
     ) as {
       summary?: string;
       exports?: Array<{ name: string; type: string }>;
@@ -443,6 +446,11 @@ async function updateFileEmbeddings(
   },
   language: string
 ): Promise<void> {
+  if (!isOpenAIConfigured()) {
+    logger.warn({ filePath, branchName }, "skipping embeddings — OPENAI_API_KEY not set");
+    return;
+  }
+
   const { repoOwner, repoName } = repoIds();
   const chunks = buildEmbeddingTexts(filePath, content, intelligence).slice(0, 16);
   const rows = [];

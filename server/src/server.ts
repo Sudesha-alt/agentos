@@ -9,6 +9,7 @@ import { loadJiraCredentialsFromStore } from "./jira-intake/jiraCredentialsStore
 import { loadPipelineJiraCredentialsFromStore } from "./pipeline/jira/credentialsStore";
 import { initIntakeDb } from "./jira-intake/sqliteStore";
 import { initCodebaseVizWebSocket } from "./codebaseIntelligence/codebaseVizHub";
+import { recoverStaleIndexRuns } from "./codebaseIntelligence/indexRecovery";
 import { logger } from "./utils/logger";
 
 async function bootstrap(): Promise<void> {
@@ -23,6 +24,10 @@ async function bootstrap(): Promise<void> {
   } catch {
     /* optional until Git integration is configured */
   }
+
+  await recoverStaleIndexRuns().catch((err) => {
+    logger.warn({ err }, "startup index recovery failed");
+  });
 
   if (process.env.SENTRY_DSN) {
     Sentry.init({ dsn: process.env.SENTRY_DSN });

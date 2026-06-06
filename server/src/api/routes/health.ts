@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { getPrisma } from "../../db/client";
-import { redisConnection } from "../../queue/jobQueue";
 
 const router = Router();
 
@@ -21,13 +20,7 @@ router.get("/readyz", async (_req, res) => {
       checks.postgres = err instanceof Error ? err.message : "error";
     }
   }
-  try {
-    await redisConnection.ping();
-    checks.redis = "ok";
-  } catch (err) {
-    checks.redis = err instanceof Error ? err.message : "error";
-  }
-  const ok = Object.values(checks).every((v) => v === "ok");
+  const ok = Object.values(checks).every((v) => v === "ok" || v.startsWith("skipped"));
   res.status(ok ? 200 : 503).json({ status: ok ? "ready" : "degraded", checks });
 });
 

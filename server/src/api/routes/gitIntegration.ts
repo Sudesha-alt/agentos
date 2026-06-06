@@ -1,14 +1,17 @@
 import { Router, type Request } from "express";
 import { connectGit } from "../../git-integration/connectGit";
+import { disconnectGitIntegration } from "../../git-integration/disconnectGit";
 import {
   completeGithubInstallation,
   selectGithubRepository,
 } from "../../git-integration/githubInstall";
 import {
+  enqueueFullIndex,
   getIndexRunById,
   getLatestIndexRun,
   indexRunProgress,
 } from "../../codebaseIntelligence/indexQueue";
+import { getRepoContext } from "../../git-integration/gitCredentialsStore";
 import { getPublicGitCredentials } from "../../git-integration/gitCredentialsStore";
 import {
   githubAppInstallUrl,
@@ -301,6 +304,20 @@ router.post("/github/complete-install", async (req, res) => {
   }
 });
 
+router.post("/integration/disconnect", async (_req, res, next) => {
+  try {
+    const result = await disconnectGitIntegration();
+    res.json({
+      ok: true,
+      ...result,
+      message:
+        "Git integration disconnected in AgentOS. Indexed codebase data is kept; uninstall the GitHub App on GitHub if you want to revoke access entirely.",
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post("/github/select-repo", async (req, res, next) => {
   try {
     const result = await selectGithubRepository({
@@ -314,6 +331,29 @@ router.post("/github/select-repo", async (req, res, next) => {
     res.json(result);
   } catch (err) {
     next(err);
+  }
+});
+
+/** Fetch entire repo from GitHub → AI summaries → Postgres + vector embeddings → graph cache. */
+router.post("/index/full", async (req, res) => {
+  try {
+    const ctx = getRepoContext();
+    const branchName =
+      typeof req.body?.branch === "string" && req.body.branch.trim()
+        ? req.body.branch.trim()
+        : ctx.defaultBranch;
+    const result = await enqueueFullIndex(branchName, "manual");
+    res.json({
+      ok: true,
+      branchName,
+      repo: `${ctx.workspace}/${ctx.repoSlug}`,
+      runId: result.runId,
+      queued: result.queued,
+      message: "Full index started in-process on the API server",
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "index_enqueue_failed";
+    res.status(400).json({ error: "index_enqueue_failed", message });
   }
 });
 

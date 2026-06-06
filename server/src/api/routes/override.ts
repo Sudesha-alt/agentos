@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { auditRepo } from "../../db/repositories/auditRepo";
 import { pipelineRepo } from "../../db/repositories/pipelineRepo";
-import { jobQueue, JOB_NAMES } from "../../queue/jobQueue";
+import { runPipelineInBackground } from "../../queue/inProcessRunner";
 import { stateManager } from "../../pipeline/stateManager";
 import { prisma } from "../../db/client";
 import { NotFoundError, ValidationError } from "../../utils/errors";
@@ -63,9 +63,7 @@ router.post("/:pipelineId/override", async (req, res, next) => {
     // pick up the most recent stage output, which now reflects the override
     // because we wrote it as a new HumanOverride row.
     await stateManager.advance(pipeline.id, nextStageAfter(parsed.data.stage));
-    await jobQueue.add(JOB_NAMES.RUN_PIPELINE, {
-      ticketId: pipeline.ticketId,
-    });
+    runPipelineInBackground(pipeline.ticketId);
 
     res.status(202).json({ ok: true });
   } catch (err) {

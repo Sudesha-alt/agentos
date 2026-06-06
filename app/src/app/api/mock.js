@@ -1010,6 +1010,90 @@ export const mockApi = {
       ],
     };
   },
+  async codebaseInsights(branch = "main") {
+    markUsed();
+    await delay(60);
+    return {
+      repo: { owner: "acme", name: "agentos", branch },
+      totals: { files: 142, withSummary: 128 },
+      languages: [
+        { language: "typescript", count: 86 },
+        { language: "javascript", count: 34 },
+        { language: "sql", count: 12 },
+      ],
+      patterns: [
+        { pattern: "api-route", count: 18 },
+        { pattern: "database-query", count: 14 },
+        { pattern: "auth", count: 9 },
+      ],
+      topDirectories: [
+        { path: "server", fileCount: 72 },
+        { path: "app", fileCount: 48 },
+        { path: "prisma", fileCount: 8 },
+      ],
+      highlights: [
+        {
+          path: "server/src/pipeline/orchestrator.ts",
+          language: "typescript",
+          summary: "Coordinates multi-agent pipeline stages and validation gates.",
+          patterns: ["api-route"],
+          size: 420,
+        },
+        {
+          path: "server/src/codebaseIntelligence/indexer.ts",
+          language: "typescript",
+          summary: "Indexes repository files and writes embeddings to Supabase.",
+          patterns: ["database-query"],
+          size: 380,
+        },
+      ],
+    };
+  },
+  async codebaseLayerStatus() {
+    markUsed();
+    await delay(80);
+    return {
+      connected: true,
+      repo: {
+        owner: "acme",
+        name: "agentos",
+        fullName: "acme/agentos",
+        defaultBranch: "main",
+      },
+      ready: true,
+      index: {
+        status: "completed",
+        runId: "mock-run-1",
+        filesTotal: 142,
+        filesProcessed: 142,
+        filesIndexed: 128,
+        percent: 100,
+        lastCompletedAt: new Date(Date.now() - 3600_000).toISOString(),
+        lastIndexedAt: new Date(Date.now() - 1800_000).toISOString(),
+        error: null,
+      },
+      counts: { filesIndexed: 142, embeddings: 890 },
+      graph: { ready: true, computedAt: new Date(Date.now() - 900_000).toISOString(), nodeCount: 142 },
+      configuration: {
+        openaiConfigured: true,
+        llmProvider: "bedrock",
+        fileIntelligenceAvailable: true,
+      },
+      blockers: [],
+    };
+  },
+  async triggerFullCodebaseIndex(branch = "main") {
+    markUsed();
+    await delay(120);
+    return {
+      ok: true,
+      branchName: branch,
+      repo: "acme/agentos",
+      runId: "mock-run-reindex",
+      queued: false,
+      message: "Full index started in-process (mock mode).",
+    };
+  },
   async codebaseAsk(question) {
     markUsed();
     await delay(200);
@@ -1082,7 +1166,7 @@ export const mockApi = {
   async runPipeline(ticketId) {
     markUsed();
     await delay(140);
-    return { jobId: "mock-job", ticketId };
+    return { ticketId, started: true };
   },
   async submitOverride(pipelineId, payload) {
     markUsed();
@@ -1092,7 +1176,7 @@ export const mockApi = {
   async readiness() {
     markUsed();
     await delay(60);
-    return { status: "ready", checks: { postgres: "ok", redis: "ok" } };
+    return { status: "ready", checks: { postgres: "ok" } };
   },
   async gitIntegrationSetup() {
     markUsed();
@@ -1161,6 +1245,33 @@ export const mockApi = {
       fullName: `${owner}/${repo}`,
       defaultBranch: body?.defaultBranch ?? "main",
       git: { ...mockGitState.git },
+    };
+  },
+  async disconnectGitIntegration() {
+    markUsed();
+    await delay(100);
+    mockGitState = {
+      connected: false,
+      git: {
+        provider: null,
+        workspace: "",
+        repoSlug: "",
+        username: null,
+        hasToken: false,
+        tokenHint: null,
+        webhookSecret: "",
+        defaultBranch: "main",
+        configured: false,
+        authMethod: null,
+        installationId: null,
+        source: "none",
+      },
+    };
+    return {
+      ok: true,
+      disconnected: true,
+      postgresInstallationsRemoved: 1,
+      message: "Git integration disconnected (mock).",
     };
   },
 };
