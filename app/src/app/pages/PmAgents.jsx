@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   analyzePmTicket,
+  getPmResumeStage,
+  PM_STAGE_LABELS,
   PM_STAGE_ORDER,
+  resumePmAnalysis,
   runPmRetrospective,
   usePmAnalysis,
   usePmAnalyses,
@@ -62,6 +65,26 @@ export default function PmAgents() {
       await refetchList();
     } catch (err) {
       setError(err.message ?? "Analysis failed");
+      setAnalyzing(false);
+    }
+  }
+
+  async function handleResume() {
+    const key = activeKey?.trim().toUpperCase();
+    if (!key) return;
+    const resumeFrom = getPmResumeStage(analysis);
+    if (!resumeFrom) {
+      setError("No failed stage to resume from.");
+      return;
+    }
+    setError(null);
+    setAnalyzing(true);
+    try {
+      await resumePmAnalysis(key, { resumeFrom });
+      await refetchAnalysis();
+      await refetchList();
+    } catch (err) {
+      setError(err.message ?? "Resume failed");
       setAnalyzing(false);
     }
   }
@@ -198,6 +221,13 @@ export default function PmAgents() {
           analysis={analysis}
           onRetrospective={handleRetrospective}
           retroRunning={retroRunning}
+          onResume={analysis.status === "FAILED" ? handleResume : undefined}
+          resuming={analyzing}
+          resumeStageLabel={
+            analysis.status === "FAILED"
+              ? PM_STAGE_LABELS[getPmResumeStage(analysis)] ?? null
+              : null
+          }
         />
       )}
     </AnimatedAppPage>

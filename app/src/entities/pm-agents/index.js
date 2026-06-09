@@ -15,6 +15,12 @@ const restPmAdapter = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
+  resume: (ticketId, body = {}) =>
+    fetchJson(pm(`/analyze/${encodeURIComponent(ticketId)}/resume`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
   retrospective: (ticketId, body = {}) =>
     fetchJson(pm(`/retrospective/${encodeURIComponent(ticketId)}`), {
       method: "POST",
@@ -29,15 +35,23 @@ const restPmAdapter = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
     }),
+  startPipeline: (ticketId) =>
+    fetchJson(pm(`/handoff/${encodeURIComponent(ticketId)}/start-pipeline`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    }),
 };
 
 const mockPmAdapter = {
   listAnalyses: () => mockApi.listPmAnalyses(),
   getAnalysis: (ticketId) => mockApi.getPmAnalysis(ticketId),
   analyze: (ticketId, body) => mockApi.analyzePmTicket(ticketId, body),
+  resume: (ticketId) => mockApi.resumePmTicket(ticketId),
   retrospective: (ticketId, body) => mockApi.runPmRetrospective(ticketId, body),
   getHandoff: (ticketId) => mockApi.getPmHandoff(ticketId),
   runHandoff: (ticketId) => mockApi.runPmHandoff(ticketId),
+  startPipeline: (ticketId) => mockApi.startPmPipeline(ticketId),
 };
 
 const adapter = DATA_MODE === "rest" ? restPmAdapter : mockPmAdapter;
@@ -77,6 +91,21 @@ export function analyzePmTicket(ticketId, body) {
   return adapter.analyze(ticketId, body);
 }
 
+export function resumePmAnalysis(ticketId, body) {
+  return adapter.resume(ticketId, body);
+}
+
+export function getPmResumeStage(analysis) {
+  if (!analysis) return null;
+  if (analysis.currentStage && PM_STAGE_ORDER.includes(analysis.currentStage)) {
+    return analysis.currentStage;
+  }
+  const failed = [...(analysis.stageMeta ?? [])]
+    .reverse()
+    .find((meta) => meta.status === "FAILED");
+  return failed?.stage ?? null;
+}
+
 export function runPmRetrospective(ticketId, body) {
   return adapter.retrospective(ticketId, body);
 }
@@ -87,6 +116,10 @@ export function getPmHandoff(ticketId) {
 
 export function runPmHandoff(ticketId) {
   return adapter.runHandoff(ticketId);
+}
+
+export function startPmCodingPipeline(ticketId) {
+  return adapter.startPipeline(ticketId);
 }
 
 export function usePmAnalyses(options = {}) {

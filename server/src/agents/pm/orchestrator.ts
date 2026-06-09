@@ -36,7 +36,8 @@ import type {
 } from "./types";
 import { PM_STAGE_ORDER } from "./types";
 
-const SYSTEM = "You are an expert product management AI assistant. Follow instructions precisely.";
+const SYSTEM =
+  "You are an expert product management AI assistant. Follow instructions precisely. Always respond with a single valid JSON object.";
 
 function formatEnrichmentBrief(e: EnrichmentOutput): string {
   return JSON.stringify(e, null, 2);
@@ -61,6 +62,12 @@ function acSummary(ac: AcceptanceCriteriaOutput | undefined): string {
   return `${ac.userStory}; ${hp} happy-path + ${ec} edge-case criteria`;
 }
 
+const PM_STAGE_MAX_TOKENS: Partial<Record<PmStageId, number>> = {
+  ACCEPTANCE_CRITERIA: 8000,
+  ARTIFACTS: 6000,
+  RETROSPECTIVE: 6000,
+};
+
 async function runStageWithMeta<T>(
   jiraKey: string,
   stage: PmStageId,
@@ -78,6 +85,7 @@ async function runStageWithMeta<T>(
       stage,
       systemPrompt: SYSTEM,
       userPrompt,
+      maxTokens: PM_STAGE_MAX_TOKENS[stage] ?? 4000,
     });
 
     pmAnalysisStore.appendStageMeta(jiraKey, {
@@ -104,9 +112,20 @@ async function runStageWithMeta<T>(
   }
 }
 
+export function getPmResumeStage(record: PmAnalysisRecord): PmStageId | null {
+  if (record.currentStage && PM_STAGE_ORDER.includes(record.currentStage)) {
+    return record.currentStage;
+  }
+  const failed = [...record.stageMeta]
+    .reverse()
+    .find((meta) => meta.status === "FAILED");
+  return failed?.stage ?? null;
+}
+
 export async function runPmAnalysisPipeline(input: {
   jiraKey: string;
   ticket?: Partial<PmTicketInput>;
+  resumeFrom?: PmStageId;
 }): Promise<PmAnalysisRecord> {
   const jiraKey = input.jiraKey.toUpperCase();
   const existing = pmAnalysisStore.get(jiraKey);
@@ -114,25 +133,52 @@ export async function runPmAnalysisPipeline(input: {
     return existing;
   }
 
-  const ticket = await resolveTicketInput(jiraKey, input.ticket);
-  const contextBundle = await gatherPmContext(ticket);
-  const contextRecord = { ...contextBundle, ticket };
+  const resumeFrom =
+    input.resumeFrom ??
+    (existing?.status === "FAILED" ? getPmResumeStage(existing) : null);
 
-  const record = pmAnalysisStore.create({
-    jiraKey,
-    status: "RUNNING",
-    currentStage: "ENRICHMENT",
-    ticketInput: ticket,
-    context: contextRecord,
-    stageMeta: [],
-    startedAt: new Date().toISOString(),
-  });
+  let record: PmAnalysisRecord;
+  let ticket: PmTicketInput;
+  let contextBundle: Awaited<ReturnType<typeof gatherPmContext>>;
+
+  if (resumeFrom && existing) {
+    ticket = existing.ticketInput;
+    contextBundle = await gatherPmContext(ticket);
+    const resumed = pmAnalysisStore.update(jiraKey, {
+      status: "RUNNING",
+      error: undefined,
+      completedAt: undefined,
+      context: { ...contextBundle, ticket },
+    });
+    if (!resumed) {
+      throw new Error(`PM analysis record missing for ${jiraKey}`);
+    }
+    record = resumed;
+  } else {
+    ticket = await resolveTicketInput(jiraKey, input.ticket);
+    contextBundle = await gatherPmContext(ticket);
+    const contextRecord = { ...contextBundle, ticket };
+
+    record = pmAnalysisStore.create({
+      jiraKey,
+      status: "RUNNING",
+      currentStage: "ENRICHMENT",
+      ticketInput: ticket,
+      context: contextRecord,
+      stageMeta: [],
+      startedAt: new Date().toISOString(),
+    });
+  }
+
+  const startIdx = resumeFrom ? PM_STAGE_ORDER.indexOf(resumeFrom) : 0;
+  if (startIdx < 0) {
+    throw new Error(`Invalid PM resume stage: ${resumeFrom}`);
+  }
 
   try {
-    for (const stage of PM_STAGE_ORDER) {
+    for (const stage of PM_STAGE_ORDER.slice(startIdx)) {
       pmAnalysisStore.setCurrentStage(jiraKey, stage);
       await runSingleStage(jiraKey, stage, ticket, contextBundle, record);
-      // Refresh record after each stage
       const updated = pmAnalysisStore.get(jiraKey);
       if (updated) Object.assign(record, updated);
     }
@@ -142,9 +188,8 @@ export async function runPmAnalysisPipeline(input: {
     return pmAnalysisStore.get(jiraKey)!;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    logger.error({ err, jiraKey }, "pm analysis pipeline failed");
+    logger.error({ err, jiraKey, resumeFrom }, "pm analysis pipeline failed");
     pmAnalysisStore.setStatus(jiraKey, "FAILED", message);
-    pmAnalysisStore.setCurrentStage(jiraKey, null);
     return pmAnalysisStore.get(jiraKey)!;
   }
 }

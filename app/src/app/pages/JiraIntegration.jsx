@@ -314,7 +314,9 @@ function JiraIntegrationContent({ setup, refetchSetup }) {
         </>
       ) : null}
 
-      {connected ? <PipelineQueuePanel setup={setup} /> : null}
+      {connected ? (
+        <PipelineQueuePanel setup={setup} onRefreshSetup={refetchSetup} />
+      ) : null}
 
       {connected && intakeConfigured ? (
         <Panel>

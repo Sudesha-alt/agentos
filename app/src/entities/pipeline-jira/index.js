@@ -37,6 +37,14 @@ export async function listPipelineIntakeTickets() {
   return fetchJson(root("/intake/tickets"));
 }
 
+export async function scanPipelineIntake() {
+  return fetchJson(root("/intake/scan"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+}
+
 export function usePipelineJiraSetup(options = {}) {
   return useResource(() => getPipelineJiraSetup(), [], {
     pollMs: options.pollMs ?? 30000,

@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { PM_STAGE_ORDER, PM_STAGE_LABELS, getPmHandoff } from "../../entities/pm-agents";
+import {
+  PM_STAGE_ORDER,
+  PM_STAGE_LABELS,
+  getPmHandoff,
+  startPmCodingPipeline,
+} from "../../entities/pm-agents";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import { motionSafe, pageStagger, sectionFadeUp } from "../../lib/motion";
 
@@ -329,6 +334,8 @@ export function PmTechHandoffSection({ jiraKey, analysisComplete }) {
   const [loading, setLoading] = useState(false);
   const [copyState, setCopyState] = useState(null);
   const [handoffError, setHandoffError] = useState(null);
+  const [startingPipeline, setStartingPipeline] = useState(false);
+  const [pipelineMsg, setPipelineMsg] = useState(null);
 
   async function handleHandoff() {
     setLoading(true);
@@ -341,6 +348,20 @@ export function PmTechHandoffSection({ jiraKey, analysisComplete }) {
       setHandoffData(null);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleStartPipeline() {
+    setStartingPipeline(true);
+    setPipelineMsg(null);
+    setHandoffError(null);
+    try {
+      const result = await startPmCodingPipeline(jiraKey);
+      setPipelineMsg(result.message ?? "Coding pipeline started.");
+    } catch (err) {
+      setHandoffError(err.message ?? "Failed to start coding pipeline");
+    } finally {
+      setStartingPipeline(false);
     }
   }
 
@@ -363,20 +384,34 @@ export function PmTechHandoffSection({ jiraKey, analysisComplete }) {
         kicker="Engineering handoff"
         title="Tech Agent Handoff"
         right={
-          <button
-            type="button"
-            disabled={loading}
-            onClick={handleHandoff}
-            className="rounded-full bg-indigo px-4 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-white hover:bg-indigo/90 disabled:opacity-50"
-          >
-            {loading ? "Building…" : "Hand off to Tech Agent"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={loading}
+              onClick={handleHandoff}
+              className="rounded-full border border-hairline px-4 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-ink-dim hover:border-indigo hover:text-indigo disabled:opacity-50"
+            >
+              {loading ? "Building…" : "Preview handoff"}
+            </button>
+            <button
+              type="button"
+              disabled={startingPipeline}
+              onClick={handleStartPipeline}
+              className="rounded-full bg-indigo px-4 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-white hover:bg-indigo/90 disabled:opacity-50"
+            >
+              {startingPipeline ? "Starting…" : "Start coding pipeline"}
+            </button>
+          </div>
         }
       />
       <div className="px-5 py-4 sm:px-6">
         <p className="text-[14px] text-ink-dim">
-          Assembles PM pipeline output into an engineer-ready prompt with primary file snapshots.
+          Start coding enqueues the classic engineering pipeline (discovery → implementation → QA).
+          Preview handoff copies the engineer-ready prompt and file snapshots.
         </p>
+        {pipelineMsg && (
+          <p className="mt-3 text-[13px] text-success">{pipelineMsg}</p>
+        )}
         {handoffError && (
           <p className="mt-3 text-[13px] text-danger">{handoffError}</p>
         )}
@@ -441,7 +476,14 @@ export function PmTechHandoffSection({ jiraKey, analysisComplete }) {
   );
 }
 
-export function PmAnalysisOutputs({ analysis, onRetrospective, retroRunning }) {
+export function PmAnalysisOutputs({
+  analysis,
+  onRetrospective,
+  retroRunning,
+  onResume,
+  resuming,
+  resumeStageLabel,
+}) {
   if (!analysis) return null;
 
   const sections = [
@@ -481,7 +523,24 @@ export function PmAnalysisOutputs({ analysis, onRetrospective, retroRunning }) {
     />,
     analysis.status === "FAILED" && analysis.error ? (
       <Panel key="error">
-        <PanelHeader kicker="Error" title="Pipeline failed" />
+        <PanelHeader
+          kicker="Error"
+          title="Pipeline failed"
+          right={
+            onResume ? (
+              <button
+                type="button"
+                disabled={resuming}
+                onClick={onResume}
+                className="rounded-full bg-indigo px-4 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-white hover:bg-indigo/90 disabled:opacity-50"
+              >
+                {resuming
+                  ? "Resuming…"
+                  : `Resume${resumeStageLabel ? ` from ${resumeStageLabel}` : ""}`}
+              </button>
+            ) : null
+          }
+        />
         <p className="px-5 py-4 text-[13px] text-danger sm:px-6">{analysis.error}</p>
       </Panel>
     ) : null,

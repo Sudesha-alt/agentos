@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import LabelPill from "../../app/components/LabelPill";
 import EmptyState from "../../app/components/EmptyState";
+import { scanPipelineIntake } from "../../entities/pipeline-jira";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 
 function formatIntakeTrigger(intake) {
@@ -54,7 +56,9 @@ export function PipelineQueueSummary({ setup, className = "" }) {
   );
 }
 
-export default function PipelineQueuePanel({ setup, showHeader = true }) {
+export default function PipelineQueuePanel({ setup, showHeader = true, onRefreshSetup }) {
+  const [scanning, setScanning] = useState(false);
+  const [scanMessage, setScanMessage] = useState(null);
   const intake = setup?.intake;
   const queue = setup?.queue ?? {};
   const activeKey = queue.activeJiraKey;
@@ -62,6 +66,25 @@ export default function PipelineQueuePanel({ setup, showHeader = true }) {
   const trigger = formatIntakeTrigger(intake);
   const isActive = Boolean(activeKey);
   const hasQueue = queuedKeys.length > 0;
+
+  async function handleIntakeScan() {
+    setScanning(true);
+    setScanMessage(null);
+    try {
+      const result = await scanPipelineIntake();
+      const errors = result.errors?.length ?? 0;
+      setScanMessage(
+        `Scanned ${result.scanned ?? 0} AI Worker ticket(s), enqueued ${result.enqueued ?? 0}` +
+          (errors ? ` (${errors} error${errors === 1 ? "" : "s"})` : "") +
+          (result.source ? ` via ${result.source}` : "")
+      );
+      onRefreshSetup?.();
+    } catch (err) {
+      setScanMessage(err instanceof Error ? err.message : "Intake scan failed");
+    } finally {
+      setScanning(false);
+    }
+  }
 
   const content = (
     <div className="space-y-5">
@@ -72,10 +95,23 @@ export default function PipelineQueuePanel({ setup, showHeader = true }) {
           </p>
           <p className="mt-2 text-sm text-white/90">{trigger}</p>
           <p className="mt-2 text-xs leading-relaxed text-white/50">
-            Moving a ticket into this column/status in Jira fires a webhook. Epics and
-            stories decompose into subtasks, then enter the FIFO queue below (one run at
-            a time).
+            Moving a ticket into this column/status in Jira fires a webhook. Tickets already
+            sitting in AI Worker before setup need a scan. Epics and stories decompose into
+            subtasks, then enter the FIFO queue below (one run at a time).
           </p>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              disabled={scanning}
+              onClick={handleIntakeScan}
+              className="rounded-full border border-violet-400/40 bg-violet-500/15 px-4 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-violet-200 hover:bg-violet-500/25 disabled:opacity-50"
+            >
+              {scanning ? "Scanning…" : "Scan AI Worker now"}
+            </button>
+            {scanMessage ? (
+              <span className="text-xs text-white/60">{scanMessage}</span>
+            ) : null}
+          </div>
         </div>
       ) : (
         <EmptyState

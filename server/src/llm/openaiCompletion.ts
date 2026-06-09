@@ -14,10 +14,25 @@ export interface LlmUsage {
   costUsd: number;
 }
 
-export function parseDiscoveryJson<T>(raw: string, source: string): T {
-  const cleaned = raw.replace(/```json|```/g, "").trim();
+function extractJsonPayload(raw: string): string {
+  const cleaned = raw.replace(/```json\s*/gi, "").replace(/```/g, "").trim();
   try {
-    return JSON.parse(cleaned) as T;
+    JSON.parse(cleaned);
+    return cleaned;
+  } catch {
+    const start = cleaned.indexOf("{");
+    const end = cleaned.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return cleaned.slice(start, end + 1);
+    }
+    return cleaned;
+  }
+}
+
+export function parseDiscoveryJson<T>(raw: string, source: string): T {
+  const payload = extractJsonPayload(raw);
+  try {
+    return JSON.parse(payload) as T;
   } catch {
     logger.error({ source, rawPreview: raw.slice(0, 300) }, "discovery JSON parse failed");
     throw new AgentParseError(source, raw);
@@ -28,6 +43,7 @@ export async function chatCompletionText(params: {
   system: string;
   user: string;
   maxTokens?: number;
+  jsonMode?: boolean;
 }): Promise<{ text: string; usage: LlmUsage }> {
   const model = getOpenAIChatModel();
   const response = await withRetry(
@@ -35,6 +51,7 @@ export async function chatCompletionText(params: {
       createChatCompletion({
         model,
         maxTokens: params.maxTokens ?? 4000,
+        ...(params.jsonMode ? { response_format: { type: "json_object" } } : {}),
         messages: [
           { role: "system", content: params.system },
           { role: "user", content: params.user },
@@ -72,6 +89,7 @@ export async function completionJson<T>(params: {
     system: params.systemPrompt,
     user: params.userPrompt,
     maxTokens: params.maxTokens,
+    jsonMode: true,
   });
 
   const parsed = parseDiscoveryJson<T>(text, params.source);

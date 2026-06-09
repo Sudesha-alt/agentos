@@ -1791,6 +1791,45 @@ export const mockApi = {
     }, 4000);
     return { jiraKey: key, status: "RUNNING", message: "PM analysis pipeline started (mock)" };
   },
+  async resumePmTicket(ticketId) {
+    markUsed();
+    await delay(200);
+    const key = String(ticketId).toUpperCase();
+    const existing = MOCK_PM_ANALYSES[key] ?? MOCK_PM_ANALYSIS_FULL;
+    MOCK_PM_ANALYSES[key] = {
+      ...existing,
+      jiraKey: key,
+      status: "RUNNING",
+      currentStage: "ACCEPTANCE_CRITERIA",
+      error: undefined,
+    };
+    setTimeout(() => {
+      MOCK_PM_ANALYSES[key] = {
+        ...MOCK_PM_ANALYSIS_FULL,
+        jiraKey: key,
+        status: "COMPLETED",
+        currentStage: null,
+        completedAt: minutes(0),
+      };
+    }, 3000);
+    return {
+      jiraKey: key,
+      status: "RUNNING",
+      resumeFrom: "ACCEPTANCE_CRITERIA",
+      message: "PM analysis resumed (mock)",
+    };
+  },
+  async startPmPipeline(ticketId) {
+    markUsed();
+    await delay(180);
+    return {
+      jiraKey: String(ticketId).toUpperCase(),
+      status: "started",
+      message: "Coding pipeline enqueued from PM handoff (mock)",
+      intake: { enqueued: 1, skipped: 0, sourceKey: String(ticketId).toUpperCase() },
+      queue: { activeJiraKey: null, queuedJiraKeys: [String(ticketId).toUpperCase()] },
+    };
+  },
   async runPmRetrospective(ticketId) {
     markUsed();
     await delay(300);
