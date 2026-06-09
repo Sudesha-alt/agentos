@@ -1,40 +1,23 @@
 import { logger } from "../../../utils/logger";
-import {
-  getPipelineJiraMirrorConfig,
-  mirrorEligibleIssueType,
-  mirrorEligibleStatus,
-} from "../config";
-import { fetchMirrorIssue, searchMirrorIssueKeys } from "./issueFetcher";
-import { buildMirrorBackfillJql } from "./jql";
-import { getMirrorStats, upsertMirrorRecord } from "./repository";
+import { getJiraIssueStats } from "../../../jira-sync/issueRepository";
+import { runJiraFullSync } from "../../../jira-sync/syncService";
+import { syncSingleJiraIssueFromWebhook } from "../../../jira-sync/syncService";
 
+/** @deprecated Use jira-sync — delegates to unified sync layer. */
 export async function syncMirroredIssue(jiraKey: string): Promise<{
   synced: boolean;
   reason?: string;
 }> {
-  const cfg = getPipelineJiraMirrorConfig();
-  const fetched = await fetchMirrorIssue(jiraKey);
-  if (!fetched) {
-    return { synced: false, reason: "issue_not_found" };
+  try {
+    await syncSingleJiraIssueFromWebhook(jiraKey);
+    logger.info({ jiraKey }, "jira mirror sync delegated to jira-sync");
+    return { synced: true };
+  } catch {
+    return { synced: false, reason: "sync_failed" };
   }
-
-  if (!mirrorEligibleStatus(fetched.status)) {
-    return { synced: false, reason: "status_not_eligible" };
-  }
-
-  if (!mirrorEligibleIssueType(fetched.issueType)) {
-    return { synced: false, reason: "issue_type_not_eligible" };
-  }
-
-  if (fetched.description.length < cfg.minDescriptionLength) {
-    return { synced: false, reason: "description_too_short" };
-  }
-
-  await upsertMirrorRecord(fetched);
-  logger.info({ jiraKey }, "jira mirror synced");
-  return { synced: true };
 }
 
+/** @deprecated Use POST /jira-sync/run — runs full paginated sync. */
 export async function runMirrorBackfill(options: {
   projectKeys?: string[];
   maxIssues?: number;
@@ -44,32 +27,28 @@ export async function runMirrorBackfill(options: {
   skipped: number;
   errors: number;
 }> {
-  const maxIssues = options.maxIssues ?? 200;
-  const jql = buildMirrorBackfillJql(options.projectKeys);
-  const keys = await searchMirrorIssueKeys(jql, maxIssues);
-  let processed = 0;
-  let synced = 0;
-  let skipped = 0;
-  let errors = 0;
-
-  for (const key of keys) {
-    processed += 1;
-    try {
-      const result = await syncMirroredIssue(key);
-      if (result.synced) synced += 1;
-      else skipped += 1;
-    } catch (err) {
-      errors += 1;
-      logger.warn({ jiraKey: key, err }, "mirror backfill issue failed");
-    }
-  }
-
-  logger.info(
-    { processed, synced, skipped, errors, jql },
-    "jira mirror backfill complete"
+  logger.warn(
+    "runMirrorBackfill is deprecated — running full jira-sync instead"
   );
-
-  return { processed, synced, skipped, errors };
+  const result = await runJiraFullSync({ projectKeys: options.projectKeys });
+  return {
+    processed: result.issuesSynced + result.issuesSkipped + result.errors,
+    synced: result.issuesSynced,
+    skipped: result.issuesSkipped,
+    errors: result.errors,
+  };
 }
 
-export { getMirrorStats };
+/** @deprecated Prefer GET /jira-sync/status stats. */
+export async function getMirrorStats(): Promise<{
+  total: number;
+  embedded: number;
+  byStatus: Record<string, number>;
+}> {
+  const stats = await getJiraIssueStats();
+  return {
+    total: stats.total,
+    embedded: stats.embedded,
+    byStatus: stats.byStatus,
+  };
+}

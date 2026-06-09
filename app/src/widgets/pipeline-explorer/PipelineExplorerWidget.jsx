@@ -1,6 +1,8 @@
 import { useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { usePipelineList } from "../../entities/pipeline";
+import { usePmAnalyses } from "../../entities/pm-agents";
+import { mapPmAnalysisToPipelineSummary } from "../pm-analysis/pipelineIds";
 import PipelineCard from "./PipelineCard";
 import PipelineDetailPanel from "./PipelineDetailPanel";
 import Spinner from "../../app/components/Spinner";
@@ -18,7 +20,22 @@ export default function PipelineExplorerWidget() {
   const selectedId = params.get("selected");
   const query = params.get("q") ?? "";
 
-  const { items, loading } = usePipelineList(undefined, { pollMs: 10_000 });
+  const { items: pipelineItems, loading: pipelinesLoading } = usePipelineList(undefined, {
+    pollMs: 10_000,
+  });
+  const { data: pmListData, loading: pmLoading } = usePmAnalyses({
+    pollMs: 3000,
+  });
+
+  const items = useMemo(() => {
+    const pmSummaries = (pmListData?.items ?? []).map(mapPmAnalysisToPipelineSummary);
+    const classic = pipelineItems.map((p) => ({ ...p, kind: "pipeline" }));
+    return [...pmSummaries, ...classic].sort((a, b) =>
+      (b.startedAt ?? "").localeCompare(a.startedAt ?? "")
+    );
+  }, [pmListData, pipelineItems]);
+
+  const loading = pipelinesLoading && pmLoading && items.length === 0;
 
   const activeTab = TABS.find((t) => t.id === tab) ?? TABS[0];
 

@@ -12,6 +12,8 @@ import EmptyState from "../components/EmptyState";
 import LabelPill from "../components/LabelPill";
 import Spinner from "../components/Spinner";
 import PipelineQueuePanel from "../../widgets/pipeline-queue/PipelineQueuePanel";
+import JiraSyncStatusPanel from "../../widgets/jira-sync/JiraSyncStatusPanel";
+import JiraTicketBrowser from "../../widgets/jira-sync/JiraTicketBrowser";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
 
 export default function JiraIntegration() {
@@ -166,7 +168,7 @@ function JiraIntegrationContent({ setup, refetchSetup }) {
     <div className="space-y-6">
       <PageIntro
         title="Jira pipeline"
-        body="Connect Jira once, pick the AI Worker board column, then move tickets there to start the agent pipeline end to end."
+        body="Connect Jira once to sync all project tickets, pick the AI Worker column for pipeline intake, and browse or analyze tickets from AgentOS."
       />
 
       {statusMessage ? (
@@ -257,7 +259,7 @@ function JiraIntegrationContent({ setup, refetchSetup }) {
         </form>
         {connected ? (
           <p className="mt-4 text-xs text-white/50">
-            Webhook URL: <code>{setup.webhookUrl}</code> — events: issue_updated
+            Webhook URL: <code>{setup.webhookUrl}</code> — events: created, updated, deleted
           </p>
         ) : null}
       </Panel>
@@ -301,6 +303,13 @@ function JiraIntegrationContent({ setup, refetchSetup }) {
             </p>
           ) : null}
         </Panel>
+      ) : null}
+
+      {connected ? (
+        <>
+          <JiraSyncStatusPanel setupSync={setup?.sync} />
+          <JiraTicketBrowser connected={connected} />
+        </>
       ) : null}
 
       {connected ? <PipelineQueuePanel setup={setup} /> : null}

@@ -24,11 +24,17 @@ import {
   getPipelineIntakeMapping,
   savePipelineIntakeColumn,
 } from "../../pipeline/jira/intakeConfig";
-import { runMirrorBackfillInBackground, getPipelineQueueState } from "../../queue/inProcessRunner";
+import { getJiraIssueStats } from "../../jira-sync/issueRepository";
+import { getLatestSyncRun, isJiraSyncRunning } from "../../jira-sync/syncService";
+import { getJiraSyncConfig } from "../../jira-sync/config";
+import {
+  getPipelineQueueState,
+  runJiraSyncInBackground,
+} from "../../queue/inProcessRunner";
 
 const router = Router();
 
-router.get("/setup", (req, res) => {
+router.get("/setup", async (req, res) => {
   const jira = getPublicPipelineJiraCredentials();
   const intake = getPipelineIntakeMapping();
   let connected = false;
@@ -42,15 +48,21 @@ router.get("/setup", (req, res) => {
   res.json({
     publicApiBase: pipelineJiraPublicBase(req),
     webhookUrl: pipelineJiraWebhookUrl(req),
-    webhookEvents: ["jira:issue_updated"],
+    webhookEvents: ["jira:issue_created", "jira:issue_updated", "jira:issue_deleted"],
     webhookHint:
-      "Move a ticket into the AI Worker column/status in Jira to start the agent pipeline. Closed/done tickets are mirrored for RAG on update.",
+      "All project tickets sync automatically. Move a ticket into the AI Worker column/status to start the agent pipeline.",
     intake,
     queue: getPipelineQueueState(),
     mirror: getPipelineJiraMirrorConfig(),
     mirrorJql: connected
       ? buildMirrorBackfillJql(jira.projectKeys)
       : null,
+    sync: {
+      config: getJiraSyncConfig(),
+      running: isJiraSyncRunning(),
+      latestRun: connected ? await getLatestSyncRun() : null,
+      stats: connected ? await getJiraIssueStats() : null,
+    },
     jira,
     connected,
   });
@@ -190,8 +202,15 @@ router.post("/mirror/backfill", async (req, res, next) => {
     const async = req.body?.async !== false;
 
     if (async) {
-      const { started } = runMirrorBackfillInBackground({ projectKeys, maxIssues });
-      res.status(202).json({ status: started ? "started" : "already_running" });
+      const { started } = runJiraSyncInBackground({
+        mode: "full",
+        projectKeys,
+      });
+      res.status(202).json({
+        status: started ? "started" : "already_running",
+        deprecated: true,
+        use: "POST /jira-sync/run",
+      });
       return;
     }
 

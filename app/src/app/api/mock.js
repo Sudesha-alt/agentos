@@ -1606,7 +1606,347 @@ export const mockApi = {
       message: "Git integration disconnected (mock).",
     };
   },
+  async getJiraSyncStatus() {
+    markUsed();
+    await delay(80);
+    return {
+      connected: true,
+      running: false,
+      stats: { total: 42, embedded: 38, deleted: 0, byStatus: { Done: 12, "In Progress": 8, "To Do": 22 } },
+      latestRun: {
+        mode: "FULL",
+        status: "COMPLETED",
+        startedAt: minutes(30),
+        completedAt: minutes(28),
+        issuesSynced: 42,
+        issuesSkipped: 0,
+        errors: 0,
+      },
+    };
+  },
+  async listJiraSyncIssues(params = {}) {
+    markUsed();
+    await delay(100);
+    let items = MOCK_JIRA_SYNC_ISSUES;
+    if (params.q) {
+      const q = params.q.toLowerCase();
+      items = items.filter(
+        (i) =>
+          i.jiraKey.toLowerCase().includes(q) ||
+          i.summary.toLowerCase().includes(q)
+      );
+    }
+    if (params.status) {
+      items = items.filter(
+        (i) => i.status.toLowerCase() === params.status.toLowerCase()
+      );
+    }
+    const limit = params.limit ?? 50;
+    return { items: items.slice(0, limit), total: items.length, limit, offset: 0 };
+  },
+  async getJiraSyncIssue(jiraKey) {
+    markUsed();
+    await delay(80);
+    const key = String(jiraKey).toUpperCase();
+    return (
+      MOCK_JIRA_SYNC_ISSUES.find((i) => i.jiraKey === key) ??
+      MOCK_JIRA_SYNC_ISSUES[0]
+    );
+  },
+  async runJiraSync(body = {}) {
+    markUsed();
+    await delay(200);
+    return {
+      status: "STARTED",
+      mode: body.mode ?? "full",
+      message: `Jira ${body.mode ?? "full"} sync started (mock)`,
+    };
+  },
+  async listPmAnalyses() {
+    markUsed();
+    await delay(120);
+    return { items: MOCK_PM_ANALYSES_LIST };
+  },
+  async getPmAnalysis(ticketId) {
+    markUsed();
+    await delay(120);
+    const key = String(ticketId).toUpperCase();
+    return MOCK_PM_ANALYSES[key] ?? MOCK_PM_ANALYSIS_FULL;
+  },
+  async analyzePmTicket(ticketId) {
+    markUsed();
+    await delay(200);
+    const key = String(ticketId).toUpperCase();
+    MOCK_PM_ANALYSES[key] = { ...MOCK_PM_ANALYSIS_FULL, jiraKey: key, status: "RUNNING", currentStage: "ENRICHMENT" };
+    setTimeout(() => {
+      MOCK_PM_ANALYSES[key] = { ...MOCK_PM_ANALYSIS_FULL, jiraKey: key, status: "COMPLETED", currentStage: null, completedAt: minutes(0) };
+    }, 4000);
+    return { jiraKey: key, status: "RUNNING", message: "PM analysis pipeline started (mock)" };
+  },
+  async runPmRetrospective(ticketId) {
+    markUsed();
+    await delay(300);
+    const key = String(ticketId).toUpperCase();
+    const base = MOCK_PM_ANALYSES[key] ?? MOCK_PM_ANALYSIS_FULL;
+    base.retrospective = MOCK_PM_RETROSPECTIVE;
+    MOCK_PM_ANALYSES[key] = base;
+    return { jiraKey: key, retrospective: MOCK_PM_RETROSPECTIVE, costUsd: 0.12 };
+  },
+  async getPmHandoff(ticketId) {
+    markUsed();
+    await delay(180);
+    return buildMockPmHandoff(ticketId);
+  },
+  async runPmHandoff(ticketId) {
+    markUsed();
+    await delay(220);
+    const payload = buildMockPmHandoff(ticketId);
+    return {
+      ...payload,
+      status: "ready",
+      message:
+        "Handoff prompt assembled. Copy the prompt or wire Cursor SDK to start implementation.",
+    };
+  },
 };
+
+const MOCK_PM_RETROSPECTIVE = {
+  classificationAccuracy: "correct",
+  classificationNote: "Bug classification matched post-implementation review.",
+  severityAccuracy: "correct",
+  severityNote: "High severity was appropriate given enterprise reporter tier.",
+  priorityAccuracy: "accepted",
+  priorityOverrideAnalysis: "PM accepted NOW recommendation without override.",
+  effortAccuracy: "accurate",
+  effortVariance: "0 — actual 5 points matched estimate.",
+  fileDetectionAccuracy: "80% — primary handler identified; one config file missed.",
+  acQuality: "4/5 — happy path complete; one edge case added during implementation.",
+  rootCauseOfErrors: ["Config file not in semantic search top-k results."],
+  learningSignals: ["Boost config pattern tags in codebase index for billing tickets."],
+  patternFlag: "none",
+};
+
+const MOCK_PM_ANALYSIS_FULL = {
+  id: "pm_mock_01",
+  jiraKey: "PLT-1287",
+  status: "COMPLETED",
+  currentStage: null,
+  ticketInput: {
+    jiraKey: "PLT-1287",
+    summary: "Add usage-based billing controls",
+    description: "Enterprise admins need per-workspace spend limits and alerts.",
+    issueType: "Story",
+    reporter: "Alex Chen",
+    labels: ["enterprise", "billing"],
+    components: ["Billing"],
+    createdDate: minutes(48),
+    priority: "High",
+  },
+  context: { reporterTier: "enterprise" },
+  enrichment: {
+    cleanSummary: "Enterprise admins need workspace-level billing limits and proactive spend alerts.",
+    realUserProblem: "Finance teams cannot prevent runaway usage charges across workspaces.",
+    missingContext: ["Exact alert channel preferences", "Whether limits are hard or soft"],
+    relatedTicketsSummary: "Two similar billing tickets open in the last quarter.",
+    reporterContext: "Enterprise customer success escalation — high urgency implied.",
+    okrAlignment: "Directly supports enterprise churn reduction OKR.",
+    redFlags: ["Revenue impact if limits fail silently"],
+  },
+  classification: {
+    type: "feature",
+    subtype: "new capability",
+    severity: "high",
+    severityReasoning: "Affects enterprise billing workflows with revenue exposure.",
+    affectedUserSegment: "Enterprise plan admins",
+    estimatedUsersAffected: "50-80 enterprise workspaces",
+    revenueRisk: "high",
+    strategicAlignment: 8,
+    strategicAlignmentReason: "Maps to billing reliability OKR.",
+    isDuplicate: false,
+    duplicateOf: null,
+    classificationConfidence: 82,
+    requiresHumanEscalation: false,
+    escalationReason: null,
+  },
+  codebaseImpact: {
+    affectedFiles: [
+      { path: "server/src/billing/limits.ts", reason: "Core limit enforcement", role: "primary", confidence: 88, riskLevel: "high" },
+      { path: "app/src/widgets/billing/BillingPanel.jsx", reason: "Admin UI for limits", role: "primary", confidence: 75, riskLevel: "medium" },
+    ],
+    recentChangeConnection: "Commit abc1234 adjusted metering hooks last week — possible related surface.",
+    dependencyWarnings: ["server/src/billing/metering.ts may need coordinated changes"],
+    scopeAssessment: "Touches billing service and admin UI — moderate blast radius across two modules.",
+    suggestedFirstFile: "server/src/billing/limits.ts — defines current limit model.",
+  },
+  effortEstimate: {
+    tshirt: "M",
+    storyPoints: "5",
+    confidenceInEstimate: 72,
+    breakdown: { investigation: "4h", implementation: "12h", testing: "6h", review: "2h" },
+    riskFactors: ["Low test coverage on billing limits module"],
+    assumptions: ["Alerting channel API already exists"],
+    recommendedApproach: "Add limit model first, then wire UI and webhook alerts.",
+    estimateConfidenceNote: "Need confirmation on hard vs soft limit behavior.",
+  },
+  implementation: {
+    approachSummary: "Extend billing limits service with workspace-scoped caps and surface controls in admin UI.",
+    implementationSteps: [
+      { step: "1", action: "Add WorkspaceLimit model in server/src/billing/limits.ts", why: "Persistence layer for caps", watchOut: "Migration required" },
+      { step: "2", action: "Expose REST endpoints in billing routes", why: "Admin UI needs API", watchOut: "Auth scope for enterprise admins only" },
+    ],
+    whereNotToTouch: ["server/src/billing/invoicing.ts — out of scope"],
+    testingGuidance: "Test limit enforcement at threshold and alert firing.",
+    alternativeApproach: "Feature flag per workspace — slower rollout but lower risk.",
+    openQuestionsForEngineer: ["Hard stop vs notify-only when limit reached?"],
+  },
+  prioritization: {
+    recommendation: "NOW",
+    recommendationReasoning: "High revenue risk, enterprise reporter, aligns with active OKR, manageable M effort.",
+    impactScore: "78 (severity 30 + revenue 25 + users 15 + alignment 8)",
+    costOfInaction: "Continued overage disputes and churn risk within 30 days.",
+    tradeoff: "Delays self-serve admin controls sprint item.",
+    conditionsToRevisit: "If fewer than 3 enterprise accounts affected, downgrade to NEXT.",
+    suggestedOwner: "Billing platform team",
+    suggestedSprint: "Current sprint",
+    escalateToHuman: false,
+    escalationReason: null,
+  },
+  acceptanceCriteria: {
+    userStory: "As an enterprise admin, I want workspace spend limits, so that I can prevent unexpected overages.",
+    happyPath: [{ given: "Admin on enterprise plan", when: "Sets $500 monthly limit", then: "Limit saved and displayed on billing dashboard" }],
+    edgeCases: [{ scenario: "Limit reached", given: "Usage at cap", when: "New usage attempted", then: "Hard block with clear error message" }],
+    explicitlyOutOfScope: ["Invoice proration changes"],
+    regressionRisks: ["Existing metering must continue for non-limited workspaces"],
+    definitionOfDone: ["Code merged", "Tests passing", "AC verified", "CS notified"],
+  },
+  artifacts: {
+    engineeringPing: "PLT-1287 — workspace billing limits for enterprise admins.\nLikely files: server/src/billing/limits.ts, BillingPanel.jsx\nPriority: NOW (high revenue risk)\nGotcha: confirm hard vs soft limit before starting",
+    stakeholderUpdate: "We've reviewed your billing limits request and understand the need to cap workspace spend. Engineering is scoping the change now. We'll share a timeline within this sprint.",
+    pmOneLiner: "Feature — Workspace billing limits for enterprise — Revenue risk, 3 active accounts — M / 5 pts — NOW",
+    sprintPlanningNote: "Enterprise CS escalated billing caps. High alignment with churn OKR. M effort, main risk is billing module test coverage. Done = limits enforced + admin UI + alerts.",
+  },
+  retrospective: null,
+  stageMeta: [],
+  startedAt: minutes(6),
+  completedAt: minutes(4),
+  updatedAt: minutes(4),
+  costUsd: 0.48,
+};
+
+const MOCK_PM_ANALYSES = { "PLT-1287": MOCK_PM_ANALYSIS_FULL };
+
+function buildMockPmHandoff(ticketId) {
+  const key = String(ticketId).toUpperCase();
+  const analysis = MOCK_PM_ANALYSES[key] ?? MOCK_PM_ANALYSIS_FULL;
+  const impact = analysis.codebaseImpact ?? MOCK_PM_ANALYSIS_FULL.codebaseImpact;
+  const impl = analysis.implementation ?? MOCK_PM_ANALYSIS_FULL.implementation;
+  const ac = analysis.acceptanceCriteria ?? MOCK_PM_ANALYSIS_FULL.acceptanceCriteria;
+  const effort = analysis.effortEstimate ?? MOCK_PM_ANALYSIS_FULL.effortEstimate;
+  const enrichment = analysis.enrichment ?? MOCK_PM_ANALYSIS_FULL.enrichment;
+  const classification = analysis.classification ?? MOCK_PM_ANALYSIS_FULL.classification;
+  const prio = analysis.prioritization ?? MOCK_PM_ANALYSIS_FULL.prioritization;
+
+  const codeSnapshots = (impact.affectedFiles ?? [])
+    .filter((f) => f.role === "primary")
+    .slice(0, 3)
+    .map((f) => ({
+      path: f.path,
+      content: `// Mock snapshot for ${f.path}\n// ${f.reason}\nexport function placeholder() {\n  return null;\n}\n`,
+      size: 128,
+    }));
+
+  const handoff = {
+    jiraId: key,
+    jiraUrl: `https://example.atlassian.net/browse/${key}`,
+    type: classification.type,
+    subtype: classification.subtype,
+    severity: classification.severity,
+    recommendation: prio.recommendation,
+    realUserProblem: enrichment.realUserProblem,
+    cleanSummary: enrichment.cleanSummary,
+    suggestedFirstFile: impact.suggestedFirstFile.split(" — ")[0] ?? impact.suggestedFirstFile,
+    suggestedFirstFileReason:
+      impact.suggestedFirstFile.split(" — ")[1] ?? impact.recentChangeConnection,
+    affectedFiles: impact.affectedFiles,
+    whereNotToTouch: impl.whereNotToTouch,
+    recentCommitHistory:
+      "abc1234 | Alex Chen | 2026-06-01 | Adjust metering hooks for workspace billing",
+    approachSummary: impl.approachSummary,
+    implementationSteps: impl.implementationSteps,
+    alternativeApproach: impl.alternativeApproach,
+    userStory: ac.userStory,
+    happyPath: ac.happyPath,
+    edgeCases: ac.edgeCases,
+    explicitlyOutOfScope: ac.explicitlyOutOfScope,
+    regressionRisks: ac.regressionRisks,
+    definitionOfDone: ac.definitionOfDone,
+    testingGuidance: impl.testingGuidance,
+    tshirt: effort.tshirt,
+    storyPoints: effort.storyPoints,
+    effortBreakdown: effort.breakdown,
+    openQuestions: impl.openQuestionsForEngineer,
+    branchName: "main",
+    codeSnapshots,
+  };
+
+  const prompt = `# Tech Agent Handoff — ${key}\n\n## 1. TICKET CONTEXT\n\n${enrichment.cleanSummary}\n\n## 12. CURRENT CODE — PRIMARY FILES\n\n${codeSnapshots.map((s) => `### ${s.path}\n\`\`\`\n${s.content}\n\`\`\``).join("\n\n")}`;
+
+  return { handoff, prompt, codeSnapshots };
+}
+
+const MOCK_JIRA_SYNC_ISSUES = [
+  {
+    id: "sync_01",
+    jiraKey: "PLT-1287",
+    jiraTicketId: "10001",
+    projectKey: "PLT",
+    summary: "Add usage-based billing controls",
+    issueType: "Story",
+    status: "In Progress",
+    priority: "High",
+    jiraUpdatedAt: minutes(2),
+    embeddedAt: minutes(5),
+  },
+  {
+    id: "sync_02",
+    jiraKey: "PLT-1201",
+    jiraTicketId: "10002",
+    projectKey: "PLT",
+    summary: "Fix webhook retry storm on rate limits",
+    issueType: "Bug",
+    status: "To Do",
+    priority: "Medium",
+    jiraUpdatedAt: minutes(48),
+    embeddedAt: minutes(50),
+  },
+  {
+    id: "sync_03",
+    jiraKey: "PLT-1150",
+    jiraTicketId: "10003",
+    projectKey: "PLT",
+    summary: "Enterprise SSO session timeout",
+    issueType: "Bug",
+    status: "Done",
+    priority: "High",
+    jiraUpdatedAt: minutes(120),
+    embeddedAt: minutes(122),
+  },
+];
+
+const MOCK_PM_ANALYSES_LIST = [
+  {
+    id: "pm_mock_01",
+    jiraKey: "PLT-1287",
+    status: "COMPLETED",
+    currentStage: null,
+    summary: "Add usage-based billing controls",
+    recommendation: "NOW",
+    severity: "high",
+    startedAt: minutes(6),
+    completedAt: minutes(4),
+    costUsd: 0.48,
+  },
+];
 
 function buildMockKnowledge(branch = "main", source = "cache") {
   return {

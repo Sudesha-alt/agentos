@@ -44,8 +44,9 @@ export function usePipelineJiraSetup(options = {}) {
 }
 
 export function usePipelineIntakeTickets(enabled, options = {}) {
-  return useResource(() => listPipelineIntakeTickets(), [], {
-    pollMs: options.pollMs ?? 10000,
-    enabled,
-  });
+  return useResource(
+    () => (enabled ? listPipelineIntakeTickets() : Promise.resolve({ items: [] })),
+    [enabled],
+    { pollMs: enabled ? (options.pollMs ?? 10000) : undefined }
+  );
 }

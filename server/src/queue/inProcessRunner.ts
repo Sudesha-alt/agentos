@@ -1,3 +1,8 @@
+import {
+  isJiraSyncRunning,
+  runJiraFullSync,
+  runJiraIncrementalSync,
+} from "../jira-sync/syncService";
 import { runMirrorBackfill } from "../pipeline/jira/mirror/syncService";
 import { orchestrator } from "../pipeline/orchestrator";
 import { logger } from "../utils/logger";
@@ -164,4 +169,38 @@ export function runMirrorBackfillInBackground(options: {
     });
 
   return { started: true };
+}
+
+/** Fire-and-forget full or incremental Jira sync. */
+export function runJiraSyncInBackground(options: {
+  mode: "full" | "incremental";
+  projectKeys?: string[];
+}): { started: boolean } {
+  if (isJiraSyncRunning()) {
+    logger.warn("jira sync already running in-process");
+    return { started: false };
+  }
+
+  const run =
+    options.mode === "incremental"
+      ? () => runJiraIncrementalSync({ projectKeys: options.projectKeys })
+      : () => runJiraFullSync({ projectKeys: options.projectKeys });
+
+  void run().catch((err) => {
+    logger.error({ err, mode: options.mode }, "in-process jira sync failed");
+  });
+
+  return { started: true };
+}
+
+export function startJiraSyncScheduler(): void {
+  const intervalMs = Number(process.env.JIRA_SYNC_INTERVAL_MS ?? 15 * 60 * 1000);
+  if (intervalMs <= 0) return;
+
+  setInterval(() => {
+    if (isJiraSyncRunning()) return;
+    runJiraSyncInBackground({ mode: "incremental" });
+  }, intervalMs).unref();
+
+  logger.info({ intervalMs }, "jira incremental sync scheduler started");
 }

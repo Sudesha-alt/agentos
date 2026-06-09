@@ -15,6 +15,7 @@ import PrdViewer from "./app/pages/PrdViewer";
 import GitIntegration from "./app/pages/GitIntegration";
 import JiraIntegration from "./app/pages/JiraIntegration";
 import JiraSearch from "./app/pages/JiraSearch";
+import PmAgents from "./app/pages/PmAgents";
 import {
   AuthProvider,
   PublicOnlyRoute,
@@ -45,6 +46,7 @@ function App() {
           >
             <Route index element={<Dashboard />} />
             <Route path="pipelines" element={<Pipelines />} />
+            <Route path="pm-agents" element={<PmAgents />} />
             <Route path="pipelines/:id" element={<PipelineDetail />} />
             <Route path="pipelines/:id/prd" element={<PrdViewer />} />
             <Route path="pipelines/:id/override" element={<Override />} />

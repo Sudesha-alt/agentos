@@ -5,6 +5,8 @@ import {
   validatePipelineJiraConfig,
 } from "./credentialsStore";
 import { fetchPipelineJiraCurrentUser } from "./client";
+import { getJiraSyncConfig } from "../../jira-sync/config";
+import { runJiraSyncInBackground } from "../../queue/inProcessRunner";
 import { ensurePipelineJiraWebhook } from "./webhookRegistration";
 
 export function pipelineJiraPublicBase(req: Request): string {
@@ -109,5 +111,21 @@ export async function connectPipelineJira(input: {
     }
   }
 
-  return { connected: true, jira, webhookRegistration, projectKey };
+  const syncConfig = getJiraSyncConfig();
+  let syncStarted = false;
+  if (syncConfig.fullSyncOnConnect) {
+    const result = runJiraSyncInBackground({
+      mode: "full",
+      projectKeys: input.projectKeys ?? jira.projectKeys,
+    });
+    syncStarted = result.started;
+  }
+
+  return {
+    connected: true,
+    jira,
+    webhookRegistration,
+    projectKey,
+    syncStarted,
+  };
 }
