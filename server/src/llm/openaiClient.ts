@@ -29,25 +29,11 @@ export function getOpenAISummaryModel(): string {
   return getOpenAIChatModel();
 }
 
-/** GPT-5 / o-series reject `max_tokens`; always send `max_completion_tokens`. */
-export function chatCompletionTokenLimit(
+/** OpenAI chat completions — always use max_completion_tokens (gpt-5+ rejects max_tokens). */
+export function openAIChatTokenLimit(
   maxTokens: number
 ): { max_completion_tokens: number } {
   return { max_completion_tokens: maxTokens };
-}
-
-export async function createChatCompletion(
-  params: ChatCompletionCreateParamsNonStreaming & {
-    maxTokens?: number;
-    max_tokens?: never;
-    max_completion_tokens?: never;
-  }
-) {
-  const { maxTokens = 4000, ...rest } = params;
-  return getOpenAIClient().chat.completions.create({
-    ...rest,
-    ...chatCompletionTokenLimit(maxTokens),
-  });
 }
 
 /** Lazy OpenAI client — server boot must not require OPENAI_API_KEY. */
