@@ -1,5 +1,7 @@
 import { prisma } from "../db/client";
 import { embedder } from "../rag/embedder";
+import { hashContent, chunkTextByParagraphs } from "../rag/contentHash";
+import { shouldSkipTicketEmbed } from "../rag/ticketEmbedCache";
 import { vectorStore } from "../rag/vectorStore";
 import { logger } from "../utils/logger";
 import { shouldEmbedStatus } from "./config";
@@ -20,8 +22,18 @@ export function buildJiraIssueEmbeddingText(
       : "",
     issue.labels.length ? `LABELS: ${issue.labels.join(", ")}` : "",
     issue.resolution ? `RESOLUTION: ${issue.resolution}` : "",
-    `DESCRIPTION: ${issue.description}`,
   ];
+
+  const descriptionChunks = chunkTextByParagraphs(issue.description);
+  if (descriptionChunks.length <= 1) {
+    parts.push(`DESCRIPTION: ${issue.description}`);
+  } else {
+    for (const [i, chunk] of descriptionChunks.entries()) {
+      parts.push(
+        `DESCRIPTION [${i + 1}/${descriptionChunks.length}]:\n${chunk}`
+      );
+    }
+  }
 
   if (issue.commentsText) {
     parts.push(`COMMENTS / FIX NOTES:\n${issue.commentsText}`);
@@ -63,6 +75,16 @@ export async function embedSyncedIssue(
 
   const git = gitContext ?? (await fetchGitContext(issue.jiraKey));
   const text = buildJiraIssueEmbeddingText(issue, git || undefined);
+  const contentHash = hashContent(text);
+
+  if (await shouldSkipTicketEmbed(issue.jiraKey, contentHash)) {
+    logger.info(
+      { jiraKey: issue.jiraKey, contentHash },
+      "synced jira issue embed skipped — content unchanged"
+    );
+    return false;
+  }
+
   const embedding = await embedder.embed(text);
 
   await vectorStore.upsert({
@@ -78,6 +100,8 @@ export async function embedSyncedIssue(
       status: issue.status,
       priority: issue.priority,
       components: issue.components,
+      contentHash,
+      chunkCount: chunkTextByParagraphs(issue.description).length,
       embeddedAt: new Date().toISOString(),
     },
   });

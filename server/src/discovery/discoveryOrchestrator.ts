@@ -5,6 +5,7 @@ import { generatePRD, type GeneratedPRD } from "../prd/prdGenerator";
 import { generatedPrdToPrdOutput } from "../prd/toPrdOutput";
 import { embedder } from "../rag/embedder";
 import { retriever } from "../rag/retriever";
+import { unifiedRetriever } from "../rag/unifiedRetriever";
 import type { PrdOutput } from "../types/agents";
 import type { NormalizedTicket } from "../types/ticket";
 import { logger } from "../utils/logger";
@@ -89,11 +90,30 @@ export async function runDiscovery(
     ambiguities: ticketAnalysis.ambiguities.length,
   });
 
+  const scope = await import("../codebaseIntelligence/repoScope").then((m) =>
+    m.resolveRepoScope()
+  );
+  const unifiedQuery = `${ticket.summary} ${ticket.description} ${ticketAnalysis.coreIntent}`;
+  const unified = await unifiedRetriever.retrieveUnified(unifiedQuery, {
+    ticketTypes: ["ticket", "prd", "implementation", "qa_report"],
+    codebase: { branchName: scope?.defaultBranch ?? "main", topK: 8 },
+    topKTotal: 12,
+    currentJiraKey: ticket.jiraKey,
+    queryComponents: ticket.components,
+    similarityThreshold: 0.7,
+  });
+
+  const historicalContext =
+    unified.retrievedContext.length > 0
+      ? unified.retrievedContext
+      : retrievedContext;
+
   const { intelligence: historicalIntelligence, usage: u2 } =
     await extractHistoricalIntelligence(
       ticketAnalysis,
-      retrievedContext,
-      pipelineId
+      historicalContext,
+      pipelineId,
+      unified.fusedBlock
     );
   usages.push(u2);
   await auditRepo.log(pipelineId, "INTELLIGENCE_EXTRACTED", {

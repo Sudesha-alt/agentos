@@ -3,6 +3,8 @@ import type { NormalizedTicket } from "../types/ticket";
 import { getOpenAIClient } from "../llm/openaiClient";
 import { logger } from "../utils/logger";
 import { withRetry } from "../utils/retry";
+import { chunkTextByParagraphs, hashContent } from "./contentHash";
+import { shouldSkipTicketEmbed } from "./ticketEmbedCache";
 import { vectorStore } from "./vectorStore";
 
 const EMBEDDING_MODEL = "text-embedding-3-small";
@@ -35,13 +37,13 @@ export const embedder = {
       "summary" | "description" | "issueType" | "priority" | "components"
     >
   ): Promise<void> {
-    const text = `
-TICKET: ${ticket.summary}
-TYPE: ${ticket.issueType}
-PRIORITY: ${ticket.priority}
-COMPONENTS: ${ticket.components.join(", ")}
-DESCRIPTION: ${ticket.description}
-    `.trim();
+    const text = buildStructuredTicketText(ticket);
+    const contentHash = hashContent(text);
+
+    if (await shouldSkipTicketEmbed(jiraKey, contentHash)) {
+      logger.info({ jiraKey, contentHash }, "ticket embed skipped — content unchanged");
+      return;
+    }
 
     const embedding = await this.embed(text);
 
@@ -56,6 +58,8 @@ DESCRIPTION: ${ticket.description}
         issueType: ticket.issueType,
         priority: ticket.priority,
         components: ticket.components,
+        contentHash,
+        chunkCount: chunkTextByParagraphs(ticket.description).length,
         embeddedAt: new Date().toISOString(),
       },
     });
@@ -179,4 +183,28 @@ export function prepareTextForEmbedding(text: string): string {
     .replace(/[^\w\s.,!?-]/g, "")
     .trim()
     .slice(0, 8000);
+}
+
+function buildStructuredTicketText(
+  ticket: Pick<
+    NormalizedTicket,
+    "summary" | "description" | "issueType" | "priority" | "components"
+  >
+): string {
+  const header = [
+    `TICKET: ${ticket.summary}`,
+    `TYPE: ${ticket.issueType}`,
+    `PRIORITY: ${ticket.priority}`,
+    `COMPONENTS: ${ticket.components.join(", ")}`,
+  ].join("\n");
+
+  const descriptionChunks = chunkTextByParagraphs(ticket.description);
+  const body =
+    descriptionChunks.length <= 1
+      ? `DESCRIPTION: ${ticket.description}`
+      : descriptionChunks
+          .map((chunk, i) => `DESCRIPTION [${i + 1}/${descriptionChunks.length}]:\n${chunk}`)
+          .join("\n\n");
+
+  return `${header}\n\n${body}`.trim();
 }
