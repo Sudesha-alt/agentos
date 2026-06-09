@@ -32,8 +32,8 @@ export function getOpenAISummaryModel(): string {
   return getOpenAIChatModel();
 }
 
-/** GPT-5 / o-series reject `max_tokens`; always send `max_completion_tokens`. */
-export function chatCompletionTokenLimit(
+/** OpenAI chat completions — always use max_completion_tokens (gpt-5+ rejects max_tokens). */
+export function openAIChatTokenLimit(
   maxTokens: number
 ): { max_completion_tokens: number } {
   return { max_completion_tokens: maxTokens };
