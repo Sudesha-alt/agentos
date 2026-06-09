@@ -32,3 +32,9 @@ CREATE TABLE IF NOT EXISTS canary_runtime_settings (
   auth_token            TEXT,
   updated_at            TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS pm_analysis_records (
+  jira_key      TEXT PRIMARY KEY,
+  record_json   TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
+);

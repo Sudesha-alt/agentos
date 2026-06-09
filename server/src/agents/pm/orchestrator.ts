@@ -4,6 +4,7 @@ import {
   recordRetrospectiveLearning,
 } from "../../rag/retrievalLearning";
 import { logger } from "../../utils/logger";
+import { formatSteps } from "./handoff";
 import { gatherPmContext, resolveTicketInput } from "./contextGatherer";
 import {
   PROMPT_ACCEPTANCE_CRITERIA,
@@ -14,11 +15,13 @@ import {
   PROMPT_IMPLEMENTATION,
   PROMPT_PRIORITIZATION,
   PROMPT_ENRICHMENT,
+  PROMPT_PRD,
   PROMPT_RETROSPECTIVE,
   renderTemplate,
 } from "./prompts";
 import { runPmStage } from "./runStage";
 import { pmAnalysisStore } from "./store";
+import type { GeneratedPRD } from "../../prd/prdGenerator";
 import type {
   AcceptanceCriteriaOutput,
   ArtifactsOutput,
@@ -64,6 +67,7 @@ function acSummary(ac: AcceptanceCriteriaOutput | undefined): string {
 
 const PM_STAGE_MAX_TOKENS: Partial<Record<PmStageId, number>> = {
   ACCEPTANCE_CRITERIA: 8000,
+  PRD: 8000,
   ARTIFACTS: 6000,
   RETROSPECTIVE: 6000,
 };
@@ -335,6 +339,49 @@ async function runSingleStage(
         await runStageWithMeta<AcceptanceCriteriaOutput>(jiraKey, stage, prompt);
       pmAnalysisStore.update(jiraKey, { acceptanceCriteria });
       record.acceptanceCriteria = acceptanceCriteria;
+      break;
+    }
+    case "PRD": {
+      const ac = record.acceptanceCriteria!;
+      const prompt = renderTemplate(PROMPT_PRD, {
+        enriched_brief: formatEnrichmentBrief(record.enrichment!),
+        ticket_type: record.classification?.type ?? "unknown",
+        subtype: record.classification?.subtype ?? "unknown",
+        severity: record.classification?.severity ?? "unknown",
+        revenue_risk: record.classification?.revenueRisk ?? "unknown",
+        users_affected:
+          record.classification?.estimatedUsersAffected ?? "unknown",
+        affected_files_summary: formatAffectedFiles(record.codebaseImpact),
+        scope_assessment: record.codebaseImpact?.scopeAssessment ?? "unknown",
+        suggested_first_file:
+          record.codebaseImpact?.suggestedFirstFile ?? "unknown",
+        tshirt: record.effortEstimate?.tshirt ?? "unknown",
+        story_points: record.effortEstimate?.storyPoints ?? "unknown",
+        recommended_approach:
+          record.effortEstimate?.recommendedApproach ?? "unknown",
+        implementation_summary:
+          record.implementation?.approachSummary ?? "unknown",
+        implementation_steps: formatSteps(record.implementation?.implementationSteps ?? []),
+        prioritization_recommendation:
+          record.prioritization?.recommendation ?? "unknown",
+        recommendation_reasoning:
+          record.prioritization?.recommendationReasoning ?? "",
+        user_story: ac.userStory,
+        happy_path_count: String(ac.happyPath?.length ?? 0),
+        edge_case_count: String(ac.edgeCases?.length ?? 0),
+        out_of_scope: (ac.explicitlyOutOfScope ?? []).join("; ") || "none",
+        regression_risks: (ac.regressionRisks ?? []).join("; ") || "none",
+        jira_key: jiraKey,
+        ticket_summary: ticket.summary,
+        today_iso: new Date().toISOString(),
+      });
+      const generatedPrd = await runStageWithMeta<GeneratedPRD>(
+        jiraKey,
+        stage,
+        prompt
+      );
+      pmAnalysisStore.update(jiraKey, { generatedPrd });
+      record.generatedPrd = generatedPrd;
       break;
     }
     case "ARTIFACTS": {

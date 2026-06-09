@@ -313,6 +313,143 @@ Produce the following in JSON:
 
 Every criterion must be verifiable by QA without interpretation.${JSON_ONLY}`;
 
+export const PROMPT_PRD = `You are a principal product manager writing a formal Product Requirements Document (PRD) from a completed PM ticket analysis.
+
+You have enrichment, classification, codebase impact, effort, implementation guidance, prioritization, and acceptance criteria. Synthesize them into a single engineering-ready PRD.
+
+---
+
+ENRICHED BRIEF:
+{{enriched_brief}}
+
+CLASSIFICATION:
+Type: {{ticket_type}} / {{subtype}}
+Severity: {{severity}}
+Revenue risk: {{revenue_risk}}
+Users affected: {{users_affected}}
+
+CODEBASE IMPACT:
+{{affected_files_summary}}
+Scope: {{scope_assessment}}
+Suggested first file: {{suggested_first_file}}
+
+EFFORT:
+T-shirt: {{tshirt}} · Story points: {{story_points}}
+Recommended approach: {{recommended_approach}}
+
+IMPLEMENTATION GUIDANCE:
+{{implementation_summary}}
+Steps:
+{{implementation_steps}}
+
+PRIORITIZATION:
+Recommendation: {{prioritization_recommendation}}
+Reasoning: {{recommendation_reasoning}}
+
+ACCEPTANCE CRITERIA:
+User story: {{user_story}}
+Happy path scenarios: {{happy_path_count}}
+Edge cases: {{edge_case_count}}
+Out of scope: {{out_of_scope}}
+Regression risks: {{regression_risks}}
+
+JIRA KEY: {{jira_key}}
+TICKET SUMMARY: {{ticket_summary}}
+TODAY: {{today_iso}}
+
+---
+
+Return JSON matching this exact schema (GeneratedPRD):
+
+{
+  "title": "string — concise feature/fix title",
+  "version": "v1.0",
+  "status": "Draft",
+  "jiraKey": "{{jira_key}}",
+  "createdAt": "ISO-8601 timestamp",
+  "priority": "string from classification severity and prioritization",
+  "effortEstimate": "string — t-shirt and story points",
+  "problemStatement": "string — user problem and business context",
+  "proposedSolution": "string — what we will build and how",
+  "successDefinition": "string — what done looks like for users and the business",
+  "userPersonas": [
+    { "persona": "string", "need": "string", "currentPain": "string" }
+  ],
+  "userStories": [
+    {
+      "id": "US-001",
+      "story": "As a ...",
+      "acceptanceCriteria": ["Given ... When ... Then ..."],
+      "priority": "must-have | should-have | nice-to-have"
+    }
+  ],
+  "technicalRequirements": {
+    "endpoints": [
+      {
+        "method": "GET | POST | PUT | PATCH | DELETE",
+        "path": "/api/...",
+        "description": "string",
+        "requestBody": "string or null",
+        "responseShape": "string",
+        "authRequired": true,
+        "notes": "string"
+      }
+    ],
+    "dataModel": [
+      { "table": "string", "changes": "string", "fields": ["string"] }
+    ],
+    "systemsAffected": ["string"],
+    "technicalAssumptions": ["string"]
+  },
+  "nonFunctionalRequirements": [
+    { "type": "string", "requirement": "string", "measurable": "string" }
+  ],
+  "assumptions": ["string"],
+  "outOfScope": ["string"],
+  "openQuestions": [
+    {
+      "question": "string",
+      "impact": "string",
+      "defaultAssumption": "string",
+      "owner": "string"
+    }
+  ],
+  "risks": [
+    {
+      "risk": "string",
+      "probability": "low | medium | high",
+      "impact": "string",
+      "mitigation": "string"
+    }
+  ],
+  "successMetrics": [
+    {
+      "metric": "string",
+      "baseline": "string",
+      "target": "string",
+      "measurementMethod": "string"
+    }
+  ],
+  "complexitySummary": {
+    "score": 0,
+    "effortOptimistic": "string",
+    "effortRealistic": "string",
+    "effortPessimistic": "string",
+    "keyComplexityDrivers": ["string"]
+  },
+  "prdConfidence": 0.0,
+  "confidenceNotes": "string"
+}
+
+Rules:
+- Ground every requirement in the PM analysis inputs — do not invent unrelated scope.
+- Every acceptance criterion must be testable Given/When/Then form.
+- Map happy-path and edge-case criteria into userStories.
+- Include technicalRequirements informed by affected files and implementation steps.
+- Capture open questions from implementation guidance and missing context.
+- prdConfidence is 0–1 reflecting completeness of the source analysis.
+- Return ONLY valid JSON.${JSON_ONLY}`;
+
 export const PROMPT_ARTIFACTS = `You are a senior product manager writing communication artifacts based on a completed ticket analysis.
 
 Generate multiple artifacts from the same context. Match tone and length to each audience.

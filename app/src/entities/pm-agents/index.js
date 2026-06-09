@@ -64,6 +64,7 @@ export const PM_STAGE_LABELS = {
   IMPLEMENTATION: "Implementation suggestion",
   PRIORITIZATION: "Prioritization",
   ACCEPTANCE_CRITERIA: "Acceptance criteria",
+  PRD: "PRD generation",
   ARTIFACTS: "Communication artifacts",
   RETROSPECTIVE: "Retrospective",
 };
@@ -76,6 +77,7 @@ export const PM_STAGE_ORDER = [
   "IMPLEMENTATION",
   "PRIORITIZATION",
   "ACCEPTANCE_CRITERIA",
+  "PRD",
   "ARTIFACTS",
 ];
 

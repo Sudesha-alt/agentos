@@ -50,6 +50,10 @@ export interface TechAgentHandoff {
   openQuestions: string[];
   branchName: string;
   codeSnapshots: CodeSnapshot[];
+  prdTitle: string | null;
+  prdProblemStatement: string | null;
+  prdUserStoryCount: number;
+  prdConfidence: number | null;
 }
 
 function jiraBrowseUrl(jiraKey: string): string | null {
@@ -292,6 +296,10 @@ export function buildTechAgentHandoffFromRecord(
     openQuestions: impl.openQuestionsForEngineer,
     branchName,
     codeSnapshots: [],
+    prdTitle: record.generatedPrd?.title ?? null,
+    prdProblemStatement: record.generatedPrd?.problemStatement ?? null,
+    prdUserStoryCount: record.generatedPrd?.userStories?.length ?? 0,
+    prdConfidence: record.generatedPrd?.prdConfidence ?? null,
   };
 }
 
@@ -377,6 +385,15 @@ ${handoff.realUserProblem}
 
 **Clean summary:**
 ${handoff.cleanSummary}
+
+${handoff.prdTitle ? `
+**PRD:** ${handoff.prdTitle}
+**PRD confidence:** ${handoff.prdConfidence != null ? `${Math.round(handoff.prdConfidence * 100)}%` : "—"}
+**User stories in PRD:** ${handoff.prdUserStoryCount}
+
+**PRD problem statement:**
+${handoff.prdProblemStatement ?? "Not generated."}
+` : ""}
 
 ---
 

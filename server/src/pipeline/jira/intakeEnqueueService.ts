@@ -12,6 +12,7 @@ import {
 } from "../../queue/inProcessRunner";
 import { classifyAiWorkerIntake } from "../../integrations/intentClassifier";
 import { logger } from "../../utils/logger";
+import type { PmPipelineContext } from "../../agents/pm/pmPipelineContext";
 import type { PipelineJiraWebhookPayload } from "./ticketNormalizer";
 
 const FETCH_FIELDS = [
@@ -56,7 +57,8 @@ export async function enqueueIntakeFromWebhook(
 
 export async function enqueueIntakeFromJiraKey(
   jiraKey: string,
-  rawPayload?: PipelineJiraWebhookPayload
+  rawPayload?: PipelineJiraWebhookPayload,
+  pmContext?: PmPipelineContext
 ): Promise<IntakeEnqueueResult> {
   const decomposed = await decomposeForPipelineIntake(jiraKey);
   const batchItems: Array<{ ticketId: string; jiraKey: string }> = [];
@@ -98,6 +100,7 @@ export async function enqueueIntakeFromJiraKey(
         createdAt: normalized.createdAt.toISOString(),
         intakeSourceKey: decomposed.sourceKey,
         parentStoryKey: group.storyKey,
+        ...(pmContext && taskKey === pmContext.jiraKey ? { pmContext } : {}),
       };
 
       const ticket = await ticketRepo.create({

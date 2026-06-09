@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { getTechAgentHandoff } from "../../agents/pm/handoff";
+import { buildPmPipelineContext } from "../../agents/pm/pmPipelineContext";
 import {
   getPmResumeStage,
   runPmAnalysisPipeline,
@@ -162,25 +163,42 @@ router.post("/handoff/:ticketId/start-pipeline", async (req, res, next) => {
     if (!jiraKey) throw new ValidationError("ticketId is required");
 
     const record = pmAnalysisStore.get(jiraKey);
-    if (!record) throw new NotFoundError("PM analysis not found");
-    if (record.status !== "COMPLETED") {
-      throw new ValidationError("PM analysis must be completed before starting the coding pipeline");
+    if (record && record.status !== "COMPLETED") {
+      throw new ValidationError(
+        "PM analysis must be completed before starting the coding pipeline"
+      );
     }
 
-    const handoff = await prepareTechAgentHandoff(jiraKey);
-    const intake = await enqueueIntakeFromJiraKey(jiraKey);
+    const handoff =
+      record?.status === "COMPLETED"
+        ? await prepareTechAgentHandoff(jiraKey)
+        : null;
+
+    const pmContext =
+      record?.generatedPrd && record.status === "COMPLETED"
+        ? buildPmPipelineContext(record)
+        : undefined;
+
+    const intake = await enqueueIntakeFromJiraKey(jiraKey, undefined, pmContext);
 
     res.status(202).json({
       jiraKey,
       status: "started",
       message:
         intake.enqueued > 0
-          ? "Coding pipeline enqueued from PM handoff"
+          ? pmContext
+            ? "Coding pipeline enqueued with PM PRD (discovery skipped)"
+            : handoff
+              ? "Coding pipeline enqueued from PM handoff"
+              : "Coding pipeline enqueued from Jira ticket (PM handoff unavailable — re-run analysis to attach PM context)"
           : "Ticket already active or queued — check pipeline queue",
-      handoff: {
-        recommendation: handoff.handoff.recommendation,
-        suggestedFirstFile: handoff.handoff.suggestedFirstFile,
-      },
+      pmContextAttached: Boolean(pmContext),
+      handoff: handoff
+        ? {
+            recommendation: handoff.handoff.recommendation,
+            suggestedFirstFile: handoff.handoff.suggestedFirstFile,
+          }
+        : null,
       intake,
       queue: getPipelineQueueState(),
     });
