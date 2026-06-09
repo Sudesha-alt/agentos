@@ -175,6 +175,43 @@ RISKS: ${impl.risks
 
     logger.info({ jiraKey }, "implementation embedded");
   },
+
+  async embedCanaryFinding(input: {
+    findingId: string;
+    jiraKey: string;
+    title: string;
+    description: string;
+    severity: string;
+    category: string;
+    reproductionSteps?: string | null;
+    suggestedFix?: string | null;
+    affectedCode?: string | null;
+  }): Promise<void> {
+    const text = `
+CANARY FINDING [${input.severity}/${input.category}]: ${input.title}
+DESCRIPTION: ${input.description}
+REPRODUCTION: ${input.reproductionSteps ?? "—"}
+AFFECTED CODE: ${input.affectedCode ?? "—"}
+SUGGESTED FIX: ${input.suggestedFix ?? "—"}
+    `.trim();
+
+    const embedding = await this.embed(text);
+
+    await vectorStore.upsert({
+      jiraTicketId: input.findingId,
+      jiraKey: input.jiraKey,
+      contentType: "canary_finding",
+      content: text,
+      embedding,
+      metadata: {
+        severity: input.severity,
+        category: input.category,
+        embeddedAt: new Date().toISOString(),
+      },
+    });
+
+    logger.info({ jiraKey: input.jiraKey, findingId: input.findingId }, "canary finding embedded");
+  },
 };
 
 export function prepareTextForEmbedding(text: string): string {

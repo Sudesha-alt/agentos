@@ -84,6 +84,41 @@ export default function SettingsSectionsWidget({
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: EASE, delay: 0.06 }}
+      >
+        <Panel>
+          <PanelHeader
+            kicker="Quality"
+            title="Canary QA"
+            body="Live-app adversarial probes run against these URLs after pipeline QA and on a schedule."
+          />
+          <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
+            <Field
+              label="Staging base URL"
+              value={form.canaryStagingBaseUrl}
+              placeholder="https://staging.example.com"
+              onChange={(value) => onChange("canaryStagingBaseUrl", value)}
+            />
+            <Field
+              label="Production base URL"
+              value={form.canaryProductionBaseUrl}
+              placeholder="https://app.example.com (optional)"
+              onChange={(value) => onChange("canaryProductionBaseUrl", value)}
+            />
+            <Field
+              label="Canary auth token"
+              type="password"
+              value={form.canaryAuthToken}
+              placeholder="Bearer token for synthetic user (optional)"
+              onChange={(value) => onChange("canaryAuthToken", value)}
+            />
+          </div>
+        </Panel>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.35, ease: EASE, delay: 0.08 }}
       >
         <Panel>

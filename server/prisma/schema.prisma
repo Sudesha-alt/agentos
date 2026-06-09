@@ -110,6 +110,52 @@ model Pipeline {
   stages       PipelineStageLog[]
   overrides    HumanOverride[]
   auditLogs    AuditLog[]
+  canaryRuns   CanaryRun[]
+}
+
+model CanaryRun {
+  id           String          @id @default(cuid())
+  pipelineId   String?
+  pipeline     Pipeline?       @relation(fields: [pipelineId], references: [id])
+  jiraKey      String?
+  trigger      String          @default("manual")
+  environment  String          @default("staging")
+  scope        String          @default("full")
+  targetUrl    String
+  status       CanaryRunStatus @default(PENDING)
+  phase        String?
+  understanding Json?
+  hypotheses   Json?
+  summary      String?         @db.Text
+  metadata     Json            @default("{}")
+  error        String?         @db.Text
+  startedAt    DateTime        @default(now())
+  completedAt  DateTime?
+  findings     CanaryFinding[]
+
+  @@index([pipelineId])
+  @@index([status, environment])
+  @@index([jiraKey])
+}
+
+model CanaryFinding {
+  id              String    @id @default(cuid())
+  canaryRunId     String
+  canaryRun       CanaryRun @relation(fields: [canaryRunId], references: [id], onDelete: Cascade)
+  hypothesisId    String?
+  severity        String
+  category        String
+  title           String
+  description     String    @db.Text
+  reproductionSteps String? @db.Text
+  evidence        Json?
+  affectedCode    String?
+  suggestedFix    String?   @db.Text
+  jiraKeyCreated  String?
+  embeddedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([canaryRunId, severity])
 }
 
 model PipelineStageLog {
@@ -366,6 +412,13 @@ enum JiraSyncMode {
 }
 
 enum JiraSyncStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum CanaryRunStatus {
+  PENDING
   RUNNING
   COMPLETED
   FAILED

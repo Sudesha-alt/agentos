@@ -10,12 +10,15 @@ import { loadPipelineJiraCredentialsFromStore } from "./pipeline/jira/credential
 import { initCodebaseVizWebSocket } from "./codebaseIntelligence/codebaseVizHub";
 import { recoverStaleIndexRuns } from "./codebaseIntelligence/indexRecovery";
 import { migrateJiraMirrorToJiraIssue } from "./jira-sync/migrateMirror";
+import { loadCanarySettingsFromStore } from "./canaryAgent/settingsStore";
+import { startCanaryScheduler } from "./canaryAgent/scheduler";
 import { startJiraSyncScheduler } from "./queue/inProcessRunner";
 import { logger } from "./utils/logger";
 
 async function bootstrap(): Promise<void> {
   initIntakeDb();
   loadPipelineJiraCredentialsFromStore();
+  loadCanarySettingsFromStore();
   await restoreGitCredentialsFromPostgres().catch((err) => {
     logger.warn({ err }, "startup git credential restore failed");
   });
@@ -34,6 +37,7 @@ async function bootstrap(): Promise<void> {
   });
 
   startJiraSyncScheduler();
+  startCanaryScheduler();
 
   if (process.env.SENTRY_DSN) {
     Sentry.init({ dsn: process.env.SENTRY_DSN });

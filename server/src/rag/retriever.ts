@@ -21,22 +21,22 @@ export interface RetrievalResult extends RetrievedContext {
 
 export const RETRIEVAL_CONFIGS = {
   PRODUCT_AGENT: {
-    contentTypes: ["ticket", "prd"] as const,
+    contentTypes: ["ticket", "prd", "canary_finding"] as const,
     topK: 6,
     similarityThreshold: 0.75,
   },
   ENGINEERING_AGENT: {
-    contentTypes: ["prd", "implementation"] as const,
+    contentTypes: ["prd", "implementation", "canary_finding"] as const,
     topK: 5,
     similarityThreshold: 0.77,
   },
   QA_AGENT: {
-    contentTypes: ["prd", "qa_report"] as const,
+    contentTypes: ["prd", "qa_report", "canary_finding"] as const,
     topK: 5,
     similarityThreshold: 0.75,
   },
   PM_AGENT: {
-    contentTypes: ["ticket", "prd", "implementation"] as const,
+    contentTypes: ["ticket", "prd", "implementation", "canary_finding"] as const,
     topK: 8,
     similarityThreshold: 0.7,
   },

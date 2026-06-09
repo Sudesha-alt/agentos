@@ -766,6 +766,87 @@ const MOCK_QA_FAILURES = {
   ],
 };
 
+const MOCK_CANARY_RUNS = [
+  {
+    id: "canary_01J8A1",
+    pipelineId: "pl_01J7H2",
+    jiraKey: "PLT-1287",
+    trigger: "pipeline",
+    environment: "staging",
+    scope: "changed_files",
+    targetUrl: "http://localhost:4000",
+    status: "COMPLETED",
+    phase: "synthesis",
+    summary: "One high-severity auth boundary issue confirmed on export API.",
+    error: null,
+    startedAt: minutes(8),
+    completedAt: minutes(6),
+    findingCount: 2,
+    findings: [
+      {
+        id: "cf_01",
+        hypothesisId: "H-002",
+        severity: "high",
+        category: "auth",
+        title: "Member role can trigger admin export",
+        description: "POST /api/exports returns 200 for workspace member token.",
+        reproductionSteps: "1. Auth as member\n2. POST /api/exports\n3. Observe 200",
+        affectedCode: "server/src/api/routes/exports.ts",
+        suggestedFix: "Apply admin-only guard middleware",
+        evidence: { status: 200 },
+        createdAt: minutes(6),
+      },
+      {
+        id: "cf_02",
+        hypothesisId: "H-005",
+        severity: "medium",
+        category: "performance",
+        title: "Export list p95 latency exceeds 2s",
+        description: "GET /api/exports p95 measured at 2.4s under warm cache.",
+        reproductionSteps: "Run measure_performance on GET /api/exports x10",
+        affectedCode: null,
+        suggestedFix: "Add pagination default limit",
+        evidence: { p95Ms: 2400 },
+        createdAt: minutes(6),
+      },
+    ],
+  },
+  {
+    id: "canary_01J7Z9",
+    pipelineId: null,
+    jiraKey: null,
+    trigger: "scheduled_light",
+    environment: "staging",
+    scope: "critical_paths",
+    targetUrl: "http://localhost:4000",
+    status: "COMPLETED",
+    phase: "synthesis",
+    summary: "Critical paths healthy — no confirmed findings.",
+    error: null,
+    startedAt: minutes(130),
+    completedAt: minutes(128),
+    findingCount: 0,
+    findings: [],
+  },
+  {
+    id: "canary_01J7Y2",
+    pipelineId: null,
+    jiraKey: null,
+    trigger: "manual",
+    environment: "production",
+    scope: "full",
+    targetUrl: "https://api.example.com",
+    status: "FAILED",
+    phase: "exploration",
+    summary: null,
+    error: "fetch failed: ECONNREFUSED",
+    startedAt: minutes(300),
+    completedAt: minutes(299),
+    findingCount: 0,
+    findings: [],
+  },
+];
+
 const MOCK_CODEBASE_FILES = {
   "server/src/pipeline/orchestrator.ts": {
     filePath: "server/src/pipeline/orchestrator.ts",
@@ -1135,6 +1216,33 @@ export const mockApi = {
       summary: MOCK_QA.testSummary,
       coverage: MOCK_QA.coverageReport,
       failures: MOCK_QA_FAILURES.columns.flatMap((c) => c.items),
+    };
+  },
+  async canaryRuns() {
+    markUsed();
+    await delay(100);
+    return { items: MOCK_CANARY_RUNS };
+  },
+  async canaryRun(id) {
+    markUsed();
+    await delay(80);
+    const run = MOCK_CANARY_RUNS.find((r) => r.id === id);
+    if (!run) throw new Error("not_found");
+    return run;
+  },
+  async canaryTrigger() {
+    markUsed();
+    await delay(120);
+    return { status: "started", runId: "canary_mock_new" };
+  },
+  async canaryNightlySummary() {
+    markUsed();
+    await delay(80);
+    return {
+      runCount: 4,
+      findingCount: 2,
+      critical: 0,
+      high: 1,
     };
   },
   async codebaseStructure() {

@@ -1,5 +1,6 @@
 import type { Prisma, PipelineStage } from "../db/prisma";
 import { EngineeringAgent } from "../agents/engineeringAgent";
+import { runCanaryCycle } from "../canaryAgent";
 import { runQaAgentic } from "../qaAgent";
 import { attachQaReportToJira } from "../qa/report/reportAttacher";
 import { codebaseQueryService } from "../codebaseIntelligence/queryService";
@@ -104,6 +105,20 @@ export class PipelineOrchestrator {
         implementationOutput.parsed
       );
       const qaOutput = qaStage.agentOutput;
+
+      const canaryResult = await runCanaryCycle({
+        pipelineId: pipeline.id,
+        jiraKey: normalizedTicket.jiraKey,
+        trigger: "pipeline",
+        environment: "staging",
+        scope: "changed_files",
+        orientation: {
+          prdSummary: productStage.agentOutput.parsed.title,
+          implementationSummary: implementationOutput.parsed.summary,
+          qaSummary: qaOutput.parsed.testSummary,
+        },
+      });
+
       const qaValidation = await this.validateQaStage(
         pipeline.id,
         qaOutput,
@@ -113,6 +128,14 @@ export class PipelineOrchestrator {
         await ticketRepo.setStatus(ticket.id, "AWAITING_HUMAN");
         return;
       }
+      if (canaryResult?.findings.length) {
+        await auditRepo.log(pipeline.id, "CANARY_FINDINGS", {
+          runId: canaryResult.runId,
+          count: canaryResult.findings.length,
+          critical: canaryResult.findings.filter((f) => f.severity === "critical").length,
+        });
+      }
+
       if (qaStage.executionReport) {
         await attachQaReportToJira(
           normalizedTicket.jiraKey,

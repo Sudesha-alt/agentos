@@ -95,7 +95,7 @@ export async function runDiscovery(
   );
   const unifiedQuery = `${ticket.summary} ${ticket.description} ${ticketAnalysis.coreIntent}`;
   const unified = await unifiedRetriever.retrieveUnified(unifiedQuery, {
-    ticketTypes: ["ticket", "prd", "implementation", "qa_report"],
+    ticketTypes: ["ticket", "prd", "implementation", "qa_report", "canary_finding"],
     codebase: { branchName: scope?.defaultBranch ?? "main", topK: 8 },
     topKTotal: 12,
     currentJiraKey: ticket.jiraKey,

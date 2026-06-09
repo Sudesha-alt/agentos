@@ -196,6 +196,7 @@ function rerankCandidates(
       if (c.kind === "ticket") {
         if (c.contentType === "prd") score += 0.2 * 0.15;
         if (c.contentType === "implementation") score += 0.2 * 0.12;
+        if (c.contentType === "canary_finding") score += 0.2 * 0.1;
         if (c.contentType === "ticket") score += 0.2 * 0.08;
       } else {
         score += 0.2 * 0.1;

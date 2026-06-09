@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS vector_store (
   jira_ticket_id TEXT NOT NULL,
   jira_key TEXT NOT NULL,
   content_type TEXT NOT NULL CHECK (
-    content_type IN ('ticket', 'prd', 'qa_report', 'implementation')
+    content_type IN ('ticket', 'prd', 'qa_report', 'implementation', 'canary_finding')
   ),
   content TEXT NOT NULL,
   embedding vector(1536) NOT NULL,
