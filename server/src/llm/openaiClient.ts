@@ -39,41 +39,33 @@ export type ChatCompletionParams = Omit<
   maxTokens?: number;
 };
 
+function tokenLimit(maxTokens: number): { max_completion_tokens: number } {
+  return { max_completion_tokens: maxTokens };
+}
+
+/** @deprecated Prefer createChatCompletion — legacy helper name. */
+export function openAIChatTokenLimit(
+  maxTokens: number
+): { max_completion_tokens: number } {
+  return tokenLimit(maxTokens);
+}
+
+/** Alias for openAIChatTokenLimit. */
+export const chatCompletionTokenLimit = openAIChatTokenLimit;
+
 /** Single entry point — never sends legacy max_tokens (gpt-5+ rejects it). */
-export async function createChatCompletion(params: ChatCompletionParams) {
-  const { maxTokens, ...rest } = params;
+export async function createChatCompletion(
+  params: ChatCompletionParams
+): Promise<ChatCompletion> {
+  const { maxTokens = 4000, ...rest } = params;
   return getOpenAIClient().chat.completions.create({
     ...rest,
-    max_completion_tokens: maxTokens ?? 4000,
+    ...tokenLimit(maxTokens),
   });
 }
 
 /** Alias for createChatCompletion. */
 export const createOpenAIChatCompletion = createChatCompletion;
-
-/** @deprecated Use createChatCompletion. */
-export function openAIChatTokenLimit(
-  maxTokens: number
-): { max_completion_tokens: number } {
-  return { max_completion_tokens: maxTokens };
-}
-
-/** Alias used on main after merge — same as chatCompletionTokenLimit. */
-export const openAIChatTokenLimit = chatCompletionTokenLimit;
-
-export async function createChatCompletion(
-  params: ChatCompletionCreateParamsNonStreaming & {
-    maxTokens?: number;
-    max_tokens?: never;
-    max_completion_tokens?: never;
-  }
-): Promise<ChatCompletion> {
-  const { maxTokens = 4000, ...rest } = params;
-  return getOpenAIClient().chat.completions.create({
-    ...rest,
-    ...chatCompletionTokenLimit(maxTokens),
-  });
-}
 
 /** Lazy OpenAI client — server boot must not require OPENAI_API_KEY. */
 export function getOpenAIClient(): OpenAI {
