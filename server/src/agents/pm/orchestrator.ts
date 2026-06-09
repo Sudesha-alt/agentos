@@ -1,4 +1,8 @@
 import { mergeUsage } from "../../llm/openaiCompletion";
+import {
+  applyFilePatternBoostsFromRetrospective,
+  recordRetrospectiveLearning,
+} from "../../rag/retrievalLearning";
 import { logger } from "../../utils/logger";
 import { gatherPmContext, resolveTicketInput } from "./contextGatherer";
 import {
@@ -363,6 +367,18 @@ export async function runPmRetrospective(input: {
   );
   pmAnalysisStore.update(jiraKey, { retrospective });
   pmAnalysisStore.setCurrentStage(jiraKey, null);
+
+  const components = record.ticketInput.components ?? [];
+  recordRetrospectiveLearning(retrospective, components);
+  const branchName =
+    typeof record.context.branchName === "string"
+      ? record.context.branchName
+      : "main";
+  await applyFilePatternBoostsFromRetrospective(
+    retrospective,
+    (record.codebaseImpact?.affectedFiles ?? []).map((f) => f.path),
+    branchName
+  );
 
   return pmAnalysisStore.get(jiraKey)!;
 }

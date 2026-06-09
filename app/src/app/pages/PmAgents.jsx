@@ -11,9 +11,8 @@ import { useJiraSyncIssues } from "../../entities/jira-sync";
 import { usePipelineIntakeTickets } from "../../entities/pipeline-jira";
 import { PmAnalysisOutputs } from "../../widgets/pm-analysis/PmAnalysisSections";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
-import { EDITORIAL_METRICS } from "../../shared/config/app";
+import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
 import Spinner from "../components/Spinner";
-
 export default function PmAgents() {
   const [searchParams] = useSearchParams();
   const ticketFromUrl = searchParams.get("ticket")?.trim().toUpperCase() || "PLT-1287";
@@ -89,32 +88,31 @@ export default function PmAgents() {
   }
 
   return (
-    <div className={`mx-auto w-full px-4 py-8 sm:px-6 ${EDITORIAL_METRICS.maxPageWidth}`}>
+    <AnimatedAppPage wide>
       <PageIntro
         kicker="Product operations"
         title="PM Agents"
         body="Nine-stage product intelligence pipeline — from ticket enrichment through prioritization, acceptance criteria, and stakeholder artifacts. Active runs also appear in Pipeline Explorer."
       />
 
-      <div className="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
         <Panel>
           <PanelHeader kicker="Analyze" title="Ticket input" />
           <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-end sm:px-6">
             <label className="flex-1">
-              <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-mute">Jira key</span>
+              <span className="type-kicker">Jira key</span>
               <input
                 type="text"
                 value={ticketInput}
                 onChange={(e) => setTicketInput(e.target.value)}
                 placeholder="PLT-1287"
-                className="mt-1.5 w-full rounded-xl border border-hairline bg-canvas px-3 py-2.5 font-mono text-[13px] text-ink outline-none focus:border-indigo"
+                className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm text-app-ink outline-none focus:border-indigo/40 focus:ring-2 focus:ring-indigo/10"
               />
-            </label>
-            <button
+            </label>            <button
               type="button"
               disabled={isRunning || !ticketInput.trim()}
               onClick={handleAnalyze}
-              className="rounded-full bg-indigo px-6 py-2.5 font-mono text-[10px] uppercase tracking-[0.16em] text-white hover:bg-indigo/90 disabled:opacity-50"
+              className="app-btn-primary disabled:opacity-50"
             >
               {isRunning ? "Analyzing…" : "Analyze ticket"}
             </button>
@@ -123,14 +121,14 @@ export default function PmAgents() {
             <div className="border-t border-hairline px-5 py-3 sm:px-6 space-y-3">
               {syncedTickets.length > 0 && (
                 <div>
-                  <p className="font-mono text-[10px] uppercase text-ink-mute">Synced from Jira</p>
+                  <p className="type-kicker">Synced from Jira</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {syncedTickets.slice(0, 10).map((t) => (
                       <button
                         key={t.jiraKey}
                         type="button"
                         onClick={() => selectFromList(t.jiraKey)}
-                        className="rounded-full border border-hairline px-3 py-1 font-mono text-[11px] text-ink-dim hover:border-indigo hover:text-indigo"
+                        className="rounded-full border border-app-border px-2.5 py-1 text-[12px] text-app-ink-dim hover:border-indigo/40 hover:text-indigo"
                         title={t.summary}
                       >
                         {t.jiraKey}
@@ -141,22 +139,21 @@ export default function PmAgents() {
               )}
               {intakeTickets.length > 0 && (
                 <div>
-                  <p className="font-mono text-[10px] uppercase text-ink-mute">AI Worker intake</p>
+                  <p className="type-kicker">AI Worker intake</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {intakeTickets.slice(0, 8).map((t) => (
                       <button
                         key={t.key}
                         type="button"
                         onClick={() => selectFromList(t.key)}
-                        className="rounded-full border border-indigo/30 bg-indigo/10 px-3 py-1 font-mono text-[11px] text-indigo hover:border-indigo"
+                        className="rounded-full border border-indigo/30 bg-indigo/10 px-2.5 py-1 text-[12px] text-indigo hover:border-indigo"
                       >
                         {t.key}
                       </button>
                     ))}
                   </div>
                 </div>
-              )}
-            </div>
+              )}            </div>
           )}
           {error && (
             <p className="border-t border-hairline px-5 py-3 text-[13px] text-danger sm:px-6">{error}</p>
@@ -175,10 +172,9 @@ export default function PmAgents() {
                     activeKey === item.jiraKey ? "bg-indigo/10" : ""
                   }`}
                 >
-                  <p className="font-mono text-[12px] text-ink">{item.jiraKey}</p>
-                  <p className="truncate text-[11px] text-ink-dim">{item.summary}</p>
-                  <p className="mt-0.5 font-mono text-[10px] uppercase text-ink-mute">{item.status}</p>
-                </button>
+                  <p className="text-[12px] font-medium text-app-ink">{item.jiraKey}</p>
+                  <p className="truncate text-[11px] text-app-ink-dim">{item.summary}</p>
+                  <p className="mt-0.5 type-kicker">{item.status}</p>                </button>
               </li>
             ))}
             {!listData?.items?.length && (
@@ -189,23 +185,21 @@ export default function PmAgents() {
       </div>
 
       {isRunning && !analysis?.enrichment && (
-        <div className="mt-8 flex items-center justify-center gap-3 py-12">
+        <div className="flex items-center justify-center gap-3 py-10">
           <Spinner />
-          <p className="font-mono text-[12px] text-ink-dim">
+          <p className="text-sm text-app-ink-dim">
             Running PM pipeline ({PM_STAGE_ORDER.length} stages)…
           </p>
         </div>
       )}
 
       {analysis && (
-        <div className="mt-8">
-          <PmAnalysisOutputs
-            analysis={analysis}
-            onRetrospective={handleRetrospective}
-            retroRunning={retroRunning}
-          />
-        </div>
+        <PmAnalysisOutputs
+          analysis={analysis}
+          onRetrospective={handleRetrospective}
+          retroRunning={retroRunning}
+        />
       )}
-    </div>
+    </AnimatedAppPage>
   );
 }

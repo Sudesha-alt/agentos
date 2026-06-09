@@ -1,0 +1,154 @@
+/**
+ * Light theme overrides for /app routes.
+ * Remaps legacy dark tokens (text-ink, bg-surface, etc.) inside the app shell.
+ */
+
+html.app-theme {
+  color-scheme: light;
+}
+
+html.app-theme body {
+  background-color: #f9f9f7;
+  color: #1a1a1a;
+}
+
+html.app-theme body::before {
+  display: none;
+}
+
+html.app-theme ::selection {
+  background: rgba(139, 124, 246, 0.25);
+  color: #1a1a1a;
+}
+
+html.app-theme ::-webkit-scrollbar-thumb {
+  background: rgba(26, 26, 26, 0.15);
+}
+
+html.app-theme ::-webkit-scrollbar-thumb:hover {
+  background: rgba(26, 26, 26, 0.25);
+}
+
+@layer components {
+  .app-shell {
+    isolation: isolate;
+    min-height: 100vh;
+  }
+
+  /* Typography */
+  .app-shell .text-ink {
+    color: #1a1a1a;
+  }
+  .app-shell .text-ink-dim {
+    color: #5c5c5c;
+  }
+  .app-shell .text-ink-mute {
+    color: #8a8a8a;
+  }
+
+  /* Surfaces */
+  .app-shell .bg-canvas {
+    background-color: #f4f4f2;
+  }
+  .app-shell .bg-canvas\/30 {
+    background-color: rgba(244, 244, 242, 0.95);
+  }
+  .app-shell .bg-canvas\/35 {
+    background-color: rgba(244, 244, 242, 0.92);
+  }
+  .app-shell .bg-canvas\/40 {
+    background-color: rgba(244, 244, 242, 0.88);
+  }
+  .app-shell .bg-canvas\/50 {
+    background-color: rgba(244, 244, 242, 0.85);
+  }
+  .app-shell .bg-canvas\/80 {
+    background-color: rgba(255, 255, 255, 0.92);
+  }
+  .app-shell .bg-canvas\/90 {
+    background-color: rgba(255, 255, 255, 0.96);
+  }
+
+  .app-shell .bg-surface {
+    background-color: #ffffff;
+  }
+  .app-shell .bg-surface-2 {
+    background-color: #f4f4f2;
+  }
+  .app-shell .bg-surface-elevated {
+    background-color: #ffffff;
+  }
+  .app-shell .bg-surface\/20 {
+    background-color: rgba(255, 255, 255, 0.72);
+  }
+  .app-shell .bg-surface\/25 {
+    background-color: rgba(255, 255, 255, 0.78);
+  }
+  .app-shell .bg-surface\/30 {
+    background-color: rgba(255, 255, 255, 0.85);
+  }
+  .app-shell .bg-surface\/35 {
+    background-color: rgba(255, 255, 255, 0.88);
+  }
+  .app-shell .bg-surface\/40 {
+    background-color: rgba(255, 255, 255, 0.92);
+  }
+  .app-shell .bg-surface\/50 {
+    background-color: rgba(255, 255, 255, 0.95);
+  }
+
+  /* Borders */
+  .app-shell .border-hairline {
+    border-color: rgba(26, 26, 26, 0.08);
+  }
+  .app-shell .border-hairline-strong {
+    border-color: rgba(26, 26, 26, 0.14);
+  }
+  .app-shell .border-hairline\/70,
+  .app-shell .border-hairline\/80,
+  .app-shell .border-hairline\/90 {
+    border-color: rgba(26, 26, 26, 0.1);
+  }
+
+  /* Panels that used dark editorial styling inside app */
+  .app-shell .editorial-panel {
+    box-shadow: 0 4px 24px -4px rgba(26, 26, 26, 0.06);
+    background-color: #ffffff;
+    border-color: rgba(26, 26, 26, 0.08);
+  }
+
+  /* Form controls */
+  .app-shell input:not([type="checkbox"]):not([type="radio"]),
+  .app-shell textarea,
+  .app-shell select {
+    background-color: #ffffff;
+    color: #1a1a1a;
+    border-color: rgba(26, 26, 26, 0.12);
+  }
+
+  .app-shell input::placeholder,
+  .app-shell textarea::placeholder {
+    color: #8a8a8a;
+  }
+
+  .app-shell pre,
+  .app-shell code {
+    color: #5c5c5c;
+  }
+
+  .app-shell .hover\:bg-canvas\/35:hover {
+    background-color: rgba(244, 244, 242, 0.95);
+  }
+  .app-shell .hover\:bg-canvas\/50:hover {
+    background-color: rgba(244, 244, 242, 0.98);
+  }
+  .app-shell .hover\:bg-surface\/40:hover {
+    background-color: #ffffff;
+  }
+  .app-shell .hover\:border-hairline-strong:hover {
+    border-color: rgba(26, 26, 26, 0.16);
+  }
+  .app-shell .hover\:text-ink:hover {
+    color: #1a1a1a;
+  }
+}

@@ -1,6 +1,7 @@
 import { useQaCoverage, useQaHeatmap, useQaFailures, useQaReports } from "../../entities/qa";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
 import { Link } from "react-router-dom";
+import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
 
 const HEATMAP_CELL = {
   pass: "bg-success",
@@ -16,7 +17,7 @@ export default function QaCenter() {
   const { data: reports } = useQaReports();
 
   return (
-    <div className="mx-auto w-full max-w-[82rem] space-y-8">
+    <AnimatedAppPage wide>
       <PageIntro
         kicker="Quality"
         title="Is this safe to ship?"
@@ -25,11 +26,11 @@ export default function QaCenter() {
 
       <Panel>
         <PanelHeader kicker="Coverage" title="Test coverage by file" />
-        <div className="grid gap-2 p-5 sm:grid-cols-2">
+        <div className="grid gap-2 p-4 sm:grid-cols-2">
           {(coverage?.files ?? []).map((file) => (
             <div
               key={file.path}
-              className="rounded-xl border border-hairline px-4 py-3"
+              className="rounded-app-sm border border-app-border px-3.5 py-2.5"
               style={{
                 borderColor:
                   file.coverage >= 80
@@ -39,9 +40,9 @@ export default function QaCenter() {
                       : "rgba(239,68,68,0.35)",
               }}
             >
-              <p className="truncate font-mono text-[11px] text-ink">{file.path}</p>
-              <p className="mt-2 font-display text-2xl text-ink">{file.coverage}%</p>
-              <p className="font-mono text-[10px] text-ink-mute">
+              <p className="truncate font-mono text-[11px] text-app-ink">{file.path}</p>
+              <p className="type-metric mt-1.5">{file.coverage}%</p>
+              <p className="type-kicker mt-0.5">
                 lines {file.lines}% · branches {file.branches}%
               </p>
             </div>
@@ -55,13 +56,13 @@ export default function QaCenter() {
           title="Acceptance criteria heatmap"
           body="Patterns across recent features — which criterion types fail repeatedly."
         />
-        <div className="overflow-x-auto p-5">
+        <div className="overflow-x-auto p-4">
           <table className="w-full min-w-[480px] border-collapse text-[12px]">
             <thead>
               <tr>
-                <th className="p-2 text-left font-mono text-ink-mute">Feature</th>
+                <th className="p-2 text-left type-kicker">Feature</th>
                 {(heatmap?.criteria ?? []).map((c) => (
-                  <th key={c} className="p-2 text-center font-mono text-[10px] text-ink-mute">
+                  <th key={c} className="p-2 text-center type-kicker">
                     {c}
                   </th>
                 ))}
@@ -70,7 +71,7 @@ export default function QaCenter() {
             <tbody>
               {(heatmap?.features ?? []).map((feature, row) => (
                 <tr key={feature}>
-                  <td className="p-2 font-mono text-indigo">{feature}</td>
+                  <td className="p-2 text-[12px] text-indigo">{feature}</td>
                   {(heatmap?.cells?.[row] ?? []).map((cell, col) => (
                     <td key={col} className="p-2 text-center">
                       <span
@@ -88,22 +89,20 @@ export default function QaCenter() {
 
       <Panel>
         <PanelHeader kicker="Failures" title="Failure analysis board" />
-        <div className="grid gap-4 p-5 lg:grid-cols-4">
+        <div className="grid gap-3 p-4 lg:grid-cols-4">
           {(failures?.columns ?? []).map((column) => (
-            <div key={column.id} className="rounded-xl border border-hairline bg-canvas/30 p-3">
-              <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-mute">
-                {column.label}
-              </p>
-              <ul className="mt-3 space-y-2">
+            <div key={column.id} className="rounded-app-sm border border-app-border bg-app-surface-muted/40 p-3">
+              <p className="type-kicker">{column.label}</p>
+              <ul className="mt-2.5 space-y-2">
                 {column.items.map((item) => (
                   <li
                     key={item.id}
-                    className="rounded-lg border border-hairline bg-surface/40 p-3 text-[12px]"
+                    className="rounded-app-sm border border-app-border bg-app-surface/60 p-2.5 text-[12px]"
                   >
-                    <p className="font-medium text-ink">{item.testName}</p>
-                    <p className="mt-1 text-ink-dim">{item.criterion}</p>
-                    <p className="mt-2 text-danger">{item.error}</p>
-                    <p className="mt-2 text-ink-mute">{item.remediation}</p>
+                    <p className="font-medium text-app-ink">{item.testName}</p>
+                    <p className="mt-1 text-app-ink-dim">{item.criterion}</p>
+                    <p className="mt-1.5 text-danger">{item.error}</p>
+                    <p className="mt-1.5 text-app-ink-mute">{item.remediation}</p>
                   </li>
                 ))}
               </ul>
@@ -114,12 +113,12 @@ export default function QaCenter() {
 
       <Panel>
         <PanelHeader kicker="Reports" title="QA report viewer" />
-        <ul className="divide-y divide-hairline">
+        <ul className="divide-y divide-app-border">
           {(reports?.reports ?? []).map((report) => (
-            <li key={report.ticketId} className="flex items-center justify-between px-5 py-4">
+            <li key={report.ticketId} className="flex items-center justify-between px-5 py-3.5">
               <div>
-                <p className="font-mono text-[12px] text-indigo">{report.ticketId}</p>
-                <p className="text-[13px] text-ink-dim">
+                <p className="text-[12px] font-medium text-indigo">{report.ticketId}</p>
+                <p className="text-[13px] text-app-ink-dim">
                   Pass rate {report.passRate}% · {report.recommendation.replaceAll("_", " ")}
                 </p>
               </div>
@@ -133,6 +132,6 @@ export default function QaCenter() {
           ))}
         </ul>
       </Panel>
-    </div>
+    </AnimatedAppPage>
   );
 }

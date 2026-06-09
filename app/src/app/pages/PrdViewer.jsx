@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { usePipelineDetail } from "../../entities/pipeline";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
+import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
 import Spinner from "../components/Spinner";
 
 const SECTIONS = [
@@ -35,89 +36,92 @@ export default function PrdViewer() {
   }
 
   const band = prdGateBand(score);
+  const scorePct = (score <= 1 ? score * 100 : score).toFixed(0);
 
   return (
-    <div className="mx-auto flex w-full max-w-[90rem] gap-6">
-      <aside className="hidden w-56 shrink-0 lg:block">
-        <nav className="sticky top-24 space-y-1">
-          {SECTIONS.map((section) => (
-            <button
-              key={section.id}
-              type="button"
-              onClick={() => setActiveSection(section.id)}
-              className={`block w-full rounded-lg px-3 py-2 text-left text-[13px] ${
-                activeSection === section.id
-                  ? "bg-indigo/10 text-ink"
-                  : "text-ink-dim hover:text-ink"
-              }`}
-            >
-              {section.label}
-            </button>
-          ))}
-        </nav>
-        <div
-          className="mt-8 flex size-20 items-center justify-center rounded-full border-4 font-display text-xl"
-          style={{ borderColor: band.color }}
-        >
-          {(score <= 1 ? score * 100 : score).toFixed(0)}%
-        </div>
-        <p className="mt-2 font-mono text-[10px] text-ink-mute">PRD gate score</p>
-      </aside>
-
-      <div className="min-w-0 flex-1 space-y-6">
-        <Link
-          to={`/app/pipelines?selected=${id}`}
-          className="editorial-kicker text-ink-mute hover:text-ink"
-        >
-          ← pipeline explorer
-        </Link>
-        <PageIntro
-          kicker={item?.jiraKey ?? "PRD"}
-          title={prd?.title ?? item?.summary ?? "Product requirements"}
-          body="Document-style PRD with inline editing and gate feedback."
-        />
-
-        <Panel>
-          <PanelHeader kicker="Document" title={SECTIONS.find((s) => s.id === activeSection)?.label} />
-          <div className="prose prose-invert max-w-none px-6 py-6">
-            <PrdSection active={activeSection} prd={prd} />
+    <AnimatedAppPage wide className="max-w-[90rem]">
+      <div className="flex w-full gap-5">
+        <aside className="hidden w-52 shrink-0 lg:block">
+          <nav className="sticky top-24 space-y-0.5">
+            {SECTIONS.map((section) => (
+              <button
+                key={section.id}
+                type="button"
+                onClick={() => setActiveSection(section.id)}
+                className={`block w-full rounded-app-sm px-2.5 py-1.5 text-left text-[13px] ${
+                  activeSection === section.id
+                    ? "bg-indigo/10 text-app-ink"
+                    : "text-app-ink-dim hover:text-app-ink"
+                }`}
+              >
+                {section.label}
+              </button>
+            ))}
+          </nav>
+          <div
+            className="type-metric mt-6 flex size-16 items-center justify-center rounded-full border-[3px] text-lg"
+            style={{ borderColor: band.color }}
+          >
+            {scorePct}%
           </div>
-        </Panel>
+          <p className="type-kicker mt-1.5">PRD gate score</p>
+        </aside>
 
-        <aside className="rounded-xl border border-hairline bg-surface/30 p-5 lg:hidden">
-          <p className="font-mono text-[10px] uppercase text-ink-mute">Actions</p>
-          <div className="mt-4 flex flex-col gap-2">
-            <button type="button" className="btn-trace rounded-full bg-indigo/15 px-4 py-2 text-[13px]">
-              Approve and continue
-            </button>
-            <button type="button" className="rounded-full border border-hairline px-4 py-2 text-[13px]">
-              Request revisions
-            </button>
+        <div className="min-w-0 flex-1 space-y-5">
+          <Link
+            to={`/app/pipelines?selected=${id}`}
+            className="type-kicker hover:text-app-ink"
+          >
+            ← pipeline explorer
+          </Link>
+          <PageIntro
+            kicker={item?.jiraKey ?? "PRD"}
+            title={prd?.title ?? item?.summary ?? "Product requirements"}
+            body="Document-style PRD with inline editing and gate feedback."
+          />
+
+          <Panel>
+            <PanelHeader kicker="Document" title={SECTIONS.find((s) => s.id === activeSection)?.label} />
+            <div className="max-w-none px-5 py-5 sm:px-6">
+              <PrdSection active={activeSection} prd={prd} />
+            </div>
+          </Panel>
+
+          <aside className="rounded-app border border-app-border bg-app-surface-muted/40 p-4 lg:hidden">
+            <p className="type-kicker">Actions</p>
+            <div className="mt-3 flex flex-col gap-2">
+              <button type="button" className="app-btn-primary text-[13px]">
+                Approve and continue
+              </button>
+              <button type="button" className="rounded-full border border-app-border px-4 py-2 text-[13px]">
+                Request revisions
+              </button>
+            </div>
+          </aside>
+        </div>
+
+        <aside className="hidden w-56 shrink-0 xl:block">
+          <div className="sticky top-24 rounded-app border border-app-border bg-app-surface-muted/40 p-4">
+            <p className="type-kicker">Gate</p>
+            <p className="type-metric mt-1.5" style={{ color: band.color }}>
+              {scorePct}%
+            </p>
+            <p className="mt-0.5 text-[12px] text-app-ink-dim">{band.label}</p>
+            <div className="mt-5 space-y-2">
+              <button type="button" className="app-btn-primary w-full text-[13px]">
+                Approve and continue
+              </button>
+              <button type="button" className="w-full rounded-full border border-app-border py-2 text-[13px]">
+                Request revisions
+              </button>
+              <button type="button" className="w-full rounded-full border border-warning/40 py-2 text-[13px] text-warning">
+                Override and force
+              </button>
+            </div>
           </div>
         </aside>
       </div>
-
-      <aside className="hidden w-64 shrink-0 xl:block">
-        <div className="sticky top-24 rounded-xl border border-hairline bg-surface/35 p-5">
-          <p className="font-mono text-[10px] uppercase text-ink-mute">Gate</p>
-          <p className="mt-2 font-display text-3xl" style={{ color: band.color }}>
-            {(score <= 1 ? score * 100 : score).toFixed(0)}%
-          </p>
-          <p className="mt-1 text-[12px] text-ink-dim">{band.label}</p>
-          <div className="mt-6 space-y-2">
-            <button type="button" className="btn-trace w-full rounded-full bg-indigo/15 py-2 text-[13px]">
-              Approve and continue
-            </button>
-            <button type="button" className="w-full rounded-full border border-hairline py-2 text-[13px]">
-              Request revisions
-            </button>
-            <button type="button" className="w-full rounded-full border border-warning/40 py-2 text-[13px] text-warning">
-              Override and force
-            </button>
-          </div>
-        </div>
-      </aside>
-    </div>
+    </AnimatedAppPage>
   );
 }
 
@@ -130,23 +134,23 @@ function prdGateBand(score) {
 
 function PrdSection({ active, prd }) {
   if (!prd || typeof prd !== "object") {
-    return <p className="text-ink-dim">PRD output will appear after the Product Agent completes.</p>;
+    return <p className="text-app-ink-dim">PRD output will appear after the Product Agent completes.</p>;
   }
 
   if (active === "problem") {
-    return <p className="text-ink leading-relaxed">{prd.problemStatement ?? "—"}</p>;
+    return <p className="type-body text-app-ink">{prd.problemStatement ?? "—"}</p>;
   }
   if (active === "solution") {
-    return <p className="text-ink leading-relaxed">{prd.proposedSolution ?? "—"}</p>;
+    return <p className="type-body text-app-ink">{prd.proposedSolution ?? "—"}</p>;
   }
   if (active === "stories") {
     const stories = prd.userStories ?? [];
     return (
-      <ul className="space-y-4">
+      <ul className="space-y-3">
         {stories.map((story) => (
-          <li key={story.id ?? story.story} className="border-l-2 border-indigo/40 pl-4">
-            <p className="text-ink">{story.story}</p>
-            <ul className="mt-2 space-y-1 text-[13px] text-ink-dim">
+          <li key={story.id ?? story.story} className="border-l-2 border-indigo/40 pl-3">
+            <p className="text-app-ink">{story.story}</p>
+            <ul className="mt-1.5 space-y-1 text-[13px] text-app-ink-dim">
               {(story.acceptanceCriteria ?? []).map((ac) => (
                 <li key={ac} className="flex gap-2">
                   <span className="text-success">✓</span>
@@ -162,12 +166,12 @@ function PrdSection({ active, prd }) {
   if (active === "technical") {
     const endpoints = prd.technicalRequirements?.endpoints ?? [];
     return (
-      <div className="space-y-3">
+      <div className="space-y-2">
         {endpoints.map((ep) => (
-          <div key={ep.path} className="rounded-lg border border-hairline bg-canvas/40 p-4 font-mono text-[12px]">
-            <span className="rounded bg-indigo/20 px-2 py-0.5 text-indigo">{ep.method}</span>{" "}
+          <div key={ep.path} className="rounded-app-sm border border-app-border bg-app-surface-muted/40 p-3 font-mono text-[11px]">
+            <span className="rounded bg-indigo/20 px-1.5 py-0.5 text-indigo">{ep.method}</span>{" "}
             {ep.path}
-            <p className="mt-2 font-sans text-[13px] text-ink-dim">{ep.description}</p>
+            <p className="mt-1.5 font-sans text-[13px] text-app-ink-dim">{ep.description}</p>
           </div>
         ))}
       </div>
@@ -175,11 +179,11 @@ function PrdSection({ active, prd }) {
   }
   if (active === "questions") {
     return (
-      <ul className="space-y-3">
+      <ul className="space-y-2">
         {(prd.openQuestions ?? []).map((q) => (
-          <li key={q.question} className="rounded-lg border border-hairline p-4">
-            <p className="text-ink">{q.question}</p>
-            <p className="mt-2 text-[12px] text-ink-dim">
+          <li key={q.question} className="rounded-app-sm border border-app-border p-3">
+            <p className="text-app-ink">{q.question}</p>
+            <p className="mt-1.5 text-[12px] text-app-ink-dim">
               Default assumption: {q.defaultAssumption ?? q.assumption ?? "—"}
             </p>
           </li>

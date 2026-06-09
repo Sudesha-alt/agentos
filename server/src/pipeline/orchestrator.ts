@@ -14,6 +14,7 @@ import { ticketRepo } from "../db/repositories/ticketRepo";
 import { getPipelineJiraClient } from "../pipeline/jira/client";
 import { indexer } from "../rag/indexer";
 import { retriever } from "../rag/retriever";
+import { unifiedRetriever } from "../rag/unifiedRetriever";
 import type {
   AgentOutput,
   ImplementationOutput,
@@ -271,13 +272,25 @@ export class PipelineOrchestrator {
     prd: PrdOutput,
     enrichedPrdDocument: Record<string, unknown>
   ): Promise<AgentOutput<ImplementationOutput>> {
-    const retrieved = await retriever.retrieveForEngineeringAgent(prd, jiraKey);
+    const query = `${prd.title} ${prd.problemStatement} ${prd.proposedSolution}`;
+    const scope = resolveRepoScope();
+    const branch = scope?.defaultBranch ?? "main";
+
+    const unified = await unifiedRetriever.retrieveUnified(query, {
+      ticketTypes: ["prd", "implementation", "ticket"],
+      codebase: { branchName: branch, topK: 10 },
+      topKTotal: 12,
+      currentJiraKey: jiraKey,
+    });
+
     const codebaseIntelligence = await this.getCodebaseIntelligenceSnapshot(prd);
     const enrichedPrdSummary = this.buildEnrichedPrdSummary(enrichedPrdDocument);
     const context = buildEngineeringAgentContext(
       prd,
-      retrieved,
-      `${enrichedPrdSummary}\n\n${codebaseIntelligence.snapshotText}`
+      unified.retrievedContext.length > 0
+        ? unified.retrievedContext
+        : await retriever.retrieveForEngineeringAgent(prd, jiraKey),
+      `${enrichedPrdSummary}\n\nUnified retrieval (tickets + codebase):\n${unified.fusedBlock}\n\n${codebaseIntelligence.snapshotText}`
     );
     const input = {
       context,

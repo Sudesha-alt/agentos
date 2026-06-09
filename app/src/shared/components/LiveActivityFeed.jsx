@@ -2,9 +2,9 @@ import { Link } from "react-router-dom";
 import { formatRelativeTime } from "../lib/format";
 
 const EVENT_TONES = {
-  progress: "border-l-indigo bg-indigo/5",
-  paused: "border-l-warning bg-warning/5",
-  complete: "border-l-success bg-success/5",
+  progress: "border-l-app-accent bg-app-lavender/30",
+  paused: "border-l-warning bg-app-butter/50",
+  complete: "border-l-success bg-app-mint/40",
   failed: "border-l-danger bg-danger/5",
 };
 
@@ -15,7 +15,7 @@ export default function LiveActivityFeed({ events, loading }) {
         {Array.from({ length: 5 }).map((_, i) => (
           <div
             key={i}
-            className="h-14 animate-pulse rounded-xl border border-hairline bg-surface/20"
+            className="h-14 animate-pulse rounded-app-sm border border-app-border bg-app-surface-muted"
           />
         ))}
       </div>
@@ -24,7 +24,7 @@ export default function LiveActivityFeed({ events, loading }) {
 
   if (!events?.length) {
     return (
-      <p className="py-8 text-center text-sm text-ink-dim">
+      <p className="py-8 text-center text-sm text-app-ink-dim">
         No activity yet — pipelines will appear here as they run.
       </p>
     );
@@ -36,12 +36,12 @@ export default function LiveActivityFeed({ events, loading }) {
         <li key={event.id}>
           <Link
             to={event.pipelineId ? `/app/pipelines?selected=${event.pipelineId}` : "/app/pipelines"}
-            className={`block rounded-xl border border-hairline border-l-[3px] px-4 py-3 transition-colors hover:bg-surface/50 ${
+            className={`block rounded-app-sm border border-app-border border-l-[3px] px-4 py-3 transition-colors hover:bg-app-surface-muted ${
               EVENT_TONES[event.tone] ?? EVENT_TONES.progress
             }`}
           >
-            <p className="text-[13px] text-ink">{event.message}</p>
-            <p className="mt-1 font-mono text-[10.5px] text-ink-mute">
+            <p className="text-[13px] text-app-ink">{event.message}</p>
+            <p className="mt-1 text-xs text-app-ink-mute">
               {formatRelativeTime(event.timestamp)}
             </p>
           </Link>

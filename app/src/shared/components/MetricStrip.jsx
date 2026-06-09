@@ -1,14 +1,14 @@
 /**
- * Cockpit metrics bar — five numbers, large type, real-time feel.
+ * Cockpit metrics bar — five numbers, compact type.
  */
 export default function MetricStrip({ metrics, loading }) {
   if (loading && !metrics) {
     return (
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {Array.from({ length: 5 }).map((_, i) => (
           <div
             key={i}
-            className="h-24 animate-pulse rounded-[1.25rem] border border-hairline bg-surface/30"
+            className="h-20 animate-pulse rounded-app border border-app-border bg-app-surface-muted"
           />
         ))}
       </div>
@@ -18,21 +18,17 @@ export default function MetricStrip({ metrics, loading }) {
   const items = metrics ?? [];
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
       {items.map((metric) => (
         <div
           key={metric.id}
-          className="rounded-[1.25rem] border border-hairline bg-surface/35 px-5 py-4"
+          className="rounded-app border border-app-border bg-app-surface px-4 py-4 shadow-app-card"
         >
-          <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-ink-mute">
-            {metric.label}
-          </p>
-          <p className="mt-2 font-display text-[2.35rem] leading-none tracking-tight text-ink">
-            {metric.value}
-          </p>
+          <p className="type-kicker">{metric.label}</p>
+          <p className="mt-1.5 type-metric">{metric.value}</p>
           {metric.delta ? (
             <p
-              className={`mt-2 font-mono text-[10.5px] ${
+              className={`mt-1 text-xs font-medium ${
                 metric.deltaPositive ? "text-success" : "text-warning"
               }`}
             >

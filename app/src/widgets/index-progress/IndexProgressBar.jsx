@@ -16,7 +16,7 @@ export default function IndexProgressBar({
   if (!enabled) return null;
   if (loading && !progress) {
     return (
-      <div className={`rounded-lg border border-hairline bg-surface-elevated p-4 ${className}`}>
+      <div className={`rounded-app-sm border border-app-border bg-app-surface p-4 ${className}`}>
         <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-mute">
           Checking index status…
         </p>
@@ -54,23 +54,23 @@ export default function IndexProgressBar({
   const total = progress?.filesTotal;
 
   return (
-    <div className={`rounded-lg border border-hairline bg-surface-elevated p-4 ${className}`}>
+    <div className={`rounded-app-sm border border-app-border bg-app-surface p-4 ${className}`}>
       <div className="flex items-center justify-between gap-3">
-        <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-mute">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-app-ink-mute">
           {title}
         </p>
-        <span className="font-mono text-[10px] text-ink-dim">
+        <span className="text-[10px] text-app-ink-dim">
           {total != null ? `${processed} / ${total}` : `${processed} files`}
           {percent != null ? ` · ${percent}%` : ""}
         </span>
       </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface">
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-app-surface-muted">
         <div
           className="h-full rounded-full bg-indigo transition-[width] duration-500 ease-out"
           style={{ width: `${Math.max(percent ?? 5, 5)}%` }}
         />
       </div>
-      <p className="mt-2 text-xs text-muted">
+      <p className="mt-2 text-xs text-app-ink-dim">
         {progress?.status === "queued"
           ? "Starting index…"
           : "Embedding and analyzing files. Visualization updates when complete."}

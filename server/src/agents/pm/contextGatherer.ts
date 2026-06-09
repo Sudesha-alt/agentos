@@ -3,6 +3,7 @@ import { searchCodebase } from "../../codebaseIntelligence/searchService";
 import { resolveRepoScope } from "../../codebaseIntelligence/repoScope";
 import { getJiraIssueByKey } from "../../jira-sync/issueRepository";
 import { getPipelineJiraClient } from "../../pipeline/jira/client";
+import { retriever } from "../../rag/retriever";
 import { jiraTool } from "../../tools/jiraTool";
 import { logger } from "../../utils/logger";
 import type { PmTicketInput } from "./types";
@@ -257,6 +258,89 @@ async function buildCandidateFilesList(
   }
 }
 
+async function buildSimilarTicketsList(ticket: PmTicketInput): Promise<string> {
+  try {
+    const ragHits = await retriever.retrieveForPmAgent(
+      {
+        summary: ticket.summary,
+        description: ticket.description,
+        components: ticket.components,
+      },
+      ticket.jiraKey
+    );
+
+    if (ragHits.length > 0) {
+      return ragHits
+        .map((hit) => {
+          const snippet = hit.content.replace(/\s+/g, " ").slice(0, 120);
+          const source = hit.metadata.source === "keyword_fallback" ? "keyword" : "semantic";
+          return `${hit.jiraKey} [${hit.contentType}, ${source}, sim=${hit.similarity.toFixed(2)}]: ${snippet}`;
+        })
+        .join("\n");
+    }
+
+    const { listJiraIssues } = await import("../../jira-sync/issueRepository");
+    const componentFilter = ticket.components[0];
+    const local = await listJiraIssues({
+      q: componentFilter || ticket.summary.split(" ")[0],
+      limit: 8,
+    });
+    const localMatches = local.items
+      .filter((i) => i.jiraKey !== ticket.jiraKey)
+      .slice(0, 5);
+    if (localMatches.length > 0) {
+      return localMatches
+        .map((t) => `${t.jiraKey}: ${t.summary} (${t.status}, synced)`)
+        .join("; ");
+    }
+
+    const related = await jiraTool.fetchRelated({
+      jiraKey: ticket.jiraKey,
+      relationshipTypes: ["linked", "same_components", "epic_children"],
+    });
+    if (related.tickets.length > 0) {
+      return related.tickets
+        .slice(0, 8)
+        .map((t) => `${t.key}: ${t.summary} (${t.status}, ${t.relationship})`)
+        .join("; ");
+    }
+
+    return "none found";
+  } catch {
+    return "unavailable (retrieval failed)";
+  }
+}
+
+async function mergeImplementationContext(
+  ticket: PmTicketInput,
+  codebaseList: string
+): Promise<string> {
+  try {
+    const implHits = await retriever.retrieve(
+      [ticket.summary, ...ticket.components].join(" "),
+      {
+        contentTypes: ["implementation"],
+        topK: 4,
+        similarityThreshold: 0.65,
+        currentJiraKey: ticket.jiraKey,
+        queryComponents: ticket.components,
+      }
+    );
+
+    if (implHits.length === 0) return codebaseList;
+
+    const implBlock = implHits
+      .map(
+        (hit) =>
+          `- ${hit.jiraKey} (sim=${hit.similarity.toFixed(2)}): ${hit.content.slice(0, 300)}`
+      )
+      .join("\n");
+
+    return `${codebaseList}\n\nPast implementation plans (semantic retrieval):\n${implBlock}`;
+  } catch {
+    return codebaseList;
+  }
+}
 async function fetchInflightCount(): Promise<string> {
   try {
     const count = await prisma.pipeline.count({
@@ -309,44 +393,20 @@ export async function gatherPmContext(
   const branchName = scope?.defaultBranch ?? "main";
 
   let similarTicketsList = "none found";
-  try {
-    const { listJiraIssues } = await import("../../jira-sync/issueRepository");
-    const componentFilter = ticket.components[0];
-    const local = await listJiraIssues({
-      q: componentFilter || ticket.summary.split(" ")[0],
-      limit: 8,
-    });
-    const localMatches = local.items
-      .filter((i) => i.jiraKey !== ticket.jiraKey)
-      .slice(0, 5);
-    if (localMatches.length > 0) {
-      similarTicketsList = localMatches
-        .map((t) => `${t.jiraKey}: ${t.summary} (${t.status}, synced)`)
-        .join("; ");
-    } else {
-      const related = await jiraTool.fetchRelated({
-        jiraKey: ticket.jiraKey,
-        relationshipTypes: ["linked", "same_components", "epic_children"],
-      });
-      if (related.tickets.length > 0) {
-        similarTicketsList = related.tickets
-          .slice(0, 8)
-          .map((t) => `${t.key}: ${t.summary} (${t.status}, ${t.relationship})`)
-          .join("; ");
-      }
-    }
-  } catch {
-    similarTicketsList = "unavailable (Jira not connected)";
-  }
+  similarTicketsList = await buildSimilarTicketsList(ticket);
 
   const searchQuery = [ticket.summary, ticket.description, ...ticket.components]
     .filter(Boolean)
     .join(" ")
     .slice(0, 500);
 
-  const { list: candidateFilesList, paths } = await buildCandidateFilesList(
+  const { list: candidateFilesListRaw, paths } = await buildCandidateFilesList(
     searchQuery,
     branchName
+  );
+  const candidateFilesList = await mergeImplementationContext(
+    ticket,
+    candidateFilesListRaw
   );
   const relevantCommitHistory = await fetchCommitHistory(paths, branchName);
 

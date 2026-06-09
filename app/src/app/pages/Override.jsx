@@ -6,6 +6,7 @@ import { usePipelineDetail } from "../../entities/pipeline";
 import { useSubmitOverride } from "../../features/submit-override/model/useSubmitOverride";
 import { formatStageLabel } from "../../shared/lib/format";
 import { PageIntro } from "../../shared/ui/Panel";
+import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
 import OverrideEditorWidget from "../../widgets/override-editor/OverrideEditorWidget";
 
 export default function Override() {
@@ -85,11 +86,11 @@ export default function Override() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[82rem] space-y-6">
-      <header className="flex flex-col gap-3">
+    <AnimatedAppPage wide>
+      <header className="flex flex-col gap-2">
         <Link
           to={`/app/pipelines/${id}`}
-          className="editorial-kicker text-ink-mute transition-colors hover:text-ink"
+          className="type-kicker transition-colors hover:text-app-ink"
         >
           ← pipeline
         </Link>
@@ -121,6 +122,6 @@ export default function Override() {
         submitted={submitted}
         onSubmit={onSubmit}
       />
-    </div>
+    </AnimatedAppPage>
   );
 }

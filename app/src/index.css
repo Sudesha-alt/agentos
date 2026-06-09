@@ -1,5 +1,7 @@
 @import url("https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&display=swap");
 
+@import "./app/theme/appTheme.css";
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -197,6 +199,52 @@ html.lenis body {
       black 55%,
       transparent 85%
     );
+  }
+
+  /* Premium app shell (light SaaS) */
+  .app-shell-gradient {
+    background-color: #f9f9f7;
+    background-image:
+      radial-gradient(ellipse 80% 60% at 10% 0%, rgba(232, 224, 248, 0.55), transparent 55%),
+      radial-gradient(ellipse 70% 50% at 90% 10%, rgba(252, 232, 220, 0.45), transparent 50%),
+      radial-gradient(ellipse 60% 40% at 50% 100%, rgba(228, 245, 234, 0.35), transparent 55%);
+  }
+  .app-glass {
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+  .app-card {
+    @apply rounded-app border border-app-border bg-app-surface shadow-app-card;
+  }
+  .app-pill {
+    @apply inline-flex items-center gap-2 rounded-full border border-app-border bg-app-surface px-4 py-2 text-sm font-medium text-app-ink transition-all duration-200 hover:border-app-ink/15 hover:shadow-app-card;
+  }
+  .app-btn-primary {
+    @apply inline-flex items-center justify-center rounded-full bg-app-charcoal px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-app-ink/90;
+  }
+
+  /* App typography scale (Inter-only, dense) */
+  .type-page-title {
+    @apply max-w-3xl text-[1.375rem] font-semibold tracking-[-0.02em] text-app-ink sm:text-2xl;
+  }
+  .type-page-lede {
+    @apply max-w-2xl text-sm leading-relaxed text-app-ink-dim;
+  }
+  .type-section-title {
+    @apply text-base font-semibold tracking-tight text-app-ink sm:text-lg;
+  }
+  .type-kicker {
+    @apply text-[10px] font-medium uppercase tracking-[0.08em] text-app-ink-mute;
+  }
+  .type-body {
+    @apply text-[13px] leading-relaxed text-app-ink-dim sm:text-sm;
+  }
+  .type-metric {
+    @apply text-xl font-semibold tabular-nums tracking-tight text-app-ink sm:text-2xl;
+  }
+  .type-nav {
+    @apply text-[13px] font-medium;
   }
 }
 

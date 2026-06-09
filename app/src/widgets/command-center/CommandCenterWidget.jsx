@@ -39,7 +39,7 @@ export default function CommandCenterWidget() {
             <CycleTrendChart points={trendData?.points ?? []} />
             <Link
               to="/app/costs"
-              className="mt-6 inline-flex text-[13px] text-ink-dim hover:text-ink"
+              className="mt-6 inline-flex text-sm font-medium text-app-ink-dim hover:text-app-ink"
             >
               View cost intelligence →
             </Link>
@@ -52,7 +52,7 @@ export default function CommandCenterWidget() {
 
 function CycleTrendChart({ points }) {
   if (!points.length) {
-    return <p className="text-sm text-ink-dim">No trend data yet.</p>;
+    return <p className="text-sm text-app-ink-dim">No trend data yet.</p>;
   }
 
   const max = Math.max(...points.map((p) => p.hours));
@@ -69,7 +69,7 @@ function CycleTrendChart({ points }) {
 
   return (
     <div>
-      <svg viewBox={`0 0 ${width} ${height}`} className="h-32 w-full text-indigo">
+      <svg viewBox={`0 0 ${width} ${height}`} className="h-32 w-full text-app-accent">
         <polyline
           fill="none"
           stroke="currentColor"
@@ -77,7 +77,7 @@ function CycleTrendChart({ points }) {
           points={coords.join(" ")}
         />
       </svg>
-      <div className="mt-2 flex justify-between font-mono text-[10px] text-ink-mute">
+      <div className="mt-2 flex justify-between text-xs text-app-ink-mute">
         <span>30 days ago · {max.toFixed(0)}h</span>
         <span>Today · {points[points.length - 1]?.hours?.toFixed(0)}h</span>
       </div>

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import { useSearchParams } from "react-router-dom";
 import IndexProgressBar from "../../widgets/index-progress/IndexProgressBar";
 import CodebaseInsightsPanel from "../../widgets/codebase-insights/CodebaseInsightsPanel";
@@ -12,6 +13,9 @@ import CodebaseIntelligenceStatusWidget from "../../widgets/codebase-intelligenc
 import { useGitIntegrationSetup } from "../../entities/git-integration";
 import Spinner from "../components/Spinner";
 import { PageIntro } from "../../shared/ui/Panel";
+import { AppTabButton } from "../../shared/ui/AppChrome";
+import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
+import { tabPanelFade, motionSafe } from "../../lib/motion";
 
 const CodebaseVisualization = lazy(
   () => import("../../features/codebase-viz/CodebaseVisualization")
@@ -28,20 +32,40 @@ const TABS = [
   { id: "knowledge", label: "Knowledge" },
 ];
 
-function TabButton({ active, onClick, children }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-full px-4 py-2 font-mono text-[10.5px] uppercase tracking-[0.16em] ${
-        active
-          ? "bg-indigo text-white"
-          : "border border-hairline text-ink-dim hover:text-ink"
-      }`}
-    >
-      {children}
-    </button>
-  );
+function renderTabContent(tab, branch) {
+  switch (tab) {
+    case "explorer":
+      return <CodebaseExplorer branch={branch} />;
+    case "insights":
+      return <CodebaseInsightsPanel branch={branch} />;
+    case "map":
+      return (
+        <div className="space-y-2">
+          <p className="type-kicker">Heavy visualization — loads on demand</p>
+          <Suspense
+            fallback={
+              <div className="flex h-48 items-center justify-center rounded-app border border-app-border">
+                <Spinner label="Loading map…" />
+              </div>
+            }
+          >
+            <CodebaseVisualization branch={branch} refreshOnOpen />
+          </Suspense>
+        </div>
+      );
+    case "search":
+      return <CodebaseSearchPanel branch={branch} />;
+    case "tour":
+      return <CodebaseTourExperience branch={branch} />;
+    case "impact":
+      return <CodebaseImpactPanel branch={branch} />;
+    case "health":
+      return <CodebaseHealthPanel branch={branch} />;
+    case "knowledge":
+      return <CodebaseKnowledgePanel branch={branch} />;
+    default:
+      return <CodebaseExplorer branch={branch} />;
+  }
 }
 
 export default function CodebaseIntelligence() {
@@ -60,7 +84,7 @@ export default function CodebaseIntelligence() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[96rem] space-y-6">
+    <AnimatedAppPage wide>
       <PageIntro
         kicker="Codebase Intelligence"
         title="Insights from your repository"
@@ -81,39 +105,27 @@ export default function CodebaseIntelligence() {
 
       {connected ? (
         <>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {TABS.map((t) => (
-              <TabButton key={t.id} active={tab === t.id} onClick={() => setTab(t.id)}>
+              <AppTabButton key={t.id} active={tab === t.id} onClick={() => setTab(t.id)}>
                 {t.label}
-              </TabButton>
+              </AppTabButton>
             ))}
           </div>
 
-          {tab === "explorer" ? <CodebaseExplorer branch={branch} /> : null}
-          {tab === "insights" ? <CodebaseInsightsPanel branch={branch} /> : null}
-          {tab === "map" ? (
-            <div className="space-y-3">
-              <p className="font-mono text-[11px] uppercase tracking-[0.12em] text-ink-mute">
-                Heavy visualization — loads layout data on demand
-              </p>
-              <Suspense
-                fallback={
-                  <div className="flex h-48 items-center justify-center rounded-[1.25rem] border border-hairline">
-                    <Spinner label="Loading map…" />
-                  </div>
-                }
-              >
-                <CodebaseVisualization branch={branch} refreshOnOpen />
-              </Suspense>
-            </div>
-          ) : null}
-          {tab === "search" ? <CodebaseSearchPanel branch={branch} /> : null}
-          {tab === "tour" ? <CodebaseTourExperience branch={branch} /> : null}
-          {tab === "impact" ? <CodebaseImpactPanel branch={branch} /> : null}
-          {tab === "health" ? <CodebaseHealthPanel branch={branch} /> : null}
-          {tab === "knowledge" ? <CodebaseKnowledgePanel branch={branch} /> : null}
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={tab}
+              variants={motionSafe(tabPanelFade)}
+              initial="hidden"
+              animate="show"
+              exit="exit"
+            >
+              {renderTabContent(tab, branch)}
+            </motion.div>
+          </AnimatePresence>
         </>
       ) : null}
-    </div>
+    </AnimatedAppPage>
   );
 }

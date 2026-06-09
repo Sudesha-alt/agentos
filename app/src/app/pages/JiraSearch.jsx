@@ -4,6 +4,7 @@ import { searchBoard } from "../../entities/jira-intake";
 import EmptyState from "../components/EmptyState";
 import Spinner from "../components/Spinner";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
+import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
 
 export default function JiraSearch() {
   const [keyword, setKeyword] = useState("");
@@ -31,7 +32,7 @@ export default function JiraSearch() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[82rem] space-y-6">
+    <AnimatedAppPage wide>
       <PageIntro
         kicker="Jira intake"
         title="Board keyword search"
@@ -39,7 +40,7 @@ export default function JiraSearch() {
         right={
           <Link
             to="/app/jira"
-            className="rounded-full border border-hairline bg-surface/60 px-4 py-2 font-mono text-[10.5px] uppercase tracking-[0.16em] text-ink-dim transition-colors hover:text-ink"
+            className="rounded-full border border-app-border bg-app-surface px-3.5 py-1.5 text-[12px] text-app-ink-dim transition-colors hover:text-app-ink"
           >
             AI Worker queue
           </Link>
@@ -48,23 +49,23 @@ export default function JiraSearch() {
 
       <Panel>
         <PanelHeader kicker="Query" title="Search all sections" />
-        <form onSubmit={handleSearch} className="flex flex-col gap-4 p-5 sm:flex-row sm:flex-wrap sm:items-end sm:p-6">
-          <label className="flex min-w-[200px] flex-1 flex-col gap-2">
-            <span className="editorial-kicker text-ink-mute">Keyword</span>
+        <form onSubmit={handleSearch} className="flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-end sm:px-6">
+          <label className="flex min-w-[200px] flex-1 flex-col gap-1.5">
+            <span className="type-kicker">Keyword</span>
             <input
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
               placeholder="e.g. login, automate"
-              className="rounded-[0.85rem] border border-hairline bg-canvas/50 px-4 py-2.5 text-[14px] text-ink outline-none focus:border-indigo/50"
+              className="rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm text-app-ink outline-none focus:border-indigo/40 focus:ring-2 focus:ring-indigo/10"
               autoComplete="off"
             />
           </label>
-          <label className="flex flex-col gap-2">
-            <span className="editorial-kicker text-ink-mute">Search in</span>
+          <label className="flex flex-col gap-1.5">
+            <span className="type-kicker">Search in</span>
             <select
               value={searchIn}
               onChange={(e) => setSearchIn(e.target.value)}
-              className="rounded-[0.85rem] border border-hairline bg-canvas/50 px-4 py-2.5 text-[14px] text-ink outline-none focus:border-indigo/50"
+              className="rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm text-app-ink outline-none focus:border-indigo/40"
             >
               <option value="both">Summary & description</option>
               <option value="summary">Summary only</option>
@@ -74,7 +75,7 @@ export default function JiraSearch() {
           <button
             type="submit"
             disabled={loading || !keyword.trim()}
-            className="rounded-full bg-indigo px-5 py-2.5 font-mono text-[10.5px] uppercase tracking-[0.16em] text-white transition-opacity disabled:opacity-50"
+            className="app-btn-primary disabled:opacity-50"
           >
             {loading ? "Searching…" : "Search board"}
           </button>
@@ -82,7 +83,7 @@ export default function JiraSearch() {
       </Panel>
 
       {loading ? (
-        <div className="flex justify-center py-12">
+        <div className="flex justify-center py-10">
           <Spinner />
         </div>
       ) : null}
@@ -95,8 +96,8 @@ export default function JiraSearch() {
       ) : null}
 
       {result && !loading ? (
-        <div className="space-y-6">
-          <p className="font-mono text-[11px] uppercase tracking-[0.14em] text-ink-dim">
+        <div className="space-y-5">
+          <p className="type-kicker">
             Found {result.total} match(es) for &ldquo;{result.keyword}&rdquo; · {result.searchIn}
           </p>
           {!result.sections?.length ? (
@@ -108,22 +109,22 @@ export default function JiraSearch() {
                   kicker="Section"
                   title={section.columnLabel || section.status}
                   right={
-                    <span className="font-mono text-[11px] text-ink-mute">
+                    <span className="text-[11px] text-app-ink-mute">
                       {section.issues.length} ticket(s)
                     </span>
                   }
                 />
-                <ul className="divide-y divide-hairline">
+                <ul className="divide-y divide-app-border">
                   {section.issues.map((issue) => (
-                    <li key={issue.key} className="px-5 py-4 sm:px-6">
-                      <p className="font-mono text-[12px] text-indigo">{issue.key}</p>
-                      <h3 className="mt-1 text-[15px] text-ink">{issue.summary}</h3>
+                    <li key={issue.key} className="px-5 py-3.5 sm:px-6">
+                      <p className="text-[12px] font-medium text-indigo">{issue.key}</p>
+                      <h3 className="mt-0.5 text-sm font-medium text-app-ink">{issue.summary}</h3>
                       {issue.description ? (
-                        <p className="mt-2 line-clamp-3 text-[13px] leading-relaxed text-ink-dim">
+                        <p className="mt-1.5 line-clamp-3 type-body text-app-ink-dim">
                           {issue.description}
                         </p>
                       ) : null}
-                      <p className="mt-2 font-mono text-[10.5px] uppercase tracking-[0.14em] text-ink-mute">
+                      <p className="mt-1.5 type-kicker">
                         {issue.status}
                         {issue.priority ? ` · ${issue.priority}` : ""}
                       </p>
@@ -135,6 +136,6 @@ export default function JiraSearch() {
           )}
         </div>
       ) : null}
-    </div>
+    </AnimatedAppPage>
   );
 }

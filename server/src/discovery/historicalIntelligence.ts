@@ -53,12 +53,13 @@ function emptyIntelligence(): HistoricalIntelligence {
 export async function extractHistoricalIntelligence(
   ticketAnalysis: TicketAnalysis,
   retrievedContext: RetrievedContext[],
-  pipelineId: string
+  pipelineId: string,
+  unifiedFusedBlock?: string
 ): Promise<{
   intelligence: HistoricalIntelligence;
   usage: import("../llm/discoveryCompletion").LlmUsage;
 }> {
-  if (retrievedContext.length === 0) {
+  if (retrievedContext.length === 0 && !unifiedFusedBlock?.trim()) {
     logger.info({ pipelineId }, "no historical context — empty intelligence");
     return { intelligence: emptyIntelligence(), usage: { inputTokens: 0, outputTokens: 0, costUsd: 0 } };
   }
@@ -76,6 +77,10 @@ ${ctx.content}
     )
     .join("\n\n---\n\n");
 
+  const unifiedSection = unifiedFusedBlock?.trim()
+    ? `\n\nUnified retrieval (tickets + codebase, reranked):\n${unifiedFusedBlock}`
+    : "";
+
   const systemPrompt = `
 You are a senior engineering lead with deep knowledge of your team's history.
 Extract actionable intelligence from historical records for a new ticket.
@@ -92,7 +97,7 @@ Systems Affected: ${ticketAnalysis.systemsAffected.join(", ")}
 Requirements Count: ${ticketAnalysis.atomicRequirements.length}
 
 Historical context:
-${contextBlock}
+${contextBlock}${unifiedSection}
 
 Return JSON:
 {
