@@ -233,6 +233,70 @@ export function PmPrioritizationSection({ prio }) {
   );
 }
 
+export function PmPrdSection({ prd }) {
+  if (!prd) return null;
+  return (
+    <JsonCard kicker="Stage 8" title="Generated PRD">
+      <div className="space-y-4 text-[14px] leading-relaxed text-ink-dim">
+        <div>
+          <p className="font-display text-[1.25rem] text-ink">{prd.title}</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <span className="rounded-full border border-hairline px-3 py-1 font-mono text-[11px]">
+              {prd.jiraKey}
+            </span>
+            <span className="rounded-full border border-hairline px-3 py-1 font-mono text-[11px]">
+              {prd.effortEstimate}
+            </span>
+            <span className="rounded-full border border-hairline px-3 py-1 font-mono text-[11px]">
+              Confidence {Math.round((prd.prdConfidence ?? 0) * 100)}%
+            </span>
+          </div>
+        </div>
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-mute">Problem</p>
+          <p className="mt-1 text-ink">{prd.problemStatement}</p>
+        </div>
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-mute">Proposed solution</p>
+          <p className="mt-1">{prd.proposedSolution}</p>
+        </div>
+        {prd.userStories?.length > 0 && (
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-mute">
+              User stories ({prd.userStories.length})
+            </p>
+            <ul className="mt-2 space-y-2">
+              {prd.userStories.map((story) => (
+                <li key={story.id} className="rounded-lg border border-hairline px-3 py-2">
+                  <p className="font-mono text-[11px] text-indigo">{story.id} · {story.priority}</p>
+                  <p className="mt-1 text-[13px] text-ink">{story.story}</p>
+                  {story.acceptanceCriteria?.length > 0 && (
+                    <ul className="mt-2 list-disc pl-5 text-[12px]">
+                      {story.acceptanceCriteria.map((c) => (
+                        <li key={c}>{c}</li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {prd.openQuestions?.length > 0 && (
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-mute">Open questions</p>
+            <ul className="mt-1 list-disc pl-5">
+              {prd.openQuestions.map((q) => (
+                <li key={q.question}>{q.question}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+    </JsonCard>
+  );
+}
+
 export function PmAcceptanceSection({ ac }) {
   if (!ac) return null;
   return (
@@ -261,7 +325,7 @@ export function PmArtifactsSection({ artifacts }) {
   ];
   return (
     <Panel>
-      <PanelHeader kicker="Stage 8" title="Communication artifacts" />
+      <PanelHeader kicker="Stage 9" title="Communication artifacts" />
       <div className="grid gap-4 px-5 py-4 sm:grid-cols-2 sm:px-6">
         {items.map(({ key, label, kicker }) => (
           <div key={key} className="rounded-xl border border-hairline bg-canvas/30 p-4">
@@ -281,7 +345,7 @@ export function PmRetrospectiveSection({ retrospective, onRun, running }) {
   return (
     <Panel>
       <PanelHeader
-        kicker="Stage 9"
+        kicker="Stage 10"
         title="Retrospective & learning"
         right={
           onRun ? (
@@ -344,7 +408,12 @@ export function PmTechHandoffSection({ jiraKey, analysisComplete }) {
       const result = await getPmHandoff(jiraKey);
       setHandoffData(result);
     } catch (err) {
-      setHandoffError(err.message ?? "Handoff failed");
+      const msg = err.message ?? "Handoff failed";
+      setHandoffError(
+        msg.includes("not found")
+          ? `${msg} — re-run Analyze ticket if the server restarted since this analysis completed.`
+          : msg
+      );
       setHandoffData(null);
     } finally {
       setLoading(false);
@@ -359,7 +428,12 @@ export function PmTechHandoffSection({ jiraKey, analysisComplete }) {
       const result = await startPmCodingPipeline(jiraKey);
       setPipelineMsg(result.message ?? "Coding pipeline started.");
     } catch (err) {
-      setHandoffError(err.message ?? "Failed to start coding pipeline");
+      const msg = err.message ?? "Failed to start coding pipeline";
+      setHandoffError(
+        msg.includes("not found")
+          ? `${msg} — re-run Analyze ticket if the server restarted since this analysis completed.`
+          : msg
+      );
     } finally {
       setStartingPipeline(false);
     }
@@ -406,7 +480,7 @@ export function PmTechHandoffSection({ jiraKey, analysisComplete }) {
       />
       <div className="px-5 py-4 sm:px-6">
         <p className="text-[14px] text-ink-dim">
-          Start coding enqueues the classic engineering pipeline (discovery → implementation → QA).
+          Start coding enqueues the engineering pipeline with the PM PRD (skips discovery when PRD exists).
           Preview handoff copies the engineer-ready prompt and file snapshots.
         </p>
         {pipelineMsg && (
@@ -509,6 +583,7 @@ export function PmAnalysisOutputs({
     <PmImplementationSection key="impl" impl={analysis.implementation} />,
     <PmPrioritizationSection key="prio" prio={analysis.prioritization} />,
     <PmAcceptanceSection key="ac" ac={analysis.acceptanceCriteria} />,
+    <PmPrdSection key="prd" prd={analysis.generatedPrd} />,
     <PmArtifactsSection key="artifacts" artifacts={analysis.artifacts} />,
     <PmTechHandoffSection
       key="handoff"

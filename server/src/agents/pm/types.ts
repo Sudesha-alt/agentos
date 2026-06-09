@@ -8,6 +8,7 @@ export type PmStageId =
   | "IMPLEMENTATION"
   | "PRIORITIZATION"
   | "ACCEPTANCE_CRITERIA"
+  | "PRD"
   | "ARTIFACTS"
   | "RETROSPECTIVE";
 
@@ -19,6 +20,7 @@ export const PM_STAGE_ORDER: PmStageId[] = [
   "IMPLEMENTATION",
   "PRIORITIZATION",
   "ACCEPTANCE_CRITERIA",
+  "PRD",
   "ARTIFACTS",
 ];
 
@@ -194,6 +196,7 @@ export interface PmAnalysisRecord {
   implementation?: ImplementationOutput;
   prioritization?: PrioritizationOutput;
   acceptanceCriteria?: AcceptanceCriteriaOutput;
+  generatedPrd?: import("../../prd/prdGenerator").GeneratedPRD;
   artifacts?: ArtifactsOutput;
   retrospective?: RetrospectiveOutput;
   stageMeta: PmStageMeta[];

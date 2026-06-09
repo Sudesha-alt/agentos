@@ -1,3 +1,5 @@
+import type { PmPipelineContext } from "../agents/pm/pmPipelineContext";
+
 export interface NormalizedTicket {
   jiraTicketId: string;
   jiraKey: string;
@@ -13,6 +15,10 @@ export interface NormalizedTicket {
   components: string[];
   createdAt: Date;
   projectKey: string;
+  /** Populated when pipeline is started from completed PM analysis with PRD. */
+  pmContext?: PmPipelineContext;
+  intakeSourceKey?: string;
+  parentStoryKey?: string;
 }
 
 export interface IntentClassification {

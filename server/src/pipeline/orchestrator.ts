@@ -1,6 +1,7 @@
 import type { Prisma, PipelineStage } from "../db/prisma";
 import { EngineeringAgent } from "../agents/engineeringAgent";
 import { runCanaryCycle } from "../canaryAgent";
+import { runEngineeringCodingAgentic } from "../engineeringCodingAgent";
 import { runQaAgentic } from "../qaAgent";
 import { attachQaReportToJira } from "../qa/report/reportAttacher";
 import { codebaseQueryService } from "../codebaseIntelligence/queryService";
@@ -71,10 +72,17 @@ export class PipelineOrchestrator {
         productStage.agentOutput.parsed
       );
 
-      const implementationOutput = await this.runEngineeringAgent(
+      let implementationOutput = await this.runEngineeringAgent(
         pipeline.id,
         normalizedTicket.jiraKey,
         productStage.agentOutput.parsed,
+        productStage.enrichedPrdDocument
+      );
+      implementationOutput = await this.runEngineeringCodingAgent(
+        pipeline.id,
+        normalizedTicket,
+        productStage.agentOutput.parsed,
+        implementationOutput,
         productStage.enrichedPrdDocument
       );
       const implementationValidation = await this.validateImplementationStage(
@@ -206,6 +214,45 @@ export class PipelineOrchestrator {
     agentOutput: AgentOutput<PrdOutput>;
     enrichedPrdDocument: Record<string, unknown>;
   }> {
+    if (ticket.pmContext) {
+      const ctx = ticket.pmContext;
+      const stageLog = await pipelineRepo.startStage({
+        pipelineId,
+        stage: "PRODUCT_AGENT",
+        inputJson: {
+          mode: "pm_prd",
+          jiraKey: ticket.jiraKey,
+          source: ctx.source,
+        } as unknown as Prisma.InputJsonValue,
+      });
+
+      const output: AgentOutput<PrdOutput> = {
+        raw: JSON.stringify(ctx.generatedPrd),
+        parsed: ctx.prdOutput,
+        metadata: {
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+          durationMs: 0,
+        },
+      };
+
+      await pipelineRepo.completeStage({
+        stageLogId: stageLog.id,
+        output: {
+          prd: ctx.prdOutput,
+          generatedPrd: ctx.generatedPrd,
+          source: "pm_agents",
+          skippedDiscovery: true,
+        } as unknown as Prisma.InputJsonValue,
+        confidenceScore: ctx.prdOutput.confidenceScore,
+        tokenCount: 0,
+        costUsd: 0,
+      });
+      await stateManager.advance(pipelineId, "PRD_VALIDATION");
+      return { agentOutput: output, enrichedPrdDocument: ctx.enrichedPrdDocument };
+    }
+
     const stageLog = await pipelineRepo.startStage({
       pipelineId,
       stage: "PRODUCT_AGENT",
@@ -339,6 +386,60 @@ export class PipelineOrchestrator {
       costUsd: output.metadata.costUsd,
     });
     await stateManager.advance(pipelineId, "IMPLEMENTATION_VALIDATION");
+    return output;
+  }
+
+  private async runEngineeringCodingAgent(
+    pipelineId: string,
+    ticket: NormalizedTicket,
+    prd: PrdOutput,
+    implementationOutput: AgentOutput<ImplementationOutput>,
+    enrichedPrdDocument: Record<string, unknown>
+  ): Promise<AgentOutput<ImplementationOutput>> {
+    await auditRepo.log(pipelineId, "ENGINEERING_CODING_STARTED", {
+      jiraKey: ticket.jiraKey,
+      hasPmContext: Boolean(ticket.pmContext),
+    });
+
+    const codingResult = await runEngineeringCodingAgentic({
+      pipelineId,
+      jiraKey: ticket.jiraKey,
+      prd,
+      implementation: implementationOutput.parsed,
+      enrichedPrdDocument,
+      pmContext: ticket.pmContext,
+    });
+
+    const merged: ImplementationOutput = {
+      ...implementationOutput.parsed,
+      codeChanges: codingResult.codeChanges,
+      codingSummary: codingResult.codingSummary,
+    };
+
+    const output: AgentOutput<ImplementationOutput> = {
+      raw: codingResult.raw,
+      parsed: merged,
+      metadata: {
+        inputTokens:
+          implementationOutput.metadata.inputTokens +
+          codingResult.metadata.inputTokens,
+        outputTokens:
+          implementationOutput.metadata.outputTokens +
+          codingResult.metadata.outputTokens,
+        costUsd:
+          implementationOutput.metadata.costUsd + codingResult.metadata.costUsd,
+        durationMs:
+          implementationOutput.metadata.durationMs +
+          codingResult.metadata.durationMs,
+      },
+    };
+
+    await auditRepo.log(pipelineId, "ENGINEERING_CODING_COMPLETED", {
+      jiraKey: ticket.jiraKey,
+      filesChanged: codingResult.codeChanges.length,
+      toolCalls: codingResult.toolCallLog.length,
+    });
+
     return output;
   }
 

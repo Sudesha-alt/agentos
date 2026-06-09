@@ -43,6 +43,13 @@ export interface CriterionMapping {
   implementation: string;
 }
 
+export interface CodeChange {
+  filePath: string;
+  action: "create" | "modify";
+  summary: string;
+  linesChanged?: number;
+}
+
 export interface ImplementationOutput {
   summary: string;
   technicalApproach: string;
@@ -56,6 +63,8 @@ export interface ImplementationOutput {
   blockers: string[];
   confidenceScore: number;
   confidenceReason: string;
+  codeChanges?: CodeChange[];
+  codingSummary?: string;
 }
 
 export interface TestCase {
