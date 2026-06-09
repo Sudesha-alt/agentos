@@ -7,10 +7,11 @@ export const auditRepo = {
    * decision, override, and webhook event is recorded here.
    */
   async log(
-    pipelineId: string,
+    pipelineId: string | undefined,
     event: string,
     metadata: Record<string, unknown> = {}
   ): Promise<void> {
+    if (!pipelineId?.trim()) return;
     await prisma.auditLog.create({
       data: {
         pipelineId,

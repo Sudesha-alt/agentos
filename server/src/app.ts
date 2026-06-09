@@ -15,6 +15,9 @@ import pipelineJiraRouter from "./api/routes/pipelineJira";
 import overrideRouter from "./api/routes/override";
 import pipelineRouter from "./api/routes/pipeline";
 import pmAgentsRouter from "./api/routes/pmAgents";
+import canaryRouter from "./api/routes/canary";
+import qaRouter from "./api/routes/qa";
+import settingsRouter from "./api/routes/settings";
 import webhooksRouter from "./api/routes/webhooks";
 import { isAppError } from "./utils/errors";
 import { logger } from "./utils/logger";
@@ -79,6 +82,9 @@ export function createApp(): express.Express {
   app.use("/pipelines", overrideRouter);
   app.use("/pm-agents", pmAgentsRouter);
   app.use("/api/pm-agents", pmAgentsRouter);
+  app.use("/api/canary", canaryRouter);
+  app.use("/api/qa", qaRouter);
+  app.use("/api/settings", settingsRouter);
 
   app.use((_req, res) => {
     res.status(404).json({ error: "not_found" });

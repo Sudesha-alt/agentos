@@ -3,9 +3,9 @@ import { AgentParseError } from "../utils/errors";
 import { logger } from "../utils/logger";
 import { withRetry } from "../utils/retry";
 import {
+  chatCompletionTokenLimit,
   getOpenAIChatModel,
   getOpenAIClient,
-  openAIChatTokenLimit,
 } from "./openaiClient";
 
 // GPT-5.1 pricing placeholder — update when billing constants are finalized.
@@ -33,11 +33,12 @@ export async function chatCompletionText(params: {
   user: string;
   maxTokens?: number;
 }): Promise<{ text: string; usage: LlmUsage }> {
+  const model = getOpenAIChatModel();
   const response = await withRetry(
     () =>
       getOpenAIClient().chat.completions.create({
-        model: getOpenAIChatModel(),
-        ...openAIChatTokenLimit(params.maxTokens ?? 4000),
+        model,
+        ...chatCompletionTokenLimit(params.maxTokens ?? 4000, model),
         messages: [
           { role: "system", content: params.system },
           { role: "user", content: params.user },

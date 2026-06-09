@@ -120,5 +120,16 @@ function compressForTool(content: string, contentType: VectorContentType): strin
     return important.join("\n").slice(0, 400);
   }
 
+  if (contentType === "canary_finding") {
+    const important = lines.filter(
+      (line) =>
+        line.startsWith("CANARY FINDING") ||
+        line.startsWith("DESCRIPTION:") ||
+        line.startsWith("REPRODUCTION:") ||
+        line.startsWith("SUGGESTED FIX:")
+    );
+    return important.join("\n").slice(0, 500);
+  }
+
   return content.slice(0, 400);
 }

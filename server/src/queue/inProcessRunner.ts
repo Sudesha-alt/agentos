@@ -4,6 +4,8 @@ import {
   runJiraIncrementalSync,
 } from "../jira-sync/syncService";
 import { runMirrorBackfill } from "../pipeline/jira/mirror/syncService";
+import { runCanaryCycle } from "../canaryAgent";
+import type { CanaryRunInput } from "../canaryAgent/types";
 import { orchestrator } from "../pipeline/orchestrator";
 import { logger } from "../utils/logger";
 
@@ -30,6 +32,8 @@ const queue: QueueItem[] = [];
 const queuedTicketIds = new Set<string>();
 const queuedJiraKeys = new Set<string>();
 let mirrorBackfillRunning = false;
+let canaryRunning = false;
+let activeCanaryRunId: string | null = null;
 
 export function getPipelineQueueState(): {
   activeTicketId: string | null;
@@ -189,6 +193,30 @@ export function runJiraSyncInBackground(options: {
   void run().catch((err) => {
     logger.error({ err, mode: options.mode }, "in-process jira sync failed");
   });
+
+  return { started: true };
+}
+
+export function runCanaryInBackground(input: CanaryRunInput): {
+  started: boolean;
+  runId?: string;
+} {
+  if (canaryRunning) {
+    logger.warn("canary already running in-process");
+    return { started: false, runId: activeCanaryRunId ?? undefined };
+  }
+
+  canaryRunning = true;
+  void runCanaryCycle(input)
+    .then((result) => {
+      if (result) activeCanaryRunId = result.runId;
+    })
+    .catch((err) => {
+      logger.error({ err }, "in-process canary failed");
+    })
+    .finally(() => {
+      canaryRunning = false;
+    });
 
   return { started: true };
 }
