@@ -1,5 +1,8 @@
 import OpenAI from "openai";
-import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions";
+import type {
+  ChatCompletion,
+  ChatCompletionCreateParamsNonStreaming,
+} from "openai/resources/chat/completions";
 
 let cached: OpenAI | undefined;
 
@@ -36,13 +39,16 @@ export function chatCompletionTokenLimit(
   return { max_completion_tokens: maxTokens };
 }
 
+/** Alias used on main after merge — same as chatCompletionTokenLimit. */
+export const openAIChatTokenLimit = chatCompletionTokenLimit;
+
 export async function createChatCompletion(
   params: ChatCompletionCreateParamsNonStreaming & {
     maxTokens?: number;
     max_tokens?: never;
     max_completion_tokens?: never;
   }
-) {
+): Promise<ChatCompletion> {
   const { maxTokens = 4000, ...rest } = params;
   return getOpenAIClient().chat.completions.create({
     ...rest,

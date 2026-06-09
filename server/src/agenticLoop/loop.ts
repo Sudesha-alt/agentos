@@ -1,4 +1,5 @@
 import { auditRepo } from "../db/repositories/auditRepo";
+import type { ChatCompletionMessageToolCall } from "openai/resources/chat/completions";
 import { createChatCompletion, getOpenAIChatModel } from "../llm/openaiClient";
 import type { AgenticMessage } from "../llm/openaiCompletion";
 import { anthropicToolsToOpenAI } from "../llm/openaiTools";
@@ -154,14 +155,14 @@ export async function runAgenticLoop(
       {
         pipelineId,
         jiraKey,
-        toolNames: toolCalls.map((tc) => tc.function.name),
+        toolNames: toolCalls.map((tc: ChatCompletionMessageToolCall) => tc.function.name),
         toolCallCount,
       },
       "executing agentic tool calls"
     );
 
     const toolResults = await Promise.all(
-      toolCalls.map((toolCall) => {
+      toolCalls.map((toolCall: ChatCompletionMessageToolCall) => {
         let input: Record<string, unknown> = {};
         try {
           input = JSON.parse(toolCall.function.arguments || "{}") as Record<string, unknown>;
