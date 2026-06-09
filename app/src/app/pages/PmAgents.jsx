@@ -24,7 +24,7 @@ export default function PmAgents() {
 
   const { data: listData, refetch: refetchList } = usePmAnalyses();
   const { data: analysis, refetch: refetchAnalysis } = usePmAnalysis(activeKey, {
-    pollMs: analyzing || analysis?.status === "RUNNING" ? 2500 : 0,
+    pollMs: analyzing ? 2500 : 0,
   });
   const { data: intake } = usePipelineIntakeTickets(true, { pollMs: 30000 });
   const { data: syncedIssues } = useJiraSyncIssues({ limit: 20 });

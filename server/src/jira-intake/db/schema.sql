@@ -24,3 +24,11 @@ CREATE TABLE IF NOT EXISTS pipeline_jira_credentials (
   ai_worker_statuses_json   TEXT,
   updated_at                TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS canary_runtime_settings (
+  singleton_id          INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+  staging_base_url      TEXT,
+  production_base_url   TEXT,
+  auth_token            TEXT,
+  updated_at            TEXT NOT NULL
+);

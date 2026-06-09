@@ -170,6 +170,9 @@ export const SettingsSchema = z.object({
   prdConfidenceThreshold: z.number(),
   implementationConfidenceThreshold: z.number(),
   qaCoverageThreshold: z.number(),
+  canaryStagingBaseUrl: z.string(),
+  canaryProductionBaseUrl: z.string(),
+  canaryAuthToken: z.string(),
 });
 
 export type TicketStatus = z.infer<typeof TicketStatusSchema>;
