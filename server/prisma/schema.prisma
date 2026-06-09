@@ -27,7 +27,53 @@ model Ticket {
   pipeline       Pipeline?
 }
 
+/// Canonical synced copy of Jira issues (all statuses in configured projects).
+model JiraIssue {
+  id            String    @id @default(cuid())
+  jiraTicketId  String    @unique
+  jiraKey       String    @unique
+  projectKey    String
+  summary       String
+  description   String    @db.Text
+  issueType     String
+  status        String
+  priority      String?
+  reporter      String?
+  assignee      String?
+  labels        Json      @default("[]")
+  components    Json      @default("[]")
+  commentsText  String?   @db.Text
+  resolution    String?
+  gitContext    String?   @db.Text
+  rawPayload    Json?
+  jiraUpdatedAt DateTime?
+  embeddedAt    DateTime?
+  isDeleted     Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([projectKey, status])
+  @@index([jiraUpdatedAt])
+  @@index([isDeleted])
+}
+
+model JiraSyncRun {
+  id            String          @id @default(cuid())
+  mode          JiraSyncMode
+  status        JiraSyncStatus
+  startedAt     DateTime        @default(now())
+  completedAt   DateTime?
+  issuesSynced  Int             @default(0)
+  issuesSkipped Int             @default(0)
+  errors        Int             @default(0)
+  errorMessage  String?         @db.Text
+  watermark     DateTime?
+
+  @@index([status, startedAt])
+}
+
 /// Selective mirror of closed/done Jira issues for pipeline RAG (Lane 2).
+/// @deprecated Prefer JiraIssue — kept for backward compatibility during migration.
 model JiraMirror {
   id            String    @id @default(cuid())
   jiraTicketId  String    @unique
@@ -312,4 +358,15 @@ enum StageStatus {
   COMPLETED
   FAILED
   AWAITING_HUMAN
+}
+
+enum JiraSyncMode {
+  FULL
+  INCREMENTAL
+}
+
+enum JiraSyncStatus {
+  RUNNING
+  COMPLETED
+  FAILED
 }

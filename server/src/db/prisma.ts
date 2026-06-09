@@ -7,6 +7,8 @@ export type {
   Ticket,
 } from "../generated/prisma/client";
 export {
+  JiraSyncMode,
+  JiraSyncStatus,
   PipelineStage,
   PipelineStatus,
   StageStatus,

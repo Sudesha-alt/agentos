@@ -8,10 +8,19 @@ import StageRail from "../../shared/components/StageRail";
 import StageTimeline from "../../app/components/StageTimeline";
 import TicketActivityWidget from "../ticket-activity/TicketActivityWidget";
 import ValidationPanelWidget from "../validation-panel/ValidationPanelWidget";
+import PmPipelineDetailPanel from "../pm-analysis/PmPipelineDetailPanel";
+import { isPmPipelineId } from "../pm-analysis/pipelineIds";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import { formatStageLabel } from "../../shared/lib/format";
 
 export default function PipelineDetailPanel({ pipelineId, onClose }) {
+  if (isPmPipelineId(pipelineId)) {
+    return <PmPipelineDetailPanel pipelineId={pipelineId} onClose={onClose} />;
+  }
+  return <ClassicPipelineDetailPanel pipelineId={pipelineId} onClose={onClose} />;
+}
+
+function ClassicPipelineDetailPanel({ pipelineId, onClose }) {
   const { item, loading } = usePipelineDetail(pipelineId, { pollMs: 6000 });
   const { items: auditItems } = usePipelineAudit(pipelineId, { pollMs: 9000 });
 

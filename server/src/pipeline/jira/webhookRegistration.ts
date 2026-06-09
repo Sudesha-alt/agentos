@@ -42,11 +42,11 @@ export async function registerPipelineAdminWebhook(input: {
 
   const body: Record<string, unknown> = {
     name: WEBHOOK_NAME,
-    description: "AgentOS pipeline — AI Worker intake + selective Jira mirror",
+    description: "AgentOS — full Jira sync, AI Worker intake, and RAG embedding",
     url: input.webhookUrl,
     excludeBody: false,
     enabled: true,
-    events: ["jira:issue_updated"],
+    events: ["jira:issue_created", "jira:issue_updated", "jira:issue_deleted"],
     secret: input.secret,
   };
 

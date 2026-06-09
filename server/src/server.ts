@@ -9,6 +9,8 @@ import { initIntakeDb } from "./jira-intake/sqliteStore";
 import { loadPipelineJiraCredentialsFromStore } from "./pipeline/jira/credentialsStore";
 import { initCodebaseVizWebSocket } from "./codebaseIntelligence/codebaseVizHub";
 import { recoverStaleIndexRuns } from "./codebaseIntelligence/indexRecovery";
+import { migrateJiraMirrorToJiraIssue } from "./jira-sync/migrateMirror";
+import { startJiraSyncScheduler } from "./queue/inProcessRunner";
 import { logger } from "./utils/logger";
 
 async function bootstrap(): Promise<void> {
@@ -26,6 +28,12 @@ async function bootstrap(): Promise<void> {
   await recoverStaleIndexRuns().catch((err) => {
     logger.warn({ err }, "startup index recovery failed");
   });
+
+  await migrateJiraMirrorToJiraIssue().catch((err) => {
+    logger.warn({ err }, "startup jira mirror migration failed");
+  });
+
+  startJiraSyncScheduler();
 
   if (process.env.SENTRY_DSN) {
     Sentry.init({ dsn: process.env.SENTRY_DSN });

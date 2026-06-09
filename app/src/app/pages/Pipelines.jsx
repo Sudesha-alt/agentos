@@ -7,7 +7,7 @@ export default function Pipelines() {
       <PageIntro
         kicker="Pipeline Explorer"
         title="What do I need to do next?"
-        body="Air-traffic view: active runs, review queue, and history — with detail panel that keeps your place in the list."
+        body="Air-traffic view: classic agent pipelines and PM agent runs — active, review queue, and history with live stage progress and outputs."
       />
       <PipelineExplorerWidget />
     </div>

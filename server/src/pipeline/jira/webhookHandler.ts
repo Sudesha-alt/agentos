@@ -3,9 +3,8 @@ import type { Request, Response } from "express";
 import { logger } from "../../utils/logger";
 import { getPipelineWebhookSecret } from "./credentialsStore";
 import { isPipelineIntakeStatus } from "./intakeConfig";
-import { mirrorEligibleStatus } from "./config";
 import { type PipelineJiraWebhookPayload } from "./ticketNormalizer";
-import { syncMirroredIssue } from "./mirror/syncService";
+import { upsertJiraIssueFromWebhook, handleJiraIssueDeleted } from "../../jira-sync/webhookBridge";
 import { enqueueIntakeFromWebhook } from "./intakeEnqueueService";
 
 /** Jira Cloud signs with X-Hub-Signature; legacy manual tests may use x-agentos-secret. */
@@ -78,21 +77,32 @@ export async function handlePipelineJiraWebhook(
 
   res.status(200).json({ ok: true, event });
 
-  if (event === "jira:issue_updated") {
-    void handleIssueUpdated(payload).catch((err) =>
-      logger.error({ err }, "pipeline issue_updated failed")
+  if (
+    event === "jira:issue_updated" ||
+    event === "jira:issue_created"
+  ) {
+    void handleIssueUpsert(payload).catch((err) =>
+      logger.error({ err, event }, "pipeline jira issue upsert failed")
+    );
+  }
+
+  if (event === "jira:issue_deleted") {
+    void handleJiraIssueDeleted(payload.issue.key).catch((err) =>
+      logger.error({ err }, "pipeline jira issue delete failed")
     );
   }
 }
 
-async function handleIssueUpdated(
+async function handleIssueUpsert(
   payload: PipelineJiraWebhookPayload
 ): Promise<void> {
   const jiraKey = payload.issue.key;
   const statusName =
     (payload.issue.fields as { status?: { name?: string } }).status?.name ?? "";
 
-  logger.info({ jiraKey, statusName }, "pipeline jira webhook: issue_updated");
+  logger.info({ jiraKey, statusName }, "pipeline jira webhook: issue upsert");
+
+  await upsertJiraIssueFromWebhook(payload);
 
   if (enteredIntakeStatus(payload)) {
     const result = await enqueueIntakeFromWebhook(payload);
@@ -112,10 +122,4 @@ async function handleIssueUpdated(
     }
   }
 
-  if (mirrorEligibleStatus(statusName)) {
-    const result = await syncMirroredIssue(jiraKey);
-    if (result.synced) {
-      logger.info({ jiraKey }, "mirror updated from webhook");
-    }
-  }
 }

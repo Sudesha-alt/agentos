@@ -1,5 +1,6 @@
 import StatusPill from "../../app/components/StatusPill";
 import StageRail from "../../shared/components/StageRail";
+import PmStageRail from "../pm-analysis/PmStageRail";
 import { formatRelativeTime, formatUsd } from "../../shared/lib/format";
 
 export default function PipelineCard({
@@ -8,10 +9,10 @@ export default function PipelineCard({
   onSelect,
   showAction = false,
 }) {
-  const cost = pipeline.raw?.stages?.reduce?.(
-    (sum, s) => sum + (s.costUsd ?? 0),
-    0
-  );
+  const isPm = pipeline.kind === "pm";
+  const cost = isPm
+    ? pipeline.costUsd
+    : pipeline.raw?.stages?.reduce?.((sum, s) => sum + (s.costUsd ?? 0), 0);
 
   return (
     <button
@@ -25,18 +26,33 @@ export default function PipelineCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="font-mono text-[11px] text-indigo">{pipeline.jiraKey}</p>
+          <div className="flex items-center gap-2">
+            <p className="font-mono text-[11px] text-indigo">{pipeline.jiraKey}</p>
+            {isPm ? (
+              <span className="rounded-full border border-indigo/25 bg-indigo/10 px-1.5 py-0.5 font-mono text-[8px] uppercase tracking-[0.1em] text-indigo">
+                PM
+              </span>
+            ) : null}
+          </div>
           <p className="mt-1 truncate text-[13px] text-ink">{pipeline.summary}</p>
         </div>
         <StatusPill status={pipeline.status} />
       </div>
 
       <div className="mt-3">
-        <StageRail
-          currentStage={pipeline.currentStage}
-          status={pipeline.status}
-          compact
-        />
+        {isPm ? (
+          <PmStageRail
+            currentStage={pipeline.currentStage}
+            status={pipeline.status}
+            compact
+          />
+        ) : (
+          <StageRail
+            currentStage={pipeline.currentStage}
+            status={pipeline.status}
+            compact
+          />
+        )}
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-3 font-mono text-[10.5px] text-ink-mute">

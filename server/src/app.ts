@@ -10,9 +10,11 @@ import codebaseRouter from "./api/routes/codebase";
 import gitIntegrationRouter from "./api/routes/gitIntegration";
 import healthRouter from "./api/routes/health";
 import jiraIntakeRouter from "./api/routes/jiraIntake";
+import jiraSyncRouter from "./api/routes/jiraSync";
 import pipelineJiraRouter from "./api/routes/pipelineJira";
 import overrideRouter from "./api/routes/override";
 import pipelineRouter from "./api/routes/pipeline";
+import pmAgentsRouter from "./api/routes/pmAgents";
 import webhooksRouter from "./api/routes/webhooks";
 import { isAppError } from "./utils/errors";
 import { logger } from "./utils/logger";
@@ -68,11 +70,15 @@ export function createApp(): express.Express {
   app.use("/api/codebase", codebaseRouter);
   app.use("/codebase", codebaseRouter);
   app.use("/jira-intake", jiraIntakeRouter);
+  app.use("/jira-sync", jiraSyncRouter);
+  app.use("/api/jira-sync", jiraSyncRouter);
   app.use("/git-integration", gitIntegrationRouter);
   app.use("/pipeline-jira", pipelineJiraRouter);
   app.use("/webhooks", webhooksRouter);
   app.use("/pipelines", pipelineRouter);
   app.use("/pipelines", overrideRouter);
+  app.use("/pm-agents", pmAgentsRouter);
+  app.use("/api/pm-agents", pmAgentsRouter);
 
   app.use((_req, res) => {
     res.status(404).json({ error: "not_found" });
