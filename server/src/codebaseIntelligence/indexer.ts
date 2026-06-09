@@ -3,6 +3,7 @@ import { prisma } from "../db/client";
 import {
   getOpenAIClient,
   getOpenAISummaryModel,
+  openAIChatTokenLimit,
   isOpenAIConfigured,
 } from "../llm/openaiClient";
 import { gitClient } from "../integrations/gitProvider";
@@ -391,7 +392,7 @@ async function extractFileIntelligence(
       () =>
         getOpenAIClient().chat.completions.create({
           model: getOpenAISummaryModel(),
-          max_tokens: 900,
+          ...openAIChatTokenLimit(900),
           response_format: { type: "json_object" },
           messages: [
             {

@@ -27,6 +27,7 @@ import {
 import { getJiraIssueStats } from "../../jira-sync/issueRepository";
 import { getLatestSyncRun, isJiraSyncRunning } from "../../jira-sync/syncService";
 import { getJiraSyncConfig } from "../../jira-sync/config";
+import { scanIntakeFromSyncedIssues } from "../../jira-sync/intakeScan";
 import {
   getPipelineQueueState,
   runJiraSyncInBackground,
@@ -176,6 +177,19 @@ router.get("/intake/tickets", async (_req, res, next) => {
     validatePipelineJiraConfig();
     const result = await listIntakeColumnTickets();
     res.json(result);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/intake/scan", async (_req, res, next) => {
+  try {
+    validatePipelineJiraConfig();
+    const result = await scanIntakeFromSyncedIssues();
+    res.json({
+      ...result,
+      queue: getPipelineQueueState(),
+    });
   } catch (err) {
     next(err);
   }
