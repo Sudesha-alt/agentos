@@ -4,7 +4,11 @@ import { getPrisma } from "../../db/client";
 const router = Router();
 
 router.get("/healthz", (_req, res) => {
-  res.json({ status: "ok", timestamp: new Date().toISOString() });
+  res.json({
+    status: "ok",
+    timestamp: new Date().toISOString(),
+    openaiChatTokenParam: "max_completion_tokens",
+  });
 });
 
 router.get("/readyz", async (_req, res) => {
