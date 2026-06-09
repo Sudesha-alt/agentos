@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { prisma } from "../db/client";
 import {
+  chatCompletionTokenLimit,
   getOpenAIClient,
   getOpenAISummaryModel,
   openAIChatTokenLimit,
@@ -388,11 +389,12 @@ async function extractFileIntelligence(
     content.length > 8_000 ? `${content.slice(0, 8_000)}\n\n[TRUNCATED]` : content;
 
   try {
+    const summaryModel = getOpenAISummaryModel();
     const response = await withRetry(
       () =>
         getOpenAIClient().chat.completions.create({
-          model: getOpenAISummaryModel(),
-          ...openAIChatTokenLimit(900),
+          model: summaryModel,
+          ...chatCompletionTokenLimit(900, summaryModel),
           response_format: { type: "json_object" },
           messages: [
             {
