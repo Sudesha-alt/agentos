@@ -32,7 +32,26 @@ export function getOpenAISummaryModel(): string {
   return getOpenAIChatModel();
 }
 
-/** OpenAI chat completions — always use max_completion_tokens (gpt-5+ rejects max_tokens). */
+export type ChatCompletionParams = Omit<
+  ChatCompletionCreateParamsNonStreaming,
+  "max_tokens" | "max_completion_tokens"
+> & {
+  maxTokens?: number;
+};
+
+/** Single entry point — never sends legacy max_tokens (gpt-5+ rejects it). */
+export async function createChatCompletion(params: ChatCompletionParams) {
+  const { maxTokens, ...rest } = params;
+  return getOpenAIClient().chat.completions.create({
+    ...rest,
+    max_completion_tokens: maxTokens ?? 4000,
+  });
+}
+
+/** Alias for createChatCompletion. */
+export const createOpenAIChatCompletion = createChatCompletion;
+
+/** @deprecated Use createChatCompletion. */
 export function openAIChatTokenLimit(
   maxTokens: number
 ): { max_completion_tokens: number } {
