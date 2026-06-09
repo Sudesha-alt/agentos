@@ -1,16 +1,14 @@
 export default function EmptyState({ title, body, action }) {
   return (
-    <div className="rounded-xl border border-dashed border-hairline-strong bg-surface/30 px-6 py-10 text-center">
-      <p className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink-mute">
-        // empty
+    <div className="rounded-app border border-dashed border-app-border bg-app-surface-muted/60 px-6 py-10 text-center">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-app-ink-mute">
+        Empty
       </p>
-      <h3 className="mt-2 text-base text-ink">{title}</h3>
-      {body && (
-        <p className="mx-auto mt-2 max-w-sm text-[13px] leading-relaxed text-ink-dim">
-          {body}
-        </p>
-      )}
-      {action && <div className="mt-5">{action}</div>}
+      <h3 className="mt-2 text-base font-medium text-app-ink">{title}</h3>
+      {body ? (
+        <p className="mx-auto mt-2 max-w-sm text-sm leading-relaxed text-app-ink-dim">{body}</p>
+      ) : null}
+      {action ? <div className="mt-5">{action}</div> : null}
     </div>
   );
 }

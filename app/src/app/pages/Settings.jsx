@@ -3,6 +3,7 @@ import { useSettings } from "../../entities/settings";
 import { useSaveSettings } from "../../features/save-settings/model/useSaveSettings";
 import SettingsSectionsWidget from "../../widgets/settings-sections/SettingsSectionsWidget";
 import { PageIntro } from "../../shared/ui/Panel";
+import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
 
 export default function Settings() {
   const { data, loading } = useSettings();
@@ -25,13 +26,13 @@ export default function Settings() {
   if (loading && !form) {
     return (
       <div className="flex h-64 items-center justify-center">
-        <p className="font-mono text-[12px] text-ink-mute">Loading settings…</p>
+        <p className="text-sm text-app-ink-mute">Loading settings…</p>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-[82rem] space-y-6">
+    <AnimatedAppPage wide>
       <PageIntro
         kicker="Settings"
         title="Workspace configuration."
@@ -46,6 +47,6 @@ export default function Settings() {
         savedAt={savedAt}
         error={error?.message}
       />
-    </div>
+    </AnimatedAppPage>
   );
 }

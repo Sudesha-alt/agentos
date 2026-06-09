@@ -1,10 +1,14 @@
-export default function Logo({ className = "", href = "#top" }) {
-  return (
-    <a
-      href={href}
-      className={`group inline-flex items-center gap-2.5 ${className}`}
-      aria-label="Agentos home"
-    >
+import { Link } from "react-router-dom";
+
+export default function Logo({ className = "", href = "#top", variant = "dark" }) {
+  const isLight = variant === "light";
+  const labelClass = isLight
+    ? "text-app-ink group-hover:text-app-charcoal"
+    : "text-ink/90 group-hover:text-ink";
+  const centerFill = isLight ? "fill-app-ink" : "fill-ink";
+
+  const content = (
+    <>
       <svg
         width="22"
         height="22"
@@ -13,18 +17,30 @@ export default function Logo({ className = "", href = "#top" }) {
         className="shrink-0"
         aria-hidden="true"
       >
-        <circle cx="9" cy="16" r="2.6" fill="#6366F1" />
-        <circle cx="16" cy="16" r="2.6" className="fill-ink" />
-        <circle cx="23" cy="16" r="2.6" fill="#6366F1" />
-        <path
-          d="M11.6 16 H13.4 M18.6 16 H20.4"
-          stroke="#6366F1"
-          strokeWidth="1.2"
-        />
+        <circle cx="9" cy="16" r="2.6" fill="#8B7CF6" />
+        <circle cx="16" cy="16" r="2.6" className={centerFill} />
+        <circle cx="23" cy="16" r="2.6" fill="#8B7CF6" />
+        <path d="M11.6 16 H13.4 M18.6 16 H20.4" stroke="#8B7CF6" strokeWidth="1.2" />
       </svg>
-      <span className="font-mono text-[13px] tracking-[0.16em] text-ink/90 group-hover:text-ink transition-colors">
-        AGENTOS
+      <span
+        className={`text-[15px] font-semibold tracking-tight transition-colors ${labelClass} ${className}`}
+      >
+        AgentOS
       </span>
+    </>
+  );
+
+  if (href.startsWith("/")) {
+    return (
+      <Link to={href} className="group inline-flex items-center gap-2.5" aria-label="Agentos home">
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <a href={href} className="group inline-flex items-center gap-2.5" aria-label="Agentos home">
+      {content}
     </a>
   );
 }

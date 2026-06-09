@@ -95,8 +95,9 @@ export default function Login() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, ease: EASE, delay: 0.05 }}
             >
-              <Panel className="overflow-hidden">
+              <Panel className="overflow-hidden" variant="dark">
                 <PanelHeader
+                  variant="dark"
                   kicker="Sign in"
                   title="Email and password"
                   body="Authenticate to continue into the protected product workspace."

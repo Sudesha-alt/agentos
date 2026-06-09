@@ -12,6 +12,7 @@ import StagePanelWidget from "../../widgets/stage-panel/StagePanelWidget";
 import AuditFeedWidget from "../../widgets/audit-feed/AuditFeedWidget";
 import TicketActivityWidget from "../../widgets/ticket-activity/TicketActivityWidget";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
+import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
 
 export default function PipelineDetail() {
   const { id } = useParams();
@@ -62,11 +63,11 @@ export default function PipelineDetail() {
   const selected = stages.find((s) => s.id === effectiveStageId) ?? stages[0];
 
   return (
-    <div className="mx-auto w-full max-w-[82rem] space-y-6">
-      <header className="flex flex-col gap-4">
+    <AnimatedAppPage wide>
+      <header className="flex flex-col gap-3">
         <Link
           to="/app/pipelines"
-          className="editorial-kicker text-ink-mute transition-colors hover:text-ink"
+          className="type-kicker transition-colors hover:text-app-ink"
         >
           ← pipelines
         </Link>
@@ -140,6 +141,6 @@ export default function PipelineDetail() {
           <AuditFeedWidget items={auditItems.length ? auditItems : item.auditLogs} />
         </div>
       </div>
-    </div>
+    </AnimatedAppPage>
   );
 }

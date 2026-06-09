@@ -193,9 +193,9 @@ export default function CodebaseIntelligenceStatusWidget({
 
   if (embedded) {
     return (
-      <div className="rounded-[1rem] border border-hairline bg-surface/30 p-4">
+      <div className="rounded-app-sm border border-app-border bg-app-surface-muted/60 p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-ink-mute">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-app-ink-mute">
             Codebase layer
           </p>
           {data ? headerRight : null}

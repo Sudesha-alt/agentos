@@ -15,6 +15,7 @@ import PipelineQueuePanel from "../../widgets/pipeline-queue/PipelineQueuePanel"
 import JiraSyncStatusPanel from "../../widgets/jira-sync/JiraSyncStatusPanel";
 import JiraTicketBrowser from "../../widgets/jira-sync/JiraTicketBrowser";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
+import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
 
 export default function JiraIntegration() {
   const {
@@ -165,83 +166,84 @@ function JiraIntegrationContent({ setup, refetchSetup }) {
   }
 
   return (
-    <div className="space-y-6">
+    <AnimatedAppPage wide>
       <PageIntro
+        kicker="Jira"
         title="Jira pipeline"
         body="Connect Jira once to sync all project tickets, pick the AI Worker column for pipeline intake, and browse or analyze tickets from AgentOS."
       />
 
       {statusMessage ? (
-        <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
+        <p className="rounded-app-sm border border-success/30 bg-success/10 px-4 py-2.5 text-sm text-success">
           {statusMessage}
         </p>
       ) : null}
       {connectError ? (
-        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-100">
+        <p className="rounded-app-sm border border-danger/30 bg-danger/10 px-4 py-2.5 text-sm text-danger">
           {connectError}
         </p>
       ) : null}
 
       <Panel>
         <PanelHeader title="Connect Jira" />
-        <form className="grid gap-4 md:grid-cols-2" onSubmit={handleConnect}>
+        <form className="grid gap-4 p-4 md:grid-cols-2 sm:px-6" onSubmit={handleConnect}>
           <label className="block text-sm">
-            <span className="text-white/70">Base URL</span>
+            <span className="type-kicker">Base URL</span>
             <input
-              className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2"
+              className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
               placeholder="https://your-domain.atlassian.net"
             />
           </label>
           <label className="block text-sm">
-            <span className="text-white/70">Email</span>
+            <span className="type-kicker">Email</span>
             <input
-              className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2"
+              className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
           </label>
           <label className="block text-sm">
-            <span className="text-white/70">API token</span>
+            <span className="type-kicker">API token</span>
             <input
               type="password"
-              className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2"
+              className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
               value={apiToken}
               onChange={(e) => setApiToken(e.target.value)}
               placeholder={setup?.jira?.hasApiToken ? "Saved — leave blank to keep" : "Required"}
             />
           </label>
           <label className="block text-sm">
-            <span className="text-white/70">Board ID</span>
+            <span className="type-kicker">Board ID</span>
             <input
-              className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2"
+              className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
               value={boardId}
               onChange={(e) => setBoardId(e.target.value)}
             />
           </label>
           <label className="block text-sm md:col-span-2">
-            <span className="text-white/70">Project keys (comma-separated)</span>
+            <span className="type-kicker">Project keys (comma-separated)</span>
             <input
-              className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2"
+              className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
               value={projectKeys}
               onChange={(e) => setProjectKeys(e.target.value)}
               placeholder="SCRUM"
             />
           </label>
           <label className="block text-sm md:col-span-2">
-            <span className="text-white/70">Webhook secret (optional)</span>
+            <span className="type-kicker">Webhook secret (optional)</span>
             <input
-              className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2"
+              className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
               value={webhookSecret}
               onChange={(e) => setWebhookSecret(e.target.value)}
             />
           </label>
-          <div className="md:col-span-2 flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-3 md:col-span-2">
             <button
               type="submit"
               disabled={!canConnect || connectPending}
-              className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium disabled:opacity-50"
+              className="app-btn-primary disabled:opacity-50"
             >
               {connectPending ? "Connecting…" : connected ? "Update connection" : "Connect"}
             </button>
@@ -250,7 +252,7 @@ function JiraIntegrationContent({ setup, refetchSetup }) {
                 type="button"
                 disabled={webhookPending}
                 onClick={handleRegisterWebhook}
-                className="rounded-lg border border-white/15 px-4 py-2 text-sm"
+                className="rounded-app-sm border border-app-border px-4 py-2 text-sm text-app-ink-dim hover:text-app-ink"
               >
                 {webhookPending ? "Registering…" : "Register webhook"}
               </button>
@@ -258,8 +260,8 @@ function JiraIntegrationContent({ setup, refetchSetup }) {
           </div>
         </form>
         {connected ? (
-          <p className="mt-4 text-xs text-white/50">
-            Webhook URL: <code>{setup.webhookUrl}</code> — events: created, updated, deleted
+          <p className="px-5 pb-4 text-xs text-app-ink-mute sm:px-6">
+            Webhook URL: <code className="text-indigo">{setup.webhookUrl}</code> — events: created, updated, deleted
           </p>
         ) : null}
       </Panel>
@@ -270,11 +272,11 @@ function JiraIntegrationContent({ setup, refetchSetup }) {
             title="AI Worker intake column"
             subtitle="Tickets in this column are picked up automatically when moved in Jira."
           />
-          <form className="flex flex-wrap items-end gap-3" onSubmit={handleSaveIntakeColumn}>
+          <form className="flex flex-wrap items-end gap-3 p-4 sm:px-6" onSubmit={handleSaveIntakeColumn}>
             <label className="block min-w-[240px] flex-1 text-sm">
-              <span className="text-white/70">Board column</span>
+              <span className="type-kicker">Board column</span>
               <select
-                className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-3 py-2"
+                className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
                 value={intakeColumn}
                 onChange={(e) => setIntakeColumn(e.target.value)}
               >
@@ -289,13 +291,13 @@ function JiraIntegrationContent({ setup, refetchSetup }) {
             <button
               type="submit"
               disabled={!intakeColumn || mappingPending}
-              className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium disabled:opacity-50"
+              className="app-btn-primary disabled:opacity-50"
             >
               {mappingPending ? "Saving…" : "Save intake column"}
             </button>
           </form>
           {intakeConfigured && intakeStatuses.length ? (
-            <p className="mt-4 text-sm text-white/60">
+            <p className="px-5 pb-4 text-sm text-app-ink-dim sm:px-6">
               Trigger statuses:{" "}
               {intakeStatuses.map((status) => (
                 <LabelPill key={status} label={status} tone="indigo" className="ml-1" />
@@ -327,25 +329,25 @@ function JiraIntegrationContent({ setup, refetchSetup }) {
               body="Drag a Story into the AI Worker column on your Jira board."
             />
           ) : (
-            <ul className="divide-y divide-white/10">
+            <ul className="divide-y divide-app-border">
               {intakeItems.map((item) => (
-                <li key={item.key} className="flex flex-wrap items-center gap-3 py-3">
-                  <span className="font-mono text-sm text-violet-300">{item.key}</span>
-                  <span className="flex-1 text-sm">{item.summary}</span>
+                <li key={item.key} className="flex flex-wrap items-center gap-3 px-5 py-3 sm:px-6">
+                  <span className="text-sm font-medium text-indigo">{item.key}</span>
+                  <span className="flex-1 text-sm text-app-ink">{item.summary}</span>
                   <LabelPill label={item.issueType} tone="muted" />
                   <LabelPill label={item.status} tone="indigo" />
                 </li>
               ))}
             </ul>
           )}
-          <p className="mt-4 text-xs text-white/45">
+          <p className="px-5 pb-4 text-xs text-app-ink-mute sm:px-6">
             Active pipelines:{" "}
-            <Link to="/app/pipelines" className="text-violet-300 underline">
+            <Link to="/app/pipelines" className="text-indigo underline">
               View pipelines →
             </Link>
           </p>
         </Panel>
       ) : null}
-    </div>
+    </AnimatedAppPage>
   );
 }

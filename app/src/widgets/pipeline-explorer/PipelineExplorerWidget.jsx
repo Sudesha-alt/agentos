@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { motion } from "framer-motion";
 import { useSearchParams } from "react-router-dom";
 import { usePipelineList } from "../../entities/pipeline";
 import { usePmAnalyses } from "../../entities/pm-agents";
@@ -7,6 +8,7 @@ import PipelineCard from "./PipelineCard";
 import PipelineDetailPanel from "./PipelineDetailPanel";
 import Spinner from "../../app/components/Spinner";
 import EmptyState from "../../app/components/EmptyState";
+import { motionSafe, pageStagger, sectionFadeUp } from "../../lib/motion";
 
 const TABS = [
   { id: "active", label: "Active", statuses: ["RUNNING"] },
@@ -67,24 +69,24 @@ export default function PipelineExplorerWidget() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-8.5rem)] min-h-[520px] overflow-hidden rounded-[1.25rem] border border-hairline bg-surface/20">
-      <div className="flex w-full max-w-md shrink-0 flex-col border-r border-hairline">
-        <div className="border-b border-hairline p-4">
-          <div className="flex gap-1">
+    <div className="app-card flex min-h-[calc(100dvh-11rem)] overflow-hidden">
+      <div className="flex w-full max-w-md shrink-0 flex-col border-r border-app-border bg-app-surface-muted/30">
+        <div className="border-b border-app-border p-4">
+          <div className="flex flex-wrap gap-1">
             {TABS.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
-                className={`rounded-full px-3 py-1.5 font-mono text-[10.5px] uppercase tracking-[0.14em] transition-colors ${
+                className={`rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.1em] transition-colors ${
                   tab === t.id
-                    ? "bg-indigo/15 text-ink"
-                    : "text-ink-dim hover:text-ink"
+                    ? "bg-app-surface text-app-ink shadow-app-nav-active"
+                    : "text-app-ink-dim hover:bg-app-surface/80 hover:text-app-ink"
                 }`}
               >
                 {t.label}
                 {t.id === "review" && reviewCount > 0 ? (
-                  <span className="ml-1.5 inline-flex size-4 items-center justify-center rounded-full bg-danger text-[10px] text-canvas">
+                  <span className="ml-1.5 inline-flex size-4 items-center justify-center rounded-full bg-danger text-[10px] font-semibold text-white">
                     {reviewCount}
                   </span>
                 ) : null}
@@ -100,27 +102,34 @@ export default function PipelineExplorerWidget() {
               setParams(next, { replace: true });
             }}
             placeholder="Search tickets"
-            className="mt-3 h-9 w-full rounded-full border border-hairline bg-canvas/50 px-4 text-[13px] outline-none focus:border-indigo/40"
+            className="mt-3 h-10 w-full rounded-full border border-app-border bg-app-surface px-4 text-sm text-app-ink outline-none placeholder:text-app-ink-mute focus:border-indigo/40 focus:ring-2 focus:ring-indigo/10"
           />
         </div>
 
-        <div className="flex-1 space-y-2 overflow-y-auto p-3">
+        <motion.div
+          className="flex-1 space-y-1.5 overflow-y-auto p-2.5"
+          variants={motionSafe(pageStagger(0.04))}
+          initial="hidden"
+          animate="show"
+          key={tab}
+        >
           {loading && filtered.length === 0 ? (
             <Spinner label="Loading pipelines" />
           ) : filtered.length === 0 ? (
             <EmptyState title="No pipelines" body="Nothing in this queue right now." />
           ) : (
             filtered.map((pipeline) => (
-              <PipelineCard
-                key={pipeline.id}
-                pipeline={pipeline}
-                selected={selectedId === pipeline.id}
-                onSelect={selectPipeline}
-                showAction={tab === "review"}
-              />
+              <motion.div key={pipeline.id} variants={motionSafe(sectionFadeUp)}>
+                <PipelineCard
+                  pipeline={pipeline}
+                  selected={selectedId === pipeline.id}
+                  onSelect={selectPipeline}
+                  showAction={tab === "review"}
+                />
+              </motion.div>
             ))
           )}
-        </div>
+        </motion.div>
       </div>
 
       <div className="hidden min-w-0 flex-1 md:block">

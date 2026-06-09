@@ -3,17 +3,17 @@ import { APP_NAV } from "../../shared/config/app";
 
 export default function MobileNav() {
   return (
-    <nav className="flex gap-1 overflow-x-auto border-b border-hairline bg-canvas/90 px-3 py-2 md:hidden">
+    <nav className="app-glass sticky top-[4.25rem] z-10 flex gap-2 overflow-x-auto border-b border-app-border px-4 py-2.5 md:hidden">
       {APP_NAV.filter((item) => item.to !== "/app/settings").map((item) => (
         <NavLink
           key={item.to}
           to={item.to}
           end={item.end}
           className={({ isActive }) =>
-            `shrink-0 rounded-full px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors ${
+            `shrink-0 rounded-full px-3.5 py-2 text-xs font-medium transition-all ${
               isActive
-                ? "bg-surface text-indigo shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]"
-                : "text-ink-dim hover:text-ink"
+                ? "bg-app-surface text-app-ink shadow-app-nav-active"
+                : "text-app-ink-dim hover:bg-white/70 hover:text-app-ink"
             }`
           }
         >

@@ -15,6 +15,7 @@ import IndexProgressBar from "../../widgets/index-progress/IndexProgressBar";
 import LabelPill from "../components/LabelPill";
 import Spinner from "../components/Spinner";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
+import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
 
 export default function GitIntegration() {
   const { data: setup, error, loading, refetch } = useGitIntegrationSetup();
@@ -236,7 +237,7 @@ function GitIntegrationContent({ setup, refetch }) {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[82rem] space-y-6 pb-16">
+    <AnimatedAppPage wide className="pb-16">
       <PageIntro
         kicker="GitHub integration"
         title={
@@ -443,7 +444,7 @@ function GitIntegrationContent({ setup, refetch }) {
       ) : (
         <BitbucketManualPanel setup={setup} refetch={refetch} />
       )}
-    </div>
+    </AnimatedAppPage>
   );
 }
 

@@ -26,3 +26,55 @@ export const fadeIn = {
 };
 
 export const viewportOnce = { once: true, amount: 0.25 };
+
+/** App shell — subtle page section stagger */
+export const pageStagger = (delay = 0.06) => ({
+  hidden: {},
+  show: {
+    transition: { staggerChildren: delay, delayChildren: 0.04 },
+  },
+});
+
+/** App shell — section fade-in */
+export const sectionFadeUp = {
+  hidden: { opacity: 0, y: 12 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.35, ease: EASE },
+  },
+};
+
+/** App shell — quick-action chips */
+export const chipFadeUp = {
+  hidden: { opacity: 0, y: 8 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.25, ease: EASE },
+  },
+};
+
+/** Tab panel crossfade */
+export const tabPanelFade = {
+  hidden: { opacity: 0 },
+  show: { opacity: 1, transition: { duration: 0.2, ease: EASE } },
+  exit: { opacity: 0, transition: { duration: 0.15, ease: EASE } },
+};
+
+export function prefersReducedMotion() {
+  if (typeof window === "undefined") return false;
+  if (typeof window.matchMedia !== "function") return false;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/** Instant variants when user prefers reduced motion */
+export function motionSafe(variants) {
+  if (prefersReducedMotion()) {
+    return {
+      hidden: { opacity: 1, y: 0 },
+      show: { opacity: 1, y: 0, transition: { duration: 0 } },
+    };
+  }
+  return variants;
+}

@@ -11,10 +11,8 @@ export default function ValidationCard({ validation }) {
     <div className="rounded-[1.1rem] border border-hairline bg-surface/40">
       <div className="flex items-center justify-between border-b border-hairline px-5 py-4">
         <div>
-          <p className="editorial-kicker text-ink-mute">
-            Validation
-          </p>
-          <h3 className="mt-2 font-display text-[1.35rem] leading-none tracking-tight text-ink">
+          <p className="type-kicker">Validation</p>
+          <h3 className="type-section-title mt-1.5">
             {passed ? "Gate passed" : "Gate failed — human review required"}
           </h3>
         </div>

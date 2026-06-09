@@ -1,17 +1,68 @@
+import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
 import CommandCenterWidget from "../../widgets/command-center/CommandCenterWidget";
 import IntegrationsOverviewWidget from "../../widgets/integrations-overview/IntegrationsOverviewWidget";
-import { PageIntro } from "../../shared/ui/Panel";
+import { useAuth } from "../../shared/providers/useAuth";
+import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
+import { chipFadeUp, pageStagger } from "../../lib/motion";
+
+const QUICK_ACTIONS = [
+  { to: "/app/pipelines", label: "Pipeline Explorer", tone: "lavender" },
+  { to: "/app/pm-agents", label: "PM Agents", tone: "peach" },
+  { to: "/app/codebase", label: "Codebase", tone: "mint" },
+  { to: "/app/jira", label: "Jira", tone: "butter" },
+  { to: "/app/git", label: "GitHub", tone: "lavender" },
+  { to: "/app/qa", label: "QA Center", tone: "mint" },
+];
+
+const CHIP_TONES = {
+  lavender: "bg-app-lavender/50 border-app-lavender hover:bg-app-lavender/70",
+  peach: "bg-app-peach/50 border-app-peach hover:bg-app-peach/70",
+  mint: "bg-app-mint/50 border-app-mint hover:bg-app-mint/70",
+  butter: "bg-app-butter/60 border-app-butter hover:bg-app-butter/80",
+};
+
+function greetingName(user) {
+  if (!user) return "there";
+  if (user.name?.trim()) return user.name.split(/\s+/)[0];
+  return user.email?.split("@")[0] ?? "there";
+}
 
 export default function Dashboard() {
+  const { user } = useAuth();
+  const name = greetingName(user);
+
   return (
-    <div className="mx-auto w-full max-w-[82rem] space-y-8">
-      <PageIntro
-        kicker="Command Center"
-        title="What is happening right now"
-        body="Five metrics, live activity, and cycle-time trend — built for engineering leadership, not agent debug logs."
-      />
+    <AnimatedAppPage className="space-y-6">
+      <section className="app-card p-6 sm:p-8">
+        <p className="type-kicker">Workspace overview</p>
+        <h1 className="mt-2 type-page-title">Welcome back, {name}</h1>
+        <p className="mt-2 type-page-lede">
+          Your AI engineering workspace — monitor pipelines, integrations, and delivery
+          metrics in one place.
+        </p>
+
+        <motion.div
+          className="mt-6 flex flex-wrap gap-2"
+          variants={pageStagger(0.04)}
+          initial="hidden"
+          animate="show"
+        >
+          {QUICK_ACTIONS.map((action) => (
+            <motion.div key={action.to} variants={chipFadeUp}>
+              <Link
+                to={action.to}
+                className={`inline-flex items-center rounded-full border px-3.5 py-1.5 text-[13px] font-medium text-app-ink transition-all duration-200 ${CHIP_TONES[action.tone]}`}
+              >
+                {action.label}
+              </Link>
+            </motion.div>
+          ))}
+        </motion.div>
+      </section>
+
       <IntegrationsOverviewWidget />
       <CommandCenterWidget />
-    </div>
+    </AnimatedAppPage>
   );
 }
