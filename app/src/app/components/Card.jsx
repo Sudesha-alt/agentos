@@ -1,8 +1,6 @@
 export function Card({ children, className = "" }) {
   return (
-    <div
-      className={`rounded-xl border border-hairline bg-surface/40 ${className}`}
-    >
+    <div className={`rounded-app border border-app-border bg-app-surface shadow-app-card ${className}`}>
       {children}
     </div>
   );
@@ -10,16 +8,14 @@ export function Card({ children, className = "" }) {
 
 export function CardHeader({ title, kicker, right }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-hairline px-5 py-4">
+    <div className="flex items-start justify-between gap-4 border-b border-app-border px-5 py-4 sm:px-6">
       <div>
-        {kicker && (
-          <p className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-ink-mute">
+        {kicker ? (
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-app-ink-mute">
             {kicker}
           </p>
-        )}
-        <h3 className="mt-1 text-[15px] font-medium tracking-tight text-ink">
-          {title}
-        </h3>
+        ) : null}
+        <h3 className="mt-1 text-base font-semibold tracking-tight text-app-ink">{title}</h3>
       </div>
       {right}
     </div>

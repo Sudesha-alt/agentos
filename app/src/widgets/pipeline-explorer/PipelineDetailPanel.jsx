@@ -34,7 +34,7 @@ function ClassicPipelineDetailPanel({ pipelineId, onClose }) {
 
   if (!pipelineId) {
     return (
-      <div className="flex h-full items-center justify-center p-8 text-center text-sm text-ink-dim">
+      <div className="flex h-full items-center justify-center p-8 text-center text-sm text-app-ink-dim">
         Select a pipeline to inspect stages, discovery intelligence, and audit trail.
       </div>
     );
@@ -50,17 +50,19 @@ function ClassicPipelineDetailPanel({ pipelineId, onClose }) {
 
   if (!item) {
     return (
-      <div className="p-8 text-center text-sm text-ink-dim">Pipeline not found.</div>
+      <div className="p-8 text-center text-sm text-app-ink-dim">Pipeline not found.</div>
     );
   }
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <header className="shrink-0 border-b border-hairline px-5 py-4">
+      <header className="shrink-0 border-b border-app-border bg-app-surface/80 px-5 py-4 backdrop-blur-sm">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="font-mono text-[11px] text-indigo">{item.jiraKey}</p>
-            <h2 className="mt-1 font-display text-xl text-ink">{item.summary}</h2>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-indigo">
+              {item.jiraKey}
+            </p>
+            <h2 className="mt-1 text-xl font-semibold tracking-tight text-app-ink">{item.summary}</h2>
           </div>
           <div className="flex items-center gap-2">
             <StatusPill status={item.status} />
@@ -68,7 +70,7 @@ function ClassicPipelineDetailPanel({ pipelineId, onClose }) {
               <button
                 type="button"
                 onClick={onClose}
-                className="rounded-full border border-hairline px-2 py-1 text-ink-mute hover:text-ink"
+                className="flex size-8 items-center justify-center rounded-full border border-app-border text-app-ink-mute transition-colors hover:border-app-ink/15 hover:text-app-ink"
                 aria-label="Close panel"
               >
                 ×

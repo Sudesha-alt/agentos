@@ -18,10 +18,10 @@ export default function PipelineCard({
     <button
       type="button"
       onClick={() => onSelect(pipeline.id)}
-      className={`w-full rounded-xl border px-4 py-3 text-left transition-colors ${
+      className={`w-full rounded-app-sm border px-3.5 py-2.5 text-left transition-all duration-200 ${
         selected
-          ? "border-indigo/50 bg-indigo/5 shadow-[inset_0_0_0_1px_rgba(99,102,241,0.2)]"
-          : "border-hairline bg-surface/25 hover:border-hairline-strong hover:bg-surface/40"
+          ? "border-indigo/35 bg-app-lavender/50 shadow-app-nav-active"
+          : "border-app-border bg-app-surface hover:border-app-ink/10 hover:shadow-app-card"
       }`}
     >
       <div className="flex items-start justify-between gap-3">
@@ -34,7 +34,7 @@ export default function PipelineCard({
               </span>
             ) : null}
           </div>
-          <p className="mt-1 truncate text-[13px] text-ink">{pipeline.summary}</p>
+          <p className="mt-1 truncate text-sm text-app-ink">{pipeline.summary}</p>
         </div>
         <StatusPill status={pipeline.status} />
       </div>
@@ -55,7 +55,7 @@ export default function PipelineCard({
         )}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-3 font-mono text-[10.5px] text-ink-mute">
+      <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-app-ink-mute">
         <span>{formatRelativeTime(pipeline.startedAt)}</span>
         {typeof cost === "number" && cost > 0 ? (
           <span>{formatUsd(cost)}</span>

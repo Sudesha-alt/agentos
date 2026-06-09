@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { motion } from "framer-motion";
 import { PM_STAGE_ORDER, PM_STAGE_LABELS, getPmHandoff } from "../../entities/pm-agents";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
+import { motionSafe, pageStagger, sectionFadeUp } from "../../lib/motion";
 
 export function PmStageProgress({ analysis }) {
   const current = analysis?.currentStage;
@@ -442,48 +444,65 @@ export function PmTechHandoffSection({ jiraKey, analysisComplete }) {
 export function PmAnalysisOutputs({ analysis, onRetrospective, retroRunning }) {
   if (!analysis) return null;
 
-  return (
-    <div className="space-y-5">
-      <Panel>
-        <PanelHeader
-          kicker={analysis.jiraKey}
-          title={analysis.ticketInput?.summary ?? "PM analysis"}
-          right={
-            <span className="font-mono text-[10px] uppercase text-ink-mute">
-              {analysis.status}
-              {analysis.costUsd != null ? ` · $${analysis.costUsd.toFixed(3)}` : ""}
-            </span>
-          }
-        />
-        <div className="px-5 py-4 sm:px-6">
-          <PmStageProgress analysis={analysis} />
-        </div>
+  const sections = [
+    <Panel key="progress">
+      <PanelHeader
+        kicker={analysis.jiraKey}
+        title={analysis.ticketInput?.summary ?? "PM analysis"}
+        right={
+          <span className="type-kicker">
+            {analysis.status}
+            {analysis.costUsd != null ? ` · $${analysis.costUsd.toFixed(3)}` : ""}
+          </span>
+        }
+      />
+      <div className="px-5 py-4 sm:px-6">
+        <PmStageProgress analysis={analysis} />
+      </div>
+    </Panel>,
+    <PmBriefSection key="brief" enrichment={analysis.enrichment} />,
+    <PmClassificationSection key="class" classification={analysis.classification} />,
+    <PmImpactSection key="impact" impact={analysis.codebaseImpact} />,
+    <PmEffortSection key="effort" effort={analysis.effortEstimate} />,
+    <PmImplementationSection key="impl" impl={analysis.implementation} />,
+    <PmPrioritizationSection key="prio" prio={analysis.prioritization} />,
+    <PmAcceptanceSection key="ac" ac={analysis.acceptanceCriteria} />,
+    <PmArtifactsSection key="artifacts" artifacts={analysis.artifacts} />,
+    <PmTechHandoffSection
+      key="handoff"
+      jiraKey={analysis.jiraKey}
+      analysisComplete={analysis.status === "COMPLETED"}
+    />,
+    <PmRetrospectiveSection
+      key="retro"
+      retrospective={analysis.retrospective}
+      onRun={onRetrospective}
+      running={retroRunning}
+    />,
+    analysis.status === "FAILED" && analysis.error ? (
+      <Panel key="error">
+        <PanelHeader kicker="Error" title="Pipeline failed" />
+        <p className="px-5 py-4 text-[13px] text-danger sm:px-6">{analysis.error}</p>
       </Panel>
+    ) : null,
+  ].filter(Boolean);
 
-      <PmBriefSection enrichment={analysis.enrichment} />
-      <PmClassificationSection classification={analysis.classification} />
-      <PmImpactSection impact={analysis.codebaseImpact} />
-      <PmEffortSection effort={analysis.effortEstimate} />
-      <PmImplementationSection impl={analysis.implementation} />
-      <PmPrioritizationSection prio={analysis.prioritization} />
-      <PmAcceptanceSection ac={analysis.acceptanceCriteria} />
-      <PmArtifactsSection artifacts={analysis.artifacts} />
-      <PmTechHandoffSection
-        jiraKey={analysis.jiraKey}
-        analysisComplete={analysis.status === "COMPLETED"}
-      />
-      <PmRetrospectiveSection
-        retrospective={analysis.retrospective}
-        onRun={onRetrospective}
-        running={retroRunning}
-      />
+  const safeStagger = motionSafe(pageStagger(0.05));
+  const safeSection = motionSafe(sectionFadeUp);
 
-      {analysis.status === "FAILED" && analysis.error && (
-        <Panel>
-          <PanelHeader kicker="Error" title="Pipeline failed" />
-          <p className="px-5 py-4 text-[13px] text-danger sm:px-6">{analysis.error}</p>
-        </Panel>
-      )}
-    </div>
+  return (
+    <motion.div
+      key={analysis.id ?? analysis.jiraKey}
+      className="space-y-5"
+      variants={safeStagger}
+      initial="hidden"
+      animate="show"
+    >
+      {sections.map((section, index) => (
+        <motion.div key={section.key ?? index} variants={safeSection}>
+          {section}
+        </motion.div>
+      ))}
+    </motion.div>
   );
 }

@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { useJiraSyncIssues } from "../../entities/jira-sync";
 import EmptyState from "../../app/components/EmptyState";
@@ -6,10 +7,13 @@ import LabelPill from "../../app/components/LabelPill";
 import Spinner from "../../app/components/Spinner";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import { formatRelativeTime } from "../../shared/lib/format";
+import { motionSafe, pageStagger, sectionFadeUp } from "../../lib/motion";
 
 export default function JiraTicketBrowser({ connected }) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const animatedRef = useRef(false);
+  const [didAnimate, setDidAnimate] = useState(false);
 
   const params = useMemo(
     () => ({
@@ -26,6 +30,16 @@ export default function JiraTicketBrowser({ connected }) {
 
   const items = data?.items ?? [];
 
+  useEffect(() => {
+    if (!loading && items.length > 0 && !animatedRef.current) {
+      animatedRef.current = true;
+      setDidAnimate(true);
+    }
+  }, [loading, items.length]);
+
+  const safeStagger = motionSafe(pageStagger(0.03));
+  const safeSection = motionSafe(sectionFadeUp);
+
   if (!connected) return null;
 
   return (
@@ -34,21 +48,21 @@ export default function JiraTicketBrowser({ connected }) {
         title="Synced tickets"
         subtitle="Browse all Jira tickets synced into AgentOS."
       />
-      <div className="border-b border-white/10 px-5 py-3 sm:px-6">
+      <div className="border-b border-app-border px-5 py-3 sm:px-6">
         <div className="flex flex-wrap gap-3">
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search key or summary"
-            className="min-w-[200px] flex-1 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm"
+            className="min-w-[200px] flex-1 rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
           />
           <input
             type="text"
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
             placeholder="Filter by status"
-            className="w-40 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm"
+            className="w-40 rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
           />
         </div>
       </div>
@@ -61,10 +75,10 @@ export default function JiraTicketBrowser({ connected }) {
         />
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
+          <table className="w-full text-left text-[13px]">
             <thead>
-              <tr className="border-b border-white/10 text-xs uppercase text-white/45">
-                <th className="px-5 py-2 font-mono">Key</th>
+              <tr className="border-b border-app-border type-kicker">
+                <th className="px-5 py-2">Key</th>
                 <th className="px-3 py-2">Summary</th>
                 <th className="px-3 py-2">Type</th>
                 <th className="px-3 py-2">Status</th>
@@ -72,44 +86,53 @@ export default function JiraTicketBrowser({ connected }) {
                 <th className="px-5 py-2">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/10">
+            <motion.tbody
+              className="divide-y divide-app-border"
+              variants={didAnimate ? safeStagger : undefined}
+              initial={didAnimate ? "hidden" : false}
+              animate={didAnimate ? "show" : false}
+            >
               {items.map((item) => (
-                <tr key={item.jiraKey} className="hover:bg-white/5">
-                  <td className="px-5 py-3 font-mono text-violet-300">{item.jiraKey}</td>
-                  <td className="max-w-md truncate px-3 py-3">{item.summary}</td>
-                  <td className="px-3 py-3">
+                <motion.tr
+                  key={item.jiraKey}
+                  variants={didAnimate ? safeSection : undefined}
+                  className="hover:bg-app-surface-muted/50"
+                >
+                  <td className="px-5 py-2.5 font-medium text-indigo">{item.jiraKey}</td>
+                  <td className="max-w-md truncate px-3 py-2.5">{item.summary}</td>
+                  <td className="px-3 py-2.5">
                     <LabelPill label={item.issueType} tone="muted" />
                   </td>
-                  <td className="px-3 py-3">
+                  <td className="px-3 py-2.5">
                     <LabelPill label={item.status} tone="indigo" />
                   </td>
-                  <td className="px-3 py-3 text-xs text-white/50">
+                  <td className="px-3 py-2.5 text-[11px] text-app-ink-mute">
                     {item.jiraUpdatedAt
                       ? formatRelativeTime(item.jiraUpdatedAt)
                       : "—"}
                   </td>
-                  <td className="px-5 py-3">
+                  <td className="px-5 py-2.5">
                     <Link
                       to={`/app/pm-agents?ticket=${encodeURIComponent(item.jiraKey)}`}
-                      className="mr-3 text-xs text-violet-300 hover:underline"
+                      className="mr-3 text-[12px] text-indigo hover:underline"
                     >
                       Analyze
                     </Link>
                     <Link
                       to="/app/pipelines"
-                      className="text-xs text-white/50 hover:underline"
+                      className="text-[12px] text-app-ink-mute hover:underline"
                     >
                       Pipelines
                     </Link>
                   </td>
-                </tr>
+                </motion.tr>
               ))}
-            </tbody>
+            </motion.tbody>
           </table>
         </div>
       )}
       {data?.total > items.length ? (
-        <p className="px-5 py-3 text-xs text-white/45">
+        <p className="px-5 py-2.5 text-xs text-app-ink-mute">
           Showing {items.length} of {data.total} synced tickets
         </p>
       ) : null}
