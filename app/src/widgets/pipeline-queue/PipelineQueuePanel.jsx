@@ -73,8 +73,10 @@ export default function PipelineQueuePanel({ setup, showHeader = true, onRefresh
     try {
       const result = await scanPipelineIntake();
       const errors = result.errors?.length ?? 0;
+      const skipped = result.skipped ?? 0;
       setScanMessage(
         `Scanned ${result.scanned ?? 0} AI Worker ticket(s), enqueued ${result.enqueued ?? 0}` +
+          (skipped ? `, skipped ${skipped}` : "") +
           (errors ? ` (${errors} error${errors === 1 ? "" : "s"})` : "") +
           (result.source ? ` via ${result.source}` : "")
       );

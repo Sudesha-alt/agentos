@@ -9,6 +9,7 @@ const NAV_ICONS = {
   "/app/pm-agents": IconPmAgents,
   "/app/codebase": IconCodebase,
   "/app/qa": IconQa,
+  "/app/org-intelligence": IconAudit,
   "/app/costs": IconCosts,
   "/app/audit": IconAudit,
   "/app/git": IconGitHub,

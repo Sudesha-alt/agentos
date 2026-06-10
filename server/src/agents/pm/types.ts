@@ -1,28 +1,27 @@
-export type PmAnalysisStatus = "RUNNING" | "COMPLETED" | "FAILED";
+import type {
+  CodebaseAnalysisOutput,
+  HandoffPackageOutput,
+  IntakeOutput,
+  NeelStageId,
+  PostShipOutput,
+  QuestionModeState,
+  SolutioningOutput,
+} from "../neel/types";
+import { NEEL_STAGE_ORDER } from "../neel/types";
 
-export type PmStageId =
-  | "ENRICHMENT"
-  | "CLASSIFICATION"
-  | "CODEBASE_IMPACT"
-  | "EFFORT"
-  | "IMPLEMENTATION"
-  | "PRIORITIZATION"
-  | "ACCEPTANCE_CRITERIA"
-  | "PRD"
-  | "ARTIFACTS"
-  | "RETROSPECTIVE";
+export type PmAnalysisStatus =
+  | "RUNNING"
+  | "COMPLETED"
+  | "FAILED"
+  | "AWAITING_INPUT"
+  | "AWAITING_CONFIRMATION";
 
-export const PM_STAGE_ORDER: PmStageId[] = [
-  "ENRICHMENT",
-  "CLASSIFICATION",
-  "CODEBASE_IMPACT",
-  "EFFORT",
-  "IMPLEMENTATION",
-  "PRIORITIZATION",
-  "ACCEPTANCE_CRITERIA",
-  "PRD",
-  "ARTIFACTS",
-];
+/** Neel stage IDs (product discovery agent) */
+export type PmStageId = NeelStageId;
+
+export const PM_STAGE_ORDER: PmStageId[] = NEEL_STAGE_ORDER;
+
+export type NeelRunMode = "interactive" | "auto";
 
 export interface PmTicketInput {
   jiraKey: string;
@@ -36,6 +35,7 @@ export interface PmTicketInput {
   priority: string;
 }
 
+/** @deprecated Legacy — synced from Neel outputs for pipeline compatibility */
 export interface EnrichmentOutput {
   cleanSummary: string;
   realUserProblem: string;
@@ -46,6 +46,7 @@ export interface EnrichmentOutput {
   redFlags: string[];
 }
 
+/** @deprecated Legacy — synced from Neel intake */
 export interface ClassificationOutput {
   type: string;
   subtype: string;
@@ -71,6 +72,7 @@ export interface AffectedFileEntry {
   riskLevel: string;
 }
 
+/** @deprecated Legacy — synced from Neel codebase analysis */
 export interface CodebaseImpactOutput {
   affectedFiles: AffectedFileEntry[];
   recentChangeConnection: string;
@@ -189,6 +191,20 @@ export interface PmAnalysisRecord {
   currentStage: PmStageId | null;
   ticketInput: PmTicketInput;
   context: Record<string, unknown>;
+  /** Neel agent identity */
+  agentName?: "Neel";
+  neelMode?: NeelRunMode;
+  neelIntake?: IntakeOutput;
+  questionMode?: QuestionModeState;
+  codebaseAnalysis?: CodebaseAnalysisOutput;
+  solutioning?: SolutioningOutput;
+  handoffPackage?: HandoffPackageOutput;
+  postShip?: PostShipOutput;
+  pendingQuestion?: string | null;
+  pendingQuestionStage?: PmStageId | null;
+  pendingAnswer?: string | null;
+  pendingFlag?: string | null;
+  /** Legacy synced fields */
   enrichment?: EnrichmentOutput;
   classification?: ClassificationOutput;
   codebaseImpact?: CodebaseImpactOutput;
@@ -215,4 +231,15 @@ export interface RetrospectiveInput {
   actualFilesChanged?: string[];
   acCoverageRating?: number;
   stageDurations?: Record<string, string>;
+  metricsInput?: string;
+  launchNotes?: string;
 }
+
+export type {
+  IntakeOutput,
+  QuestionModeState,
+  CodebaseAnalysisOutput,
+  SolutioningOutput,
+  HandoffPackageOutput,
+  PostShipOutput,
+};

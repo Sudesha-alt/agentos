@@ -199,3 +199,35 @@ and sets the ticket status to `AWAITING_HUMAN` until an override resumes it.
 npm run typecheck
 npm run build
 ```
+
+## Automatic pipeline deployment (Render)
+
+### Required environment variables
+
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | Postgres for pipelines, org intelligence |
+| `SUPABASE_URL` + `SUPABASE_SERVICE_KEY` | Vector store (RAG + org intelligence) |
+| `OPENAI_API_KEY` | Agent reasoning and embeddings |
+| `PUBLIC_API_URL` | Public URL for Jira webhooks |
+| `PIPELINE_COMPLETION_STATUS` | Default Jira status after pipeline (e.g. `Done`) |
+| `PIPELINE_INTAKE_POLL_MS` | AI Worker scan interval (default `120000`) |
+
+### Deploy steps
+
+1. Merge to `main` and deploy `agentos-api` via [`render.yaml`](render.yaml).
+2. Run `npx prisma migrate deploy` against production Postgres.
+3. In **Jira Integration**: connect Jira, map AI Worker column, set completion status via `PUT /pipeline-jira/completion-settings`.
+4. Register webhook (automatic on connect when `PUBLIC_API_URL` is set).
+
+### Post-deploy smoke test
+
+1. Move a test ticket into the AI Worker column — it should enqueue within 2 minutes (webhook or intake poll).
+2. Confirm **Pipeline Queue** shows one active ticket, others FIFO-queued.
+3. On completion: Jira receives PRD/QA/RCA comments, description update, and status transition.
+4. Check `/healthz` for `pipelineQueue` stats.
+5. Open **QA Center** and **Org Intelligence** for test cases and learning signals.
+
+### SQLite persistence
+
+Pipeline queue state and Jira completion settings persist in the intake SQLite DB (`pipeline_queue_items`, `completion_settings_json`).

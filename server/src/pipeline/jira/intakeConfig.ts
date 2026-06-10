@@ -1,10 +1,30 @@
 import { getDb } from "../../jira-intake/sqliteStore";
 
+export interface PipelineCompletionSettings {
+  completionStatusName: string;
+  attachPrdComment: boolean;
+  attachQaComment: boolean;
+  attachRcaComment: boolean;
+  updateDescription: boolean;
+  attachJsonArtifact: boolean;
+}
+
 export interface PipelineIntakeMapping {
   boardId: string;
   aiWorkerColumnName: string;
   aiWorkerStatuses: string[];
+  completionSettings: PipelineCompletionSettings;
 }
+
+const DEFAULT_COMPLETION: PipelineCompletionSettings = {
+  completionStatusName:
+    process.env.PIPELINE_COMPLETION_STATUS?.trim() || "Done",
+  attachPrdComment: true,
+  attachQaComment: true,
+  attachRcaComment: true,
+  updateDescription: true,
+  attachJsonArtifact: false,
+};
 
 function parseList(raw: string | undefined, fallback: string[]): string[] {
   if (!raw?.trim()) return fallback;
@@ -21,7 +41,7 @@ function defaultStatuses(): string[] {
 export function getPipelineIntakeMapping(): PipelineIntakeMapping {
   const row = getDb()
     .prepare(
-      `SELECT board_id, ai_worker_column_name, ai_worker_statuses_json
+      `SELECT board_id, ai_worker_column_name, ai_worker_statuses_json, completion_settings_json
        FROM pipeline_jira_credentials WHERE singleton_id = 1`
     )
     .get() as
@@ -29,6 +49,7 @@ export function getPipelineIntakeMapping(): PipelineIntakeMapping {
         board_id: string | null;
         ai_worker_column_name: string | null;
         ai_worker_statuses_json: string | null;
+        completion_settings_json: string | null;
       }
     | undefined;
 
@@ -43,11 +64,45 @@ export function getPipelineIntakeMapping(): PipelineIntakeMapping {
     }
   }
 
+  let completionSettings = { ...DEFAULT_COMPLETION };
+  if (row?.completion_settings_json) {
+    try {
+      completionSettings = {
+        ...DEFAULT_COMPLETION,
+        ...(JSON.parse(row.completion_settings_json) as Partial<PipelineCompletionSettings>),
+      };
+    } catch {
+      /* keep defaults */
+    }
+  }
+
   return {
     boardId: row?.board_id || envBoardId,
     aiWorkerColumnName: row?.ai_worker_column_name || "",
     aiWorkerStatuses: statuses,
+    completionSettings,
   };
+}
+
+export function getPipelineCompletionSettings(): PipelineCompletionSettings {
+  return getPipelineIntakeMapping().completionSettings;
+}
+
+export function savePipelineCompletionSettings(
+  settings: Partial<PipelineCompletionSettings>
+): PipelineCompletionSettings {
+  const existing = getPipelineIntakeMapping();
+  const merged = { ...existing.completionSettings, ...settings };
+  const now = new Date().toISOString();
+
+  getDb()
+    .prepare(
+      `UPDATE pipeline_jira_credentials SET completion_settings_json = @json, updated_at = @now
+       WHERE singleton_id = 1`
+    )
+    .run({ json: JSON.stringify(merged), now });
+
+  return merged;
 }
 
 export function getPipelineIntakeStatuses(): string[] {
@@ -101,5 +156,6 @@ export function savePipelineIntakeColumn(input: {
     boardId,
     aiWorkerColumnName: input.columnName,
     aiWorkerStatuses: statuses,
+    completionSettings: existing.completionSettings,
   };
 }

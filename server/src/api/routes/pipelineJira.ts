@@ -21,7 +21,9 @@ import {
   resolveIntakeStatusesForColumn,
 } from "../../pipeline/jira/boardService";
 import {
+  getPipelineCompletionSettings,
   getPipelineIntakeMapping,
+  savePipelineCompletionSettings,
   savePipelineIntakeColumn,
 } from "../../pipeline/jira/intakeConfig";
 import { getJiraIssueStats } from "../../jira-sync/issueRepository";
@@ -182,10 +184,28 @@ router.get("/intake/tickets", async (_req, res, next) => {
   }
 });
 
+router.get("/completion-settings", (_req, res) => {
+  res.json(getPipelineCompletionSettings());
+});
+
+router.put("/completion-settings", (req, res) => {
+  const settings = savePipelineCompletionSettings({
+    completionStatusName: req.body?.completionStatusName
+      ? String(req.body.completionStatusName).trim()
+      : undefined,
+    attachPrdComment: req.body?.attachPrdComment,
+    attachQaComment: req.body?.attachQaComment,
+    attachRcaComment: req.body?.attachRcaComment,
+    updateDescription: req.body?.updateDescription,
+    attachJsonArtifact: req.body?.attachJsonArtifact,
+  });
+  res.json(settings);
+});
+
 router.post("/intake/scan", async (_req, res, next) => {
   try {
     validatePipelineJiraConfig();
-    const result = await scanIntakeFromSyncedIssues();
+    const result = await scanIntakeFromSyncedIssues("manual");
     res.json({
       ...result,
       queue: getPipelineQueueState(),

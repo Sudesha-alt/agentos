@@ -19,7 +19,12 @@ export default function PrdViewer() {
   const [activeSection, setActiveSection] = useState("problem");
 
   const prdStage = item?.stages?.find((s) => s.stage === "PRODUCT_AGENT");
-  const prd = prdStage?.output?.prd ?? prdStage?.output;
+  const stageOutput = prdStage?.output ?? {};
+  const prd =
+    stageOutput.generatedPrd ??
+    stageOutput.discovery?.generatedPrd ??
+    stageOutput.prd ??
+    stageOutput;
   const gate = item?.stages?.find((s) => s.stage === "PRD_VALIDATION");
   const score =
     gate?.validationResult?.score ??

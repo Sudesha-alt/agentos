@@ -38,3 +38,20 @@ CREATE TABLE IF NOT EXISTS pm_analysis_records (
   record_json   TEXT NOT NULL,
   updated_at    TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS pipeline_queue_items (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  ticket_id     TEXT NOT NULL,
+  jira_key      TEXT NOT NULL,
+  position      INTEGER NOT NULL,
+  status        TEXT NOT NULL DEFAULT 'PENDING',
+  enqueued_at   TEXT NOT NULL,
+  started_at    TEXT,
+  completed_at  TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_pipeline_queue_status_position
+  ON pipeline_queue_items(status, position);
+
+CREATE INDEX IF NOT EXISTS idx_pipeline_queue_jira_key
+  ON pipeline_queue_items(jira_key);

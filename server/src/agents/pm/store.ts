@@ -53,6 +53,7 @@ export const pmAnalysisStore = {
   create(record: Omit<PmAnalysisRecord, "id" | "updatedAt">): PmAnalysisRecord {
     const now = new Date().toISOString();
     const full: PmAnalysisRecord = {
+      agentName: "Neel",
       ...record,
       id: randomUUID(),
       updatedAt: now,

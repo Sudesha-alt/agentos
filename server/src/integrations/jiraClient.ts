@@ -144,6 +144,58 @@ export class JiraClient {
     });
   }
 
+  async getTransitions(jiraKey: string): Promise<Array<{ id: string; name: string }>> {
+    const data = (await this.request<{
+      transitions?: Array<{ id: string; name: string }>;
+    }>(`/rest/api/3/issue/${encodeURIComponent(jiraKey)}/transitions`)) as {
+      transitions?: Array<{ id: string; name: string }>;
+    };
+    return data.transitions ?? [];
+  }
+
+  async transitionIssue(jiraKey: string, transitionId: string): Promise<void> {
+    await this.request(`/rest/api/3/issue/${encodeURIComponent(jiraKey)}/transitions`, {
+      method: "POST",
+      body: JSON.stringify({ transition: { id: transitionId } }),
+    });
+  }
+
+  async transitionToStatus(jiraKey: string, statusName: string): Promise<boolean> {
+    const normalized = statusName.trim().toLowerCase();
+    const transitions = await this.getTransitions(jiraKey);
+    const match = transitions.find((t) => t.name.trim().toLowerCase() === normalized);
+    if (!match) {
+      logger.warn({ jiraKey, statusName, available: transitions.map((t) => t.name) }, "Jira transition not found");
+      return false;
+    }
+    await this.transitionIssue(jiraKey, match.id);
+    return true;
+  }
+
+  async getIssueLabels(jiraKey: string): Promise<string[]> {
+    const issue = (await this.getIssue(jiraKey)) as {
+      fields?: { labels?: string[] };
+    };
+    return issue.fields?.labels ?? [];
+  }
+
+  async updateIssueDescription(jiraKey: string, text: string): Promise<void> {
+    const body = {
+      body: {
+        type: "doc",
+        version: 1,
+        content: text.split(/\n{2,}/).map((block) => ({
+          type: "paragraph",
+          content: [{ type: "text", text: block.trim() }],
+        })),
+      },
+    };
+    await this.request(`/rest/api/3/issue/${encodeURIComponent(jiraKey)}`, {
+      method: "PUT",
+      body: JSON.stringify({ fields: { description: body } }),
+    });
+  }
+
   addAttachmentNote(
     jiraKey: string,
     title: string,

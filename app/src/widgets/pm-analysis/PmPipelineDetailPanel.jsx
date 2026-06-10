@@ -71,7 +71,7 @@ export default function PmPipelineDetailPanel({ pipelineId, onClose }) {
             <div className="flex items-center gap-2">
               <p className="font-mono text-[11px] text-indigo">{analysis.jiraKey}</p>
               <span className="rounded-full border border-indigo/30 bg-indigo/10 px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.12em] text-indigo">
-                PM Agents
+                Neel
               </span>
             </div>
             <h2 className="mt-1 font-display text-xl text-ink">
@@ -125,7 +125,7 @@ export default function PmPipelineDetailPanel({ pipelineId, onClose }) {
                 to="/app/pm-agents"
                 className="font-mono text-[11px] text-indigo hover:underline"
               >
-                Open PM Agents →
+                Open Neel →
               </Link>
             </div>
           </Panel>

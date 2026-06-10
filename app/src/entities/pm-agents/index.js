@@ -4,6 +4,8 @@ import { fetchJson } from "../../shared/lib/fetchJson";
 import { useResource } from "../../shared/lib/useResource";
 import { mockApi } from "../../app/api/mock";
 
+export const NEEL_NAME = "Neel";
+
 const pm = (path) => apiPath("/api", `/pm-agents${path}`);
 
 const restPmAdapter = {
@@ -11,6 +13,18 @@ const restPmAdapter = {
   getAnalysis: (ticketId) => fetchJson(pm(`/analysis/${encodeURIComponent(ticketId)}`)),
   analyze: (ticketId, body = {}) =>
     fetchJson(pm(`/analyze/${encodeURIComponent(ticketId)}`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  answer: (ticketId, answer) =>
+    fetchJson(pm(`/analyze/${encodeURIComponent(ticketId)}/answer`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ answer }),
+    }),
+  confirm: (ticketId, body) =>
+    fetchJson(pm(`/analyze/${encodeURIComponent(ticketId)}/confirm`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -23,6 +37,12 @@ const restPmAdapter = {
     }),
   retrospective: (ticketId, body = {}) =>
     fetchJson(pm(`/retrospective/${encodeURIComponent(ticketId)}`), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  postShip: (ticketId, body = {}) =>
+    fetchJson(pm(`/post-ship/${encodeURIComponent(ticketId)}`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -47,8 +67,11 @@ const mockPmAdapter = {
   listAnalyses: () => mockApi.listPmAnalyses(),
   getAnalysis: (ticketId) => mockApi.getPmAnalysis(ticketId),
   analyze: (ticketId, body) => mockApi.analyzePmTicket(ticketId, body),
+  answer: () => Promise.resolve({ status: "RUNNING" }),
+  confirm: () => Promise.resolve({ status: "RUNNING" }),
   resume: (ticketId) => mockApi.resumePmTicket(ticketId),
   retrospective: (ticketId, body) => mockApi.runPmRetrospective(ticketId, body),
+  postShip: () => Promise.resolve({ postShip: null }),
   getHandoff: (ticketId) => mockApi.getPmHandoff(ticketId),
   runHandoff: (ticketId) => mockApi.runPmHandoff(ticketId),
   startPipeline: (ticketId) => mockApi.startPmPipeline(ticketId),
@@ -57,28 +80,23 @@ const mockPmAdapter = {
 const adapter = DATA_MODE === "rest" ? restPmAdapter : mockPmAdapter;
 
 export const PM_STAGE_LABELS = {
-  ENRICHMENT: "Ticket enrichment",
-  CLASSIFICATION: "Classification & severity",
-  CODEBASE_IMPACT: "Codebase impact",
-  EFFORT: "Effort estimation",
-  IMPLEMENTATION: "Implementation suggestion",
-  PRIORITIZATION: "Prioritization",
-  ACCEPTANCE_CRITERIA: "Acceptance criteria",
+  INTAKE: "Intake & classification",
+  QUESTION_MODE: "Discovery conversation",
+  CODEBASE_ANALYSIS: "Codebase analysis",
+  SOLUTIONING: "Solution direction",
   PRD: "PRD generation",
-  ARTIFACTS: "Communication artifacts",
+  HANDOFF: "Engineering handoff",
+  POST_SHIP: "Post-ship review",
   RETROSPECTIVE: "Retrospective",
 };
 
 export const PM_STAGE_ORDER = [
-  "ENRICHMENT",
-  "CLASSIFICATION",
-  "CODEBASE_IMPACT",
-  "EFFORT",
-  "IMPLEMENTATION",
-  "PRIORITIZATION",
-  "ACCEPTANCE_CRITERIA",
+  "INTAKE",
+  "QUESTION_MODE",
+  "CODEBASE_ANALYSIS",
+  "SOLUTIONING",
   "PRD",
-  "ARTIFACTS",
+  "HANDOFF",
 ];
 
 export function listPmAnalyses() {
@@ -91,6 +109,14 @@ export function getPmAnalysis(ticketId) {
 
 export function analyzePmTicket(ticketId, body) {
   return adapter.analyze(ticketId, body);
+}
+
+export function answerNeelQuestion(ticketId, answer) {
+  return adapter.answer(ticketId, answer);
+}
+
+export function confirmNeelDirection(ticketId, body) {
+  return adapter.confirm(ticketId, body);
 }
 
 export function resumePmAnalysis(ticketId, body) {
@@ -112,6 +138,10 @@ export function runPmRetrospective(ticketId, body) {
   return adapter.retrospective(ticketId, body);
 }
 
+export function runNeelPostShip(ticketId, body) {
+  return adapter.postShip(ticketId, body);
+}
+
 export function getPmHandoff(ticketId) {
   return adapter.getHandoff(ticketId);
 }
@@ -131,11 +161,14 @@ export function usePmAnalyses(options = {}) {
 }
 
 export function usePmAnalysis(ticketId, options = {}) {
+  const poll =
+    options.pollMs ??
+    (ticketId ? 2500 : 0);
   return useResource(
     () => (ticketId ? getPmAnalysis(ticketId) : Promise.resolve(null)),
     [ticketId],
     {
-      pollMs: ticketId ? (options.pollMs ?? 0) : undefined,
+      pollMs: ticketId ? poll : undefined,
     }
   );
 }

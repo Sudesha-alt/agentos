@@ -14,7 +14,11 @@ import { loadPmAnalysesFromStore } from "./agents/pm/store";
 import { loadCanarySettingsFromStore } from "./canaryAgent/settingsStore";
 import { startCanaryScheduler } from "./canaryAgent/scheduler";
 import { scanIntakeFromSyncedIssues } from "./jira-sync/intakeScan";
-import { startJiraSyncScheduler } from "./queue/inProcessRunner";
+import {
+  hydrateQueueFromDb,
+  startIntakePollScheduler,
+  startJiraSyncScheduler,
+} from "./queue/inProcessRunner";
 import { logger } from "./utils/logger";
 
 async function bootstrap(): Promise<void> {
@@ -43,7 +47,9 @@ async function bootstrap(): Promise<void> {
   });
 
   startJiraSyncScheduler();
+  startIntakePollScheduler();
   startCanaryScheduler();
+  hydrateQueueFromDb();
 
   await scanIntakeFromSyncedIssues().catch((err) => {
     logger.warn({ err }, "startup AI Worker intake scan failed");

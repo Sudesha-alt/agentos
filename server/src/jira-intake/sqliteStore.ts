@@ -17,7 +17,37 @@ export function initIntakeDb(): Database.Database {
   db.exec(schema);
   migrateGitCredentialsTable(db);
   migratePipelineJiraCredentialsTable(db);
+  migratePipelineQueueTable(db);
   return db;
+}
+
+function migratePipelineQueueTable(database: Database.Database): void {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS pipeline_queue_items (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      ticket_id     TEXT NOT NULL,
+      jira_key      TEXT NOT NULL,
+      position      INTEGER NOT NULL,
+      status        TEXT NOT NULL DEFAULT 'PENDING',
+      enqueued_at   TEXT NOT NULL,
+      started_at    TEXT,
+      completed_at  TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_pipeline_queue_status_position
+      ON pipeline_queue_items(status, position);
+    CREATE INDEX IF NOT EXISTS idx_pipeline_queue_jira_key
+      ON pipeline_queue_items(jira_key);
+  `);
+
+  const columns = database
+    .prepare("PRAGMA table_info(pipeline_jira_credentials)")
+    .all() as Array<{ name: string }>;
+  const names = new Set(columns.map((col) => col.name));
+  if (!names.has("completion_settings_json")) {
+    database.exec(
+      "ALTER TABLE pipeline_jira_credentials ADD COLUMN completion_settings_json TEXT"
+    );
+  }
 }
 
 function migrateGitCredentialsTable(database: Database.Database): void {

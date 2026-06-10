@@ -3,7 +3,8 @@ export type VectorContentType =
   | "prd"
   | "qa_report"
   | "implementation"
-  | "canary_finding";
+  | "canary_finding"
+  | "org_intelligence";
 
 export interface RetrievedContext {
   jiraTicketId: string;

@@ -8,6 +8,21 @@ import { runCanaryCycle } from "../canaryAgent";
 import type { CanaryRunInput } from "../canaryAgent/types";
 import { orchestrator } from "../pipeline/orchestrator";
 import { logger } from "../utils/logger";
+import {
+  dequeueNextPending,
+  enqueueQueueItem,
+  getActiveQueueItem,
+  listPendingQueueItems,
+  listQueueItems,
+  markQueueItemActive,
+  markQueueItemCompleted,
+  resetStaleActiveItems,
+  isTicketOrKeyQueued,
+  getQueueStats,
+  type QueueItem,
+} from "./pipelineQueueStore";
+
+export { getQueueStats };
 
 export interface PipelineRunResult {
   started: boolean;
@@ -22,18 +37,30 @@ export interface PipelineBatchEnqueueResult {
   enqueued: number;
 }
 
-interface QueueItem {
-  ticketId: string;
-  jiraKey: string;
-}
-
-let activeItem: QueueItem | null = null;
-const queue: QueueItem[] = [];
-const queuedTicketIds = new Set<string>();
-const queuedJiraKeys = new Set<string>();
+let draining = false;
 let mirrorBackfillRunning = false;
 let canaryRunning = false;
 let activeCanaryRunId: string | null = null;
+
+export function hydrateQueueFromDb(): void {
+  const reset = resetStaleActiveItems();
+  if (reset > 0) {
+    logger.warn({ count: reset }, "reset stale ACTIVE queue items to PENDING after restart");
+  }
+
+  const active = getActiveQueueItem();
+  if (active) {
+    logger.info({ ticketId: active.ticketId, jiraKey: active.jiraKey }, "resuming active queue item");
+    if (!draining) void drainQueue(active);
+    return;
+  }
+
+  const next = dequeueNextPending();
+  if (next && !draining) {
+    logger.info({ ticketId: next.ticketId, jiraKey: next.jiraKey }, "starting queued item from DB on boot");
+    void drainQueue(next);
+  }
+}
 
 export function getPipelineQueueState(): {
   activeTicketId: string | null;
@@ -41,33 +68,40 @@ export function getPipelineQueueState(): {
   queuedTicketIds: string[];
   queuedJiraKeys: string[];
   queueLength: number;
+  items: ReturnType<typeof listQueueItems>;
 } {
+  const items = listQueueItems();
+  const active = items.find((i) => i.status === "ACTIVE");
+  const pending = items.filter((i) => i.status === "PENDING");
   return {
-    activeTicketId: activeItem?.ticketId ?? null,
-    activeJiraKey: activeItem?.jiraKey ?? null,
-    queuedTicketIds: queue.map((item) => item.ticketId),
-    queuedJiraKeys: queue.map((item) => item.jiraKey),
-    queueLength: queue.length,
+    activeTicketId: active?.ticket_id ?? null,
+    activeJiraKey: active?.jira_key ?? null,
+    queuedTicketIds: pending.map((i) => i.ticket_id),
+    queuedJiraKeys: pending.map((i) => i.jira_key),
+    queueLength: pending.length,
+    items,
   };
 }
 
 export function isTicketInPipelineQueue(ticketId: string): boolean {
-  return activeItem?.ticketId === ticketId || queuedTicketIds.has(ticketId);
+  return isTicketOrKeyQueued(ticketId, ticketId);
 }
 
 export function isJiraKeyInPipelineQueue(jiraKey: string): boolean {
-  return activeItem?.jiraKey === jiraKey || queuedJiraKeys.has(jiraKey);
+  const active = getActiveQueueItem();
+  if (active?.jiraKey === jiraKey) return true;
+  return listPendingQueueItems().some((i) => i.jiraKey === jiraKey);
 }
 
 /** Enqueue a story group block — items stay contiguous in FIFO order. */
 export function enqueuePipelineBatch(
-  items: QueueItem[]
+  items: Array<{ ticketId: string; jiraKey: string }>
 ): PipelineBatchEnqueueResult {
   let enqueued = 0;
   let started = false;
 
   for (const item of items) {
-    if (isTicketInPipelineQueue(item.ticketId) || isJiraKeyInPipelineQueue(item.jiraKey)) {
+    if (isTicketOrKeyQueued(item.ticketId, item.jiraKey)) {
       continue;
     }
 
@@ -79,78 +113,105 @@ export function enqueuePipelineBatch(
   return { started, enqueued };
 }
 
-/** FIFO queue — only one pipeline run active at a time. */
+/** FIFO queue — only one pipeline run active at a time. Backed by SQLite. */
 export function runPipelineInBackground(
   ticketId: string,
-  jiraKey?: string
+  jiraKey?: string,
+  options?: { resumePipelineId?: string }
 ): PipelineRunResult {
-  const item: QueueItem = { ticketId, jiraKey: jiraKey ?? ticketId };
+  const key = jiraKey ?? ticketId;
+  const active = getActiveQueueItem();
 
-  if (activeItem?.ticketId === ticketId) {
+  if (active?.ticketId === ticketId) {
     logger.warn({ ticketId }, "pipeline already running for this ticket");
     return {
       started: false,
       queued: false,
-      activeTicketId: activeItem.ticketId,
-      activeJiraKey: activeItem.jiraKey,
+      activeTicketId: active.ticketId,
+      activeJiraKey: active.jiraKey,
     };
   }
 
-  if (queuedTicketIds.has(ticketId)) {
-    const position = queue.findIndex((q) => q.ticketId === ticketId) + 1;
+  if (isTicketOrKeyQueued(ticketId, key)) {
+    const pending = listPendingQueueItems();
+    const position = pending.findIndex((q) => q.ticketId === ticketId) + 1;
     logger.info({ ticketId, position }, "pipeline ticket already queued");
     return {
       started: false,
       queued: true,
-      position: position || queue.length,
-      activeTicketId: activeItem?.ticketId ?? null,
-      activeJiraKey: activeItem?.jiraKey ?? null,
+      position: position || pending.length,
+      activeTicketId: active?.ticketId ?? null,
+      activeJiraKey: active?.jiraKey ?? null,
     };
   }
 
-  if (activeItem === null) {
-    void drainQueue(item);
+  const queued = enqueueQueueItem(ticketId, key);
+  if (!queued) {
+    return {
+      started: false,
+      queued: false,
+      activeTicketId: active?.ticketId ?? null,
+      activeJiraKey: active?.jiraKey ?? null,
+    };
+  }
+
+  if (!active && !draining) {
+    void drainQueue(queued, options?.resumePipelineId);
     return {
       started: true,
       queued: false,
       activeTicketId: ticketId,
-      activeJiraKey: item.jiraKey,
+      activeJiraKey: key,
     };
   }
 
-  queue.push(item);
-  queuedTicketIds.add(ticketId);
-  queuedJiraKeys.add(item.jiraKey);
+  const position = listPendingQueueItems().length;
   logger.info(
-    { ticketId, jiraKey: item.jiraKey, position: queue.length, activeTicketId: activeItem.ticketId },
+    { ticketId, jiraKey: key, position, activeTicketId: active?.ticketId },
     "pipeline ticket queued"
   );
   return {
     started: false,
     queued: true,
-    position: queue.length,
-    activeTicketId: activeItem.ticketId,
-    activeJiraKey: activeItem.jiraKey,
+    position,
+    activeTicketId: active?.ticketId ?? null,
+    activeJiraKey: active?.jiraKey ?? null,
   };
 }
 
-async function drainQueue(item: QueueItem): Promise<void> {
-  activeItem = item;
+async function drainQueue(item: QueueItem, resumePipelineId?: string): Promise<void> {
+  if (draining && getActiveQueueItem()?.id !== item.id) {
+    return;
+  }
+  draining = true;
+  markQueueItemActive(item.id);
   logger.info({ ticketId: item.ticketId, jiraKey: item.jiraKey }, "pipeline run started");
 
   try {
-    await orchestrator.run(item.ticketId);
+    if (resumePipelineId) {
+      await orchestrator.resume(resumePipelineId);
+    } else {
+      await orchestrator.run(item.ticketId);
+    }
+    markQueueItemCompleted(item.id, "COMPLETED");
   } catch (err) {
+    markQueueItemCompleted(item.id, "FAILED");
     logger.error({ err, ticketId: item.ticketId }, "in-process pipeline failed");
   } finally {
-    activeItem = null;
-    const next = queue.shift();
+    draining = false;
+    const next = dequeueNextPending();
     if (next) {
-      queuedTicketIds.delete(next.ticketId);
-      queuedJiraKeys.delete(next.jiraKey);
       await drainQueue(next);
     }
   }
+}
+
+export function resumePipelineInBackground(
+  ticketId: string,
+  jiraKey: string,
+  pipelineId: string
+): PipelineRunResult {
+  return runPipelineInBackground(ticketId, jiraKey, { resumePipelineId: pipelineId });
 }
 
 /** Fire-and-forget Jira mirror backfill on the API process event loop. */
@@ -231,4 +292,19 @@ export function startJiraSyncScheduler(): void {
   }, intervalMs).unref();
 
   logger.info({ intervalMs }, "jira incremental sync scheduler started");
+}
+
+export function startIntakePollScheduler(): void {
+  const intervalMs = Number(process.env.PIPELINE_INTAKE_POLL_MS ?? 2 * 60 * 1000);
+  if (intervalMs <= 0) return;
+
+  setInterval(() => {
+    void import("../jira-sync/intakeScan")
+      .then((m) => m.scanIntakeFromSyncedIssues("poll"))
+      .catch((err: unknown) => {
+        logger.warn({ err }, "intake poll scan failed");
+      });
+  }, intervalMs).unref();
+
+  logger.info({ intervalMs }, "AI Worker intake poll scheduler started");
 }
