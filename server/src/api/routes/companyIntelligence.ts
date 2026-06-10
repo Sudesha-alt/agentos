@@ -45,7 +45,7 @@ router.post("/generate-context", async (req, res, next) => {
         "Provide at least company name, product summary, or revenue model before generating context."
       );
     }
-    const { profile, costUsd, model, vectorHitsUsed } =
+    const { profile, costUsd, model, vectorHitsUsed, codebaseFilesIndexed, repoLabel } =
       await companyIntelligence.generateContext({
       companyName: req.body?.companyName,
       website: req.body?.website,
@@ -57,7 +57,14 @@ router.post("/generate-context", async (req, res, next) => {
       nonGoals: req.body?.nonGoals,
       updatedBy: req.body?.updatedBy ?? "user",
       });
-    res.json({ profile, costUsd, model, vectorHitsUsed });
+    res.json({
+      profile,
+      costUsd,
+      model,
+      vectorHitsUsed,
+      codebaseFilesIndexed,
+      repoLabel,
+    });
   } catch (err) {
     next(err);
   }

@@ -99,6 +99,8 @@ const mockAdapter = {
       costUsd: 0,
       model: "mock",
       vectorHitsUsed: 0,
+      codebaseFilesIndexed: 0,
+      repoLabel: null,
     };
   },
 };

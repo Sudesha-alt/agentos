@@ -82,6 +82,8 @@ export function createApp(): express.Express {
   app.use("/webhooks", webhooksRouter);
   app.use("/pipelines", pipelineRouter);
   app.use("/pipelines", overrideRouter);
+  app.use("/api/pipelines", pipelineRouter);
+  app.use("/api/pipelines", overrideRouter);
   app.use("/pm-agents", pmAgentsRouter);
   app.use("/api/pm-agents", pmAgentsRouter);
   app.use("/api/canary", canaryRouter);

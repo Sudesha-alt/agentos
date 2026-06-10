@@ -92,6 +92,8 @@ export default function CompanyIntelligence() {
       setGenMeta({
         model: result.model,
         vectorHitsUsed: result.vectorHitsUsed,
+        codebaseFilesIndexed: result.codebaseFilesIndexed,
+        repoLabel: result.repoLabel,
         costUsd: result.costUsd,
       });
       setForm({
@@ -124,7 +126,7 @@ export default function CompanyIntelligence() {
       <PageIntro
         kicker="Business intelligence"
         title="Company profile"
-        body="Define who you are, how you make money, and what you're building toward. Neel validates every idea against this context before writing a PRD."
+        body="Business context is inferred from your indexed codebase — product domains, modules, and monetization signals. Neel validates every idea against this before writing a PRD."
       />
 
       <form onSubmit={handleSave} className="space-y-5">
@@ -236,7 +238,7 @@ export default function CompanyIntelligence() {
           <PanelHeader
             kicker="Generated · editable"
             title="Business context"
-            body="One-time synthesis using your vector database (tickets, PRDs, org learnings) and gpt-5.5. Edit freely — Neel reads this verbatim."
+            body="Inferred from your indexed codebase (architecture, modules, billing/product signals) with gpt-5.5. Edit freely — Neel reads this verbatim."
             right={
               <button
                 type="button"
@@ -244,7 +246,7 @@ export default function CompanyIntelligence() {
                 onClick={handleGenerate}
                 className="rounded-full border border-indigo/30 bg-indigo/10 px-4 py-2 text-[12px] font-medium text-indigo transition hover:bg-indigo/15 disabled:opacity-50"
               >
-                {generating ? "Generating…" : "Generate from details"}
+                {generating ? "Generating…" : "Generate from codebase"}
               </button>
             }
           />
@@ -254,7 +256,7 @@ export default function CompanyIntelligence() {
               onChange={(e) => update("businessContext", e.target.value)}
               rows={12}
               className={`${inputClass} resize-y leading-relaxed`}
-              placeholder="After filling company details above, click Generate — or write your own business context here."
+              placeholder="Connect GitHub, index the repo, then Generate from codebase — or write your own business context here."
             />
           </div>
         </Panel>
@@ -262,8 +264,12 @@ export default function CompanyIntelligence() {
         {genMeta && (
           <p className="text-[12px] text-app-ink-mute">
             Generated with {genMeta.model ?? "premium model"}
-            {genMeta.vectorHitsUsed != null
-              ? ` · ${genMeta.vectorHitsUsed} vector DB hit${genMeta.vectorHitsUsed === 1 ? "" : "s"}`
+            {genMeta.repoLabel ? ` · ${genMeta.repoLabel}` : ""}
+            {genMeta.codebaseFilesIndexed != null
+              ? ` · ${genMeta.codebaseFilesIndexed} indexed files`
+              : ""}
+            {genMeta.vectorHitsUsed != null && genMeta.vectorHitsUsed > 0
+              ? ` · ${genMeta.vectorHitsUsed} vector supplement${genMeta.vectorHitsUsed === 1 ? "" : "s"}`
               : ""}
             {genMeta.costUsd != null ? ` · $${genMeta.costUsd.toFixed(4)}` : ""}
           </p>

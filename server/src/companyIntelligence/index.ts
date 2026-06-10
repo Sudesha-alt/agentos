@@ -68,6 +68,8 @@ export const companyIntelligence = {
     costUsd: number;
     model: string;
     vectorHitsUsed: number;
+    codebaseFilesIndexed: number;
+    repoLabel: string | null;
   }> {
     const current = await getCompanyProfile();
     const merged: CompanyProfile = {
@@ -77,8 +79,14 @@ export const companyIntelligence = {
       nonGoals: input.nonGoals ?? current.nonGoals,
     };
 
-    const { businessContext, usage, model, vectorHitsUsed } =
-      await generateBusinessContext(merged);
+    const {
+      businessContext,
+      usage,
+      model,
+      vectorHitsUsed,
+      codebaseFilesIndexed,
+      repoLabel,
+    } = await generateBusinessContext(merged);
     const profile = await saveCompanyProfile({
       ...input,
       businessContext,
@@ -95,13 +103,22 @@ export const companyIntelligence = {
           goalCount: profile.strategicGoals.length,
           model,
           vectorHitsUsed,
+          codebaseFilesIndexed,
+          repoLabel,
         },
       });
     } catch (err) {
       logger.warn({ err }, "company profile org intel capture failed");
     }
 
-    return { profile, costUsd: usage.costUsd, model, vectorHitsUsed };
+    return {
+      profile,
+      costUsd: usage.costUsd,
+      model,
+      vectorHitsUsed,
+      codebaseFilesIndexed,
+      repoLabel,
+    };
   },
 
   toPromptBlock(profile?: CompanyProfile | null): string {
