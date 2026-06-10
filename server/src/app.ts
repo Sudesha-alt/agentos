@@ -17,6 +17,7 @@ import pipelineRouter from "./api/routes/pipeline";
 import pmAgentsRouter from "./api/routes/pmAgents";
 import canaryRouter from "./api/routes/canary";
 import orgIntelligenceRouter from "./api/routes/orgIntelligence";
+import companyIntelligenceRouter from "./api/routes/companyIntelligence";
 import qaRouter from "./api/routes/qa";
 import settingsRouter from "./api/routes/settings";
 import webhooksRouter from "./api/routes/webhooks";
@@ -86,6 +87,7 @@ export function createApp(): express.Express {
   app.use("/api/canary", canaryRouter);
   app.use("/api/qa", qaRouter);
   app.use("/api/org-intelligence", orgIntelligenceRouter);
+  app.use("/api/company-intelligence", companyIntelligenceRouter);
   app.use("/api/settings", settingsRouter);
 
   app.use((_req, res) => {

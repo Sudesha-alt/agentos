@@ -233,6 +233,26 @@ SUGGESTED FIX: ${input.suggestedFix ?? "—"}
     });
     logger.info({ jiraKey, recordId }, "org intelligence embedded");
   },
+
+  async embedCompanyIntelligence(
+    profileId: string,
+    text: string,
+    metadata: Record<string, unknown>
+  ): Promise<void> {
+    const embedding = await this.embed(text);
+    await vectorStore.upsert({
+      jiraTicketId: profileId,
+      jiraKey: "COMPANY",
+      contentType: "company_intelligence",
+      content: text,
+      embedding,
+      metadata: {
+        ...metadata,
+        embeddedAt: new Date().toISOString(),
+      },
+    });
+    logger.info({ profileId }, "company intelligence embedded");
+  },
 };
 
 export function prepareTextForEmbedding(text: string): string {

@@ -44,8 +44,9 @@ export async function chatCompletionText(params: {
   user: string;
   maxTokens?: number;
   jsonMode?: boolean;
-}): Promise<{ text: string; usage: LlmUsage }> {
-  const model = getOpenAIChatModel();
+  model?: string;
+}): Promise<{ text: string; usage: LlmUsage; model: string }> {
+  const model = params.model ?? getOpenAIChatModel();
   const response = await withRetry(
     () =>
       createChatCompletion({
@@ -70,6 +71,7 @@ export async function chatCompletionText(params: {
 
   return {
     text,
+    model,
     usage: {
       inputTokens,
       outputTokens,

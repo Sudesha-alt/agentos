@@ -6,19 +6,15 @@ import { getPipelineJiraClient } from "../../pipeline/jira/client";
 import { retriever } from "../../rag/retriever";
 import { jiraTool } from "../../tools/jiraTool";
 import { logger } from "../../utils/logger";
+import { companyIntelligence } from "../../companyIntelligence";
 import type { PmTicketInput } from "./types";
-
-const MOCK_OKRS = [
-  "Reduce enterprise churn by improving billing reliability",
-  "Ship self-serve workspace admin controls",
-  "Improve pipeline automation coverage to 80%",
-];
 
 export interface PmContextBundle {
   reporterTier: string;
   similarTicketsList: string;
   componentBugCount: string;
   okrList: string;
+  companyContextBlock: string;
   linkedPrs: string;
   candidateFilesList: string;
   relevantCommitHistory: string;
@@ -415,11 +411,24 @@ export async function gatherPmContext(
   const linkedPrs = await fetchLinkedPrs(ticket.jiraKey);
   const inflightCount = await fetchInflightCount();
 
+  let companyProfile;
+  try {
+    companyProfile = await companyIntelligence.getProfile();
+  } catch {
+    companyProfile = null;
+  }
+  const companyContextBlock = companyIntelligence.toPromptBlock(companyProfile);
+  const okrList =
+    companyProfile?.strategicGoals?.length
+      ? companyProfile.strategicGoals.join("; ")
+      : "not configured — set company intelligence in workspace settings";
+
   return {
     reporterTier,
     similarTicketsList,
     componentBugCount,
-    okrList: MOCK_OKRS.join("; "),
+    okrList,
+    companyContextBlock,
     linkedPrs,
     candidateFilesList,
     relevantCommitHistory,

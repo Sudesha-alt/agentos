@@ -48,6 +48,11 @@ export const APP_NAV_SECTIONS = [
         label: "Org Intelligence",
         breadcrumb: "Org Intelligence",
       },
+      {
+        to: "/app/company-intelligence",
+        label: "Company Profile",
+        breadcrumb: "Company Profile",
+      },
     ],
   },
   {

@@ -7,6 +7,8 @@ import type {
 let cached: OpenAI | undefined;
 
 export const DEFAULT_OPENAI_CHAT_MODEL = "gpt-5.1";
+/** One-off / high-stakes tasks (company profile synthesis, etc.). */
+export const DEFAULT_OPENAI_PREMIUM_MODEL = "gpt-5.5";
 
 function sanitizeModelName(raw: string | undefined): string {
   if (!raw) return "";
@@ -30,6 +32,15 @@ export function getOpenAIChatModel(): string {
 /** Chat model for per-file codebase summaries during indexing. */
 export function getOpenAISummaryModel(): string {
   return getOpenAIChatModel();
+}
+
+/** Premium model for rare, high-quality synthesis (company business context). */
+export function getOpenAIPremiumModel(): string {
+  return (
+    sanitizeModelName(process.env.OPENAI_PREMIUM_MODEL) ||
+    sanitizeModelName(process.env.OPENAI_COMPANY_CONTEXT_MODEL) ||
+    DEFAULT_OPENAI_PREMIUM_MODEL
+  );
 }
 
 export type ChatCompletionParams = Omit<

@@ -12,6 +12,8 @@ Classify the ticket as exactly one of: bug | task | small_feature | large_featur
 
 Rules:
 - If unclear, produce exactly ONE clarifying question to establish type. Not a list.
+- With the clarifying question, provide 3–4 concise answer options grounded in company context, business context, and codebase intelligence below (do NOT include "Other" — the UI adds that).
+- Options must reflect realistic answers given who this company is, how they make money, and what the codebase suggests — not generic placeholders.
 - Identify symptom vs likely root cause in one sentence each.
 - Do not start discovery yet.
 
@@ -23,6 +25,18 @@ Priority: {{ticket_priority}}
 Components: {{ticket_components}}
 Labels: {{ticket_labels}}
 
+COMPANY CONTEXT:
+{{company_context}}
+
+BUSINESS CONTEXT (revenue model, ICP, priorities):
+{{business_context}}
+
+STRATEGIC GOALS:
+{{strategic_goals}}
+
+CODEBASE INTELLIGENCE (modules, similar work, technical signals):
+{{codebase_intelligence}}
+
 {{prior_clarification_block}}
 
 Output JSON:
@@ -30,7 +44,8 @@ Output JSON:
   "ticketType": "bug|task|small_feature|large_feature|unclear",
   "reasoning": "2-3 sentences on why this classification",
   "symptomVsRootCause": "Symptom: ... Root cause hypothesis: ...",
-  "clarifyingQuestion": "single question if unclear, else null"
+  "clarifyingQuestion": "single question if unclear, else null",
+  "clarifyingOptions": ["3-4 options grounded in company, business, and codebase context if clarifyingQuestion is set, else []"]
 }${JSON_ONLY}`;
 
 export const PROMPT_NEXT_QUESTION = `Stage 2 — Question mode (one turn)
@@ -47,6 +62,18 @@ TICKET CONTEXT:
 {{ticket_summary}}
 {{ticket_description}}
 
+COMPANY CONTEXT:
+{{company_context}}
+
+BUSINESS CONTEXT (revenue model, ICP, what the company is building toward):
+{{business_context}}
+
+STRATEGIC GOALS:
+{{strategic_goals}}
+
+CODEBASE INTELLIGENCE (relevant modules, similar tickets, technical constraints):
+{{codebase_intelligence}}
+
 For {{ticket_type}}, focus areas:
 - bug: what broke, when, how many users, severity, workaround
 - task: what needs doing, why now, who requested, done-when
@@ -55,13 +82,18 @@ For {{ticket_type}}, focus areas:
 Rules:
 - If the last answer reveals contradiction, missing dependency, or scope problem → action "flag" with the flag message, then ask a follow-up OR ask one clarifying question.
 - If you have enough for a clear problem statement and solution direction → action "ready" with discoverySummary.
-- Otherwise → action "ask" with exactly ONE question.
+- Otherwise → action "ask" with exactly ONE question and 3–4 concise answer options.
 - Never ask multiple questions in one turn.
+- Options MUST be grounded in company context, business context, and codebase intelligence above.
+  * At least one option should reflect business/revenue/strategic fit.
+  * At least one option should reflect a technical/codebase-informed path or constraint.
+  * Options must be mutually distinct, realistic stakeholder answers (do NOT include "Other").
 
 Output JSON:
 {
   "action": "ask|ready|flag",
   "question": "required if action is ask",
+  "options": ["3-4 answer choices grounded in company, business, and codebase context when action is ask"],
   "flag": "required if action is flag — immediate concern",
   "reason": "why this question or flag",
   "discoverySummary": "required if action is ready — structured summary of what you learned"
@@ -70,11 +102,19 @@ Output JSON:
 export const PROMPT_INFER_ANSWER = `You are helping Neel (PM agent) continue discovery when the stakeholder is not available.
 
 Given the ticket and context, infer the most likely honest answer to this question.
+Prefer answers aligned with business context and codebase intelligence when plausible.
 If truly unknown, say "Unknown — needs stakeholder input" and note what to find out.
 
 Question: {{question}}
 Ticket: {{ticket_summary}}
 {{ticket_description}}
+
+Business context:
+{{business_context}}
+
+Codebase intelligence:
+{{codebase_intelligence}}
+
 Prior conversation:
 {{conversation_history}}
 
@@ -123,6 +163,10 @@ Output JSON:
 export const PROMPT_SOLUTIONING = `Stage 4 — Solutioning (direction only — NOT full PRD)
 
 Synthesize discovery + codebase analysis into a direction summary for human confirmation.
+Every idea MUST be validated against the company context below.
+
+COMPANY CONTEXT:
+{{company_context}}
 
 DISCOVERY:
 {{discovery_summary}}
@@ -139,18 +183,32 @@ Write 2-3 paragraphs covering:
 - Explicit non-goals (specific, not vague)
 - Open risks
 
+Then assess business fit vs company strategy and revenue model:
+- strong: clearly advances strategic goals and revenue
+- moderate: useful but not core to revenue or strategy
+- weak: marginal value; question whether to prioritize
+- misaligned: conflicts with ICP, non-goals, or revenue model — flag clearly
+
 Output JSON:
 {
   "problemStatement": "clear problem statement",
   "recommendedApproach": "2-3 paragraphs",
   "explicitNonGoals": ["specific non-goals"],
   "openRisks": ["..."],
-  "summaryMarkdown": "formatted markdown of the above for stakeholder review"
+  "summaryMarkdown": "formatted markdown of the above for stakeholder review",
+  "businessFit": "strong|moderate|weak|misaligned",
+  "revenueImpact": "how this affects how the company makes money",
+  "alignmentNotes": "fit vs strategic goals and company non-goals",
+  "companyValidationSummary": "1-2 sentences: should we build this given who we are?"
 }${JSON_ONLY}`;
 
 export const PROMPT_PRD = `Stage 5 — PRD generation
 
 Neel writes the full PRD after direction was confirmed.
+Success metrics must tie to company strategic goals and revenue model.
+
+COMPANY CONTEXT:
+{{company_context}}
 
 Confirmed direction:
 {{solution_summary}}

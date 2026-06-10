@@ -128,6 +128,28 @@ function OverviewTab({ analysis, onRetrospective, retroRunning }) {
             <div className="mt-4 whitespace-pre-wrap text-[14px] leading-relaxed text-app-ink-dim">
               {analysis.solutioning?.summaryMarkdown ?? analysis.solutioning?.recommendedApproach}
             </div>
+            {analysis.solutioning?.businessFit && (
+              <div
+                className={`mt-4 rounded-app-sm border p-4 ${
+                  analysis.solutioning.businessFit === "misaligned"
+                    ? "border-danger/30 bg-danger/5"
+                    : "border-app-border bg-app-surface-muted/30"
+                }`}
+              >
+                <p className="type-kicker">Company validation</p>
+                <p className="mt-1 text-[14px] capitalize text-app-ink">
+                  {analysis.solutioning.businessFit} fit
+                  {analysis.solutioning.revenueImpact
+                    ? ` — ${analysis.solutioning.revenueImpact}`
+                    : ""}
+                </p>
+                {analysis.solutioning.companyValidationSummary && (
+                  <p className="mt-1 text-[13px] text-app-ink-dim">
+                    {analysis.solutioning.companyValidationSummary}
+                  </p>
+                )}
+              </div>
+            )}
             {analysis.solutioning?.explicitNonGoals?.length > 0 && (
               <div className="mt-4 rounded-app-sm border border-app-border bg-app-surface-muted/30 p-4">
                 <p className="type-kicker">Out of scope</p>

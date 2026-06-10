@@ -17,6 +17,7 @@ import JiraIntegration from "./app/pages/JiraIntegration";
 import JiraSearch from "./app/pages/JiraSearch";
 import PmAgents from "./app/pages/PmAgents";
 import OrgIntelligence from "./app/pages/OrgIntelligence";
+import CompanyIntelligence from "./app/pages/CompanyIntelligence";
 import {
   AuthProvider,
   PublicOnlyRoute,
@@ -54,6 +55,7 @@ function App() {
             <Route path="codebase" element={<CodebaseIntelligence />} />
             <Route path="qa" element={<QaCenter />} />
             <Route path="org-intelligence" element={<OrgIntelligence />} />
+            <Route path="company-intelligence" element={<CompanyIntelligence />} />
             <Route path="costs" element={<CostIntelligence />} />
             <Route path="audit" element={<AuditTrail />} />
             <Route path="git" element={<GitIntegration />} />

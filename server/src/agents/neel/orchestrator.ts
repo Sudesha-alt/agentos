@@ -1,3 +1,4 @@
+import { companyIntelligence, mapBusinessFitToRevenueRisk } from "../../companyIntelligence";
 import { mergeUsage } from "../../llm/openaiCompletion";
 import type { GeneratedPRD } from "../../prd/prdGenerator";
 import { recordRetrospectiveLearning } from "../../rag/retrievalLearning";
@@ -78,6 +79,50 @@ async function runNeelStage<T>(
   }
 }
 
+function companyContextFromRecord(
+  record: PmAnalysisRecord,
+  ctx?: Awaited<ReturnType<typeof gatherPmContext>>
+): string {
+  if (ctx?.companyContextBlock) return ctx.companyContextBlock;
+  const stored = record.context as { companyContextBlock?: string } | undefined;
+  return stored?.companyContextBlock ?? companyIntelligence.toPromptBlock();
+}
+
+function truncateForPrompt(text: string, max = 2800): string {
+  if (!text || text.length <= max) return text || "none";
+  return `${text.slice(0, max)}…`;
+}
+
+function formatCodebaseIntelligenceBlock(
+  ctx: Awaited<ReturnType<typeof gatherPmContext>>
+): string {
+  return [
+    `Affected components: ${ctx.affectedComponents}`,
+    `Similar tickets / past work:\n${truncateForPrompt(ctx.similarTicketsList, 1800)}`,
+    `Candidate files & modules:\n${truncateForPrompt(ctx.candidateFilesList, 2200)}`,
+    `Recent commit signal: ${ctx.recentCommitSummary}`,
+    `Open bugs in shared components: ${ctx.componentBugCount}`,
+    `Branch: ${ctx.branchName}`,
+  ].join("\n\n");
+}
+
+function questionPromptContext(ctx: Awaited<ReturnType<typeof gatherPmContext>>) {
+  return {
+    company_context: ctx.companyContextBlock,
+    business_context: ctx.companyContextBlock,
+    strategic_goals: ctx.okrList,
+    codebase_intelligence: formatCodebaseIntelligenceBlock(ctx),
+  };
+}
+
+function normalizeQuestionOptions(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((o) => String(o).trim())
+    .filter((o) => o.length > 0 && !/^other\b/i.test(o))
+    .slice(0, 4);
+}
+
 function formatConversation(state: QuestionModeState | undefined): string {
   if (!state?.conversation?.length) return "No questions yet.";
   return state.conversation
@@ -109,8 +154,13 @@ function syncLegacyFields(
           missingContext: [],
           relatedTicketsSummary: "",
           reporterContext: record.ticketInput.reporter,
-          okrAlignment: "",
-          redFlags: qm?.flagsRaised ?? [],
+          okrAlignment: solution?.alignmentNotes ?? solution?.companyValidationSummary ?? "",
+          redFlags: [
+            ...(qm?.flagsRaised ?? []),
+            ...(solution?.businessFit === "misaligned"
+              ? [`Business misalignment: ${solution.companyValidationSummary ?? solution.alignmentNotes ?? "see solutioning"}`]
+              : []),
+          ],
         }
       : record.enrichment,
     classification: intake
@@ -121,9 +171,19 @@ function syncLegacyFields(
           severityReasoning: intake.reasoning,
           affectedUserSegment: "unknown",
           estimatedUsersAffected: "unknown",
-          revenueRisk: "none",
-          strategicAlignment: 0.5,
-          strategicAlignmentReason: intake.reasoning,
+          revenueRisk: mapBusinessFitToRevenueRisk(solution?.businessFit),
+          strategicAlignment:
+            solution?.businessFit === "strong"
+              ? 0.9
+              : solution?.businessFit === "moderate"
+                ? 0.65
+                : solution?.businessFit === "weak"
+                  ? 0.35
+                  : solution?.businessFit === "misaligned"
+                    ? 0.1
+                    : 0.5,
+          strategicAlignmentReason:
+            solution?.companyValidationSummary ?? solution?.alignmentNotes ?? intake.reasoning,
           isDuplicate: false,
           duplicateOf: null,
           classificationConfidence: 0.8,
@@ -259,16 +319,16 @@ async function runNeelStageHandler(
 ): Promise<boolean> {
   switch (stage) {
     case "INTAKE":
-      return runIntake(jiraKey, ticket, record, mode);
+      return runIntake(jiraKey, ticket, ctx, record, mode);
     case "QUESTION_MODE":
-      return runQuestionMode(jiraKey, ticket, record, mode);
+      return runQuestionMode(jiraKey, ticket, ctx, record, mode);
     case "CODEBASE_ANALYSIS":
       await runCodebaseAnalysis(jiraKey, ticket, ctx, record);
       return false;
     case "SOLUTIONING":
-      return runSolutioning(jiraKey, record, mode);
+      return runSolutioning(jiraKey, ctx, record, mode);
     case "PRD":
-      await runPrdGeneration(jiraKey, ticket, record);
+      await runPrdGeneration(jiraKey, ticket, ctx, record);
       return false;
     case "HANDOFF":
       await runHandoff(jiraKey, record);
@@ -281,10 +341,12 @@ async function runNeelStageHandler(
 async function runIntake(
   jiraKey: string,
   ticket: PmTicketInput,
+  ctx: Awaited<ReturnType<typeof gatherPmContext>>,
   record: PmAnalysisRecord,
   mode: NeelRunMode
 ): Promise<boolean> {
   const priorAnswer = record.pendingAnswer ?? "";
+  const qctx = questionPromptContext(ctx);
   const prompt = renderTemplate(PROMPT_INTAKE, {
     ticket_summary: ticket.summary,
     ticket_description: ticket.description,
@@ -292,6 +354,10 @@ async function runIntake(
     ticket_priority: ticket.priority,
     ticket_components: ticket.components.join(", ") || "none",
     ticket_labels: ticket.labels.join(", ") || "none",
+    company_context: companyContextFromRecord(record, ctx),
+    business_context: qctx.business_context,
+    strategic_goals: qctx.strategic_goals,
+    codebase_intelligence: qctx.codebase_intelligence,
     prior_clarification_block: priorAnswer
       ? `Prior clarifying answer: ${priorAnswer}`
       : "",
@@ -309,6 +375,7 @@ async function runIntake(
       pmAnalysisStore.update(jiraKey, {
         status: "AWAITING_INPUT",
         pendingQuestion: intake.clarifyingQuestion,
+        pendingQuestionOptions: normalizeQuestionOptions(intake.clarifyingOptions),
         pendingQuestionStage: "INTAKE",
       });
       return true;
@@ -317,10 +384,12 @@ async function runIntake(
       question: intake.clarifyingQuestion,
       ticket_summary: ticket.summary,
       ticket_description: ticket.description,
+      business_context: qctx.business_context,
+      codebase_intelligence: qctx.codebase_intelligence,
       conversation_history: "",
     }));
     pmAnalysisStore.update(jiraKey, { pendingAnswer: inferred.answer });
-    return runIntake(jiraKey, ticket, pmAnalysisStore.get(jiraKey)!, mode);
+    return runIntake(jiraKey, ticket, ctx, pmAnalysisStore.get(jiraKey)!, mode);
   }
 
   return false;
@@ -329,6 +398,7 @@ async function runIntake(
 async function runQuestionMode(
   jiraKey: string,
   ticket: PmTicketInput,
+  ctx: Awaited<ReturnType<typeof gatherPmContext>>,
   record: PmAnalysisRecord,
   mode: NeelRunMode
 ): Promise<boolean> {
@@ -351,10 +421,13 @@ async function runQuestionMode(
     pmAnalysisStore.update(jiraKey, {
       pendingAnswer: undefined,
       pendingQuestion: undefined,
+      pendingQuestionOptions: undefined,
       pendingFlag: undefined,
       questionMode: state,
     });
   }
+
+  const qctx = questionPromptContext(ctx);
 
   while (!state.readyToProceed && state.conversation.length < NEEL_BEHAVIOR.maxDiscoveryTurns) {
     const next = await runNeelStage<NeelNextQuestionResult>(
@@ -366,6 +439,10 @@ async function runQuestionMode(
         conversation_history: formatConversation(state),
         ticket_summary: ticket.summary,
         ticket_description: ticket.description,
+        company_context: companyContextFromRecord(record, ctx),
+        business_context: qctx.business_context,
+        strategic_goals: qctx.strategic_goals,
+        codebase_intelligence: qctx.codebase_intelligence,
       })
     );
 
@@ -388,6 +465,7 @@ async function runQuestionMode(
         questionMode: state,
         status: "AWAITING_INPUT",
         pendingQuestion: next.question,
+        pendingQuestionOptions: normalizeQuestionOptions(next.options),
         pendingQuestionStage: "QUESTION_MODE",
         pendingFlag: next.flag ?? undefined,
       });
@@ -402,6 +480,8 @@ async function runQuestionMode(
         question: next.question,
         ticket_summary: ticket.summary,
         ticket_description: ticket.description,
+        business_context: qctx.business_context,
+        codebase_intelligence: qctx.codebase_intelligence,
         conversation_history: formatConversation(state),
       })
     );
@@ -450,6 +530,7 @@ async function runCodebaseAnalysis(
 
 async function runSolutioning(
   jiraKey: string,
+  ctx: Awaited<ReturnType<typeof gatherPmContext>>,
   record: PmAnalysisRecord,
   mode: NeelRunMode
 ): Promise<boolean> {
@@ -458,6 +539,7 @@ async function runSolutioning(
   }
 
   const prompt = renderTemplate(PROMPT_SOLUTIONING, {
+    company_context: companyContextFromRecord(record, ctx),
     discovery_summary: record.questionMode?.discoverySummary ?? "",
     codebase_analysis_json: JSON.stringify(record.codebaseAnalysis ?? {}, null, 2),
     flags: (record.questionMode?.flagsRaised ?? []).join("\n") || "none",
@@ -480,9 +562,11 @@ async function runSolutioning(
 async function runPrdGeneration(
   jiraKey: string,
   ticket: PmTicketInput,
+  ctx: Awaited<ReturnType<typeof gatherPmContext>>,
   record: PmAnalysisRecord
 ): Promise<void> {
   const prompt = renderTemplate(PROMPT_PRD, {
+    company_context: companyContextFromRecord(record, ctx),
     solution_summary: record.solutioning?.summaryMarkdown ?? "",
     discovery_summary: record.questionMode?.discoverySummary ?? "",
     codebase_analysis_json: JSON.stringify(record.codebaseAnalysis ?? {}, null, 2),

@@ -206,6 +206,21 @@ model OrgIntelligenceRecord {
   @@index([component])
 }
 
+model CompanyProfile {
+  id              String   @id @default("default")
+  companyName     String   @default("")
+  website         String   @default("")
+  productSummary  String   @default("") @db.Text
+  icp             String   @default("") @db.Text
+  revenueModel    String   @default("") @db.Text
+  pricingSummary  String   @default("") @db.Text
+  businessContext String   @default("") @db.Text
+  strategicGoals  Json     @default("[]")
+  nonGoals        Json     @default("[]")
+  updatedAt       DateTime @updatedAt
+  updatedBy       String?
+}
+
 model AuditLog {
   id         String   @id @default(cuid())
   pipelineId String

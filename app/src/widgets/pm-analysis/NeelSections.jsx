@@ -13,7 +13,8 @@ export function NeelConversationPanel({ analysis, onAnswer, onConfirm, busy, pro
         kicker={`${NEEL_NAME} asks`}
         title="One question at a time"
         prompt={pendingQuestion}
-        placeholder="Type your answer — be specific; Neel will ask the next question based on this."
+        options={analysis?.pendingQuestionOptions}
+        placeholder="Type your answer…"
         submitLabel="Send answer"
         onSubmit={onAnswer}
         busy={busy}
@@ -43,6 +44,35 @@ export function NeelConversationPanel({ analysis, onAnswer, onConfirm, busy, pro
               {sol.recommendedApproach}
             </div>
           </div>
+          {(sol.businessFit || sol.revenueImpact) && (
+            <div
+              className={`rounded-app-sm border p-4 ${
+                sol.businessFit === "misaligned"
+                  ? "border-danger/35 bg-danger/8"
+                  : sol.businessFit === "weak"
+                    ? "border-warning/35 bg-warning/8"
+                    : "border-success/25 bg-success/5"
+              }`}
+            >
+              <p className="type-kicker">Company validation</p>
+              {sol.businessFit && (
+                <p className="mt-2 text-[14px] font-medium capitalize text-app-ink">
+                  Business fit: {sol.businessFit.replace(/_/g, " ")}
+                </p>
+              )}
+              {sol.companyValidationSummary && (
+                <p className="mt-1 text-[13px] leading-relaxed text-app-ink-dim">
+                  {sol.companyValidationSummary}
+                </p>
+              )}
+              {sol.revenueImpact && (
+                <p className="mt-2 text-[13px] text-app-ink-dim">
+                  <span className="font-medium text-app-ink">Revenue impact:</span>{" "}
+                  {sol.revenueImpact}
+                </p>
+              )}
+            </div>
+          )}
           <div className="grid gap-4 sm:grid-cols-2">
             {sol.explicitNonGoals?.length > 0 && (
               <div className="rounded-app-sm border border-app-border p-4">
@@ -96,10 +126,13 @@ export function NeelConversationPanel({ analysis, onAnswer, onConfirm, busy, pro
   return null;
 }
 
+const OTHER_OPTION_ID = "__other__";
+
 function NeelInputPanel({
   kicker,
   title,
   prompt,
+  options = [],
   placeholder,
   submitLabel,
   onSubmit,
@@ -107,7 +140,25 @@ function NeelInputPanel({
   prominent,
   turnNumber,
 }) {
-  const [value, setValue] = useState("");
+  const [selectedId, setSelectedId] = useState(null);
+  const [otherValue, setOtherValue] = useState("");
+
+  const presetOptions = (options ?? []).filter(Boolean).slice(0, 4);
+  const hasPresets = presetOptions.length > 0;
+
+  const answerText =
+    selectedId === OTHER_OPTION_ID
+      ? otherValue.trim()
+      : selectedId != null
+        ? presetOptions[selectedId] ?? ""
+        : "";
+
+  const canSubmit = Boolean(answerText) && !busy;
+
+  function resetAfterSubmit() {
+    setSelectedId(null);
+    setOtherValue("");
+  }
 
   return (
     <Panel className={prominent ? "border-indigo/30 shadow-lg" : ""}>
@@ -124,9 +175,9 @@ function NeelInputPanel({
         className="space-y-4 px-5 py-5 sm:px-6"
         onSubmit={(e) => {
           e.preventDefault();
-          if (!value.trim()) return;
-          onSubmit(value.trim());
-          setValue("");
+          if (!canSubmit) return;
+          onSubmit(answerText);
+          resetAfterSubmit();
         }}
       >
         <div className="flex gap-3">
@@ -135,19 +186,82 @@ function NeelInputPanel({
           </div>
           <p className="flex-1 text-[16px] leading-relaxed text-app-ink">{prompt}</p>
         </div>
-        <textarea
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder={placeholder}
-          rows={4}
-          autoFocus={prominent}
-          className="w-full resize-y rounded-app-sm border border-app-border bg-app-surface px-4 py-3 text-[14px] text-app-ink outline-none transition focus:border-indigo/40 focus:ring-2 focus:ring-indigo/10"
-        />
+
+        {hasPresets ? (
+          <fieldset className="space-y-2">
+            <legend className="sr-only">Choose an answer</legend>
+            {presetOptions.map((opt, idx) => {
+              const active = selectedId === idx;
+              return (
+                <label
+                  key={opt}
+                  className={`flex cursor-pointer items-start gap-3 rounded-app-sm border px-4 py-3 transition ${
+                    active
+                      ? "border-indigo/40 bg-indigo/10 ring-2 ring-indigo/15"
+                      : "border-app-border bg-app-surface hover:border-indigo/25"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="neel-answer"
+                    className="mt-1 shrink-0 accent-indigo"
+                    checked={active}
+                    onChange={() => setSelectedId(idx)}
+                  />
+                  <span className="text-[14px] leading-snug text-app-ink">{opt}</span>
+                </label>
+              );
+            })}
+            <label
+              className={`flex cursor-pointer items-start gap-3 rounded-app-sm border px-4 py-3 transition ${
+                selectedId === OTHER_OPTION_ID
+                  ? "border-indigo/40 bg-indigo/10 ring-2 ring-indigo/15"
+                  : "border-app-border bg-app-surface hover:border-indigo/25"
+              }`}
+            >
+              <input
+                type="radio"
+                name="neel-answer"
+                className="mt-1 shrink-0 accent-indigo"
+                checked={selectedId === OTHER_OPTION_ID}
+                onChange={() => setSelectedId(OTHER_OPTION_ID)}
+              />
+              <span className="text-[14px] font-medium text-app-ink">Other</span>
+            </label>
+            {selectedId === OTHER_OPTION_ID && (
+              <textarea
+                value={otherValue}
+                onChange={(e) => setOtherValue(e.target.value)}
+                placeholder={placeholder}
+                rows={3}
+                autoFocus
+                className="w-full resize-y rounded-app-sm border border-app-border bg-app-surface px-4 py-3 text-[14px] text-app-ink outline-none transition focus:border-indigo/40 focus:ring-2 focus:ring-indigo/10"
+              />
+            )}
+          </fieldset>
+        ) : (
+          <textarea
+            value={otherValue}
+            onChange={(e) => {
+              setOtherValue(e.target.value);
+              setSelectedId(OTHER_OPTION_ID);
+            }}
+            placeholder={placeholder}
+            rows={4}
+            autoFocus={prominent}
+            className="w-full resize-y rounded-app-sm border border-app-border bg-app-surface px-4 py-3 text-[14px] text-app-ink outline-none transition focus:border-indigo/40 focus:ring-2 focus:ring-indigo/10"
+          />
+        )}
+
         <div className="flex items-center justify-between gap-3">
-          <p className="text-[12px] text-app-ink-mute">Neel asks one question, then listens.</p>
+          <p className="text-[12px] text-app-ink-mute">
+            {hasPresets
+              ? "Options reflect your company, business context, and codebase — pick one or Other."
+              : "Neel asks one question, then listens."}
+          </p>
           <button
             type="submit"
-            disabled={busy || !value.trim()}
+            disabled={!canSubmit}
             className="app-btn-primary disabled:opacity-50"
           >
             {busy ? "Sending…" : submitLabel}

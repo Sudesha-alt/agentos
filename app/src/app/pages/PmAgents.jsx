@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+import { useCompanyProfile } from "../../entities/company-intelligence";
 import {
   analyzePmTicket,
   answerNeelQuestion,
@@ -38,7 +39,11 @@ export default function PmAgents() {
   const [interactionBusy, setInteractionBusy] = useState(false);
   const [error, setError] = useState(null);
 
+  const { data: companyProfile } = useCompanyProfile();
   const { data: listData, refetch: refetchList } = usePmAnalyses();
+  const companyConfigured =
+    Boolean(companyProfile?.businessContext?.trim()) ||
+    Boolean(companyProfile?.companyName?.trim() && companyProfile?.revenueModel?.trim());
   const { data: analysis, refetch: refetchAnalysis } = usePmAnalysis(activeKey, {
     pollMs: analyzing ? 2500 : 0,
   });
@@ -181,6 +186,24 @@ export default function PmAgents() {
           ))}
         </ul>
       </header>
+
+      {!companyConfigured && (
+        <Panel className="border-warning/30 bg-warning/5">
+          <PanelHeader
+            kicker="Setup"
+            title="Configure company profile first"
+            body="Neel validates every idea against your business context and revenue model. Add company details so discovery and PRD stages can judge fit."
+            right={
+              <Link
+                to="/app/company-intelligence"
+                className="rounded-full border border-indigo/30 bg-indigo/10 px-4 py-2 text-[12px] font-medium text-indigo hover:bg-indigo/15"
+              >
+                Set up company profile →
+              </Link>
+            }
+          />
+        </Panel>
+      )}
 
       {/* Ticket launcher */}
       <Panel>
