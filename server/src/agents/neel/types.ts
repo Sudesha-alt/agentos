@@ -46,6 +46,8 @@ export interface IntakeOutput {
   reasoning: string;
   symptomVsRootCause: string;
   clarifyingQuestion?: string | null;
+  /** 3–4 suggested answers; UI always adds "Other" for free text */
+  clarifyingOptions?: string[];
 }
 
 export interface QuestionModeState {
@@ -68,12 +70,18 @@ export interface CodebaseAnalysisOutput {
   suggestedFirstFile: string;
 }
 
+export type BusinessFit = "strong" | "moderate" | "weak" | "misaligned";
+
 export interface SolutioningOutput {
   problemStatement: string;
   recommendedApproach: string;
   explicitNonGoals: string[];
   openRisks: string[];
   summaryMarkdown: string;
+  businessFit?: BusinessFit;
+  revenueImpact?: string;
+  alignmentNotes?: string;
+  companyValidationSummary?: string;
   humanConfirmed: boolean;
   humanFeedback?: string | null;
 }
@@ -105,6 +113,8 @@ export interface PostShipOutput {
 export interface NeelNextQuestionResult {
   action: "ask" | "ready" | "flag";
   question?: string;
+  /** 3–4 concise answer choices; UI adds "Other" for custom input */
+  options?: string[];
   flag?: string;
   reason?: string;
   discoverySummary?: string;

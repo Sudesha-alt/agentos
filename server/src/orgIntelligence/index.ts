@@ -10,7 +10,8 @@ export type OrgIntelSourceType =
   | "QA_FAILURE"
   | "CANARY"
   | "OVERRIDE"
-  | "PIPELINE_COMPLETE";
+  | "PIPELINE_COMPLETE"
+  | "COMPANY_PROFILE";
 
 export const orgIntelligence = {
   async capture(input: {

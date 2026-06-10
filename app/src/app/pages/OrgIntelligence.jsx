@@ -12,6 +12,7 @@ const SOURCE_LABELS = {
   CANARY: "Canary",
   OVERRIDE: "Override",
   PIPELINE_COMPLETE: "Complete",
+  COMPANY_PROFILE: "Company profile",
 };
 
 export default function OrgIntelligence() {

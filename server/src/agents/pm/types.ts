@@ -201,6 +201,7 @@ export interface PmAnalysisRecord {
   handoffPackage?: HandoffPackageOutput;
   postShip?: PostShipOutput;
   pendingQuestion?: string | null;
+  pendingQuestionOptions?: string[];
   pendingQuestionStage?: PmStageId | null;
   pendingAnswer?: string | null;
   pendingFlag?: string | null;

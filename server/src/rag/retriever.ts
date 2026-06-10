@@ -21,7 +21,7 @@ export interface RetrievalResult extends RetrievedContext {
 
 export const RETRIEVAL_CONFIGS = {
   PRODUCT_AGENT: {
-    contentTypes: ["ticket", "prd", "canary_finding", "org_intelligence"] as const,
+    contentTypes: ["ticket", "prd", "canary_finding", "org_intelligence", "company_intelligence"] as const,
     topK: 6,
     similarityThreshold: 0.75,
   },
@@ -36,9 +36,22 @@ export const RETRIEVAL_CONFIGS = {
     similarityThreshold: 0.75,
   },
   PM_AGENT: {
-    contentTypes: ["ticket", "prd", "implementation", "canary_finding", "org_intelligence"] as const,
+    contentTypes: ["ticket", "prd", "implementation", "canary_finding", "org_intelligence", "company_intelligence"] as const,
     topK: 8,
     similarityThreshold: 0.7,
+  },
+  COMPANY_CONTEXT: {
+    contentTypes: [
+      "ticket",
+      "prd",
+      "implementation",
+      "org_intelligence",
+      "company_intelligence",
+      "canary_finding",
+      "qa_report",
+    ] as const,
+    topK: 12,
+    similarityThreshold: 0.62,
   },
 };
 
@@ -165,6 +178,14 @@ export const retriever = {
     return this.retrieve(query, {
       ...RETRIEVAL_CONFIGS.ENGINEERING_AGENT,
       currentJiraKey,
+    });
+  },
+
+  async retrieveForCompanyProfile(query: string): Promise<RetrievalResult[]> {
+    return this.retrieve(query, {
+      ...RETRIEVAL_CONFIGS.COMPANY_CONTEXT,
+      currentJiraKey: "_company_profile_",
+      minResults: 0,
     });
   },
 
