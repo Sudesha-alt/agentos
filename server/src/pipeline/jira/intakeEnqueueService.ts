@@ -10,6 +10,7 @@ import {
   enqueuePipelineBatch,
   isJiraKeyInPipelineQueue,
 } from "../../queue/inProcessRunner";
+import { shouldEnqueueJiraKey, logIntakeSkipped } from "./intakeDedup";
 import { classifyAiWorkerIntake } from "../../integrations/intentClassifier";
 import { logger } from "../../utils/logger";
 import type { PmPipelineContext } from "../../agents/pm/pmPipelineContext";
@@ -79,6 +80,13 @@ export async function enqueueIntakeFromJiraKey(
       if (isJiraKeyInPipelineQueue(taskKey)) {
         skipped += 1;
         logger.info({ taskKey, storyKey: group.storyKey }, "task already active or queued");
+        continue;
+      }
+
+      const dedup = await shouldEnqueueJiraKey(taskKey);
+      if (!dedup.enqueue) {
+        skipped += 1;
+        await logIntakeSkipped(taskKey, dedup.reason!, dedup.message ?? dedup.reason!, "manual");
         continue;
       }
 

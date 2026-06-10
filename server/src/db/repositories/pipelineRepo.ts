@@ -111,6 +111,21 @@ export const pipelineRepo = {
     });
   },
 
+  async findById(pipelineId: string) {
+    return prisma.pipeline.findUnique({
+      where: { id: pipelineId },
+      include: { ticket: true },
+    });
+  },
+
+  async listCompletedStages(pipelineId: string): Promise<PipelineStage[]> {
+    const logs = await prisma.pipelineStageLog.findMany({
+      where: { pipelineId, status: "COMPLETED" },
+      select: { stage: true },
+    });
+    return [...new Set(logs.map((l) => l.stage))];
+  },
+
   async recordOverride(input: {
     pipelineId: string;
     stage: PipelineStage;

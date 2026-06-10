@@ -14,7 +14,7 @@ export const DATA_MODE =
 export const APP_NAV = [
   { to: "/app", label: "Command Center", breadcrumb: "Command Center", end: true },
   { to: "/app/pipelines", label: "Pipeline Explorer", breadcrumb: "Pipelines" },
-  { to: "/app/pm-agents", label: "PM Agents", breadcrumb: "PM Agents" },
+  { to: "/app/pm-agents", label: "Neel", breadcrumb: "Neel" },
   { to: "/app/codebase", label: "Codebase", breadcrumb: "Codebase" },
   { to: "/app/qa", label: "QA Center", breadcrumb: "QA Center" },
   { to: "/app/costs", label: "Cost Intelligence", breadcrumb: "Costs" },
@@ -40,9 +40,14 @@ export const APP_NAV_SECTIONS = [
     label: "Operations",
     items: [
       { to: "/app/pipelines", label: "Pipeline Explorer", breadcrumb: "Pipelines" },
-      { to: "/app/pm-agents", label: "PM Agents", breadcrumb: "PM Agents" },
+      { to: "/app/pm-agents", label: "Neel", breadcrumb: "Neel" },
       { to: "/app/codebase", label: "Codebase Intelligence", breadcrumb: "Codebase" },
       { to: "/app/qa", label: "QA Center", breadcrumb: "QA" },
+      {
+        to: "/app/org-intelligence",
+        label: "Org Intelligence",
+        breadcrumb: "Org Intelligence",
+      },
     ],
   },
   {

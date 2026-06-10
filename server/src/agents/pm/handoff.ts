@@ -120,17 +120,17 @@ async function fetchRecentCommitHistory(
 
 function requireStages(record: PmAnalysisRecord): void {
   const missing: string[] = [];
-  if (!record.enrichment) missing.push("enrichment");
-  if (!record.classification) missing.push("classification");
-  if (!record.codebaseImpact) missing.push("codebaseImpact");
-  if (!record.effortEstimate) missing.push("effortEstimate");
-  if (!record.implementation) missing.push("implementation");
-  if (!record.prioritization) missing.push("prioritization");
-  if (!record.acceptanceCriteria) missing.push("acceptanceCriteria");
+  if (!record.neelIntake && !record.classification) missing.push("intake");
+  if (!record.questionMode?.discoverySummary && !record.enrichment) {
+    missing.push("discovery");
+  }
+  if (!record.codebaseAnalysis && !record.codebaseImpact) missing.push("codebaseAnalysis");
+  if (!record.generatedPrd) missing.push("prd");
+  if (!record.handoffPackage && !record.acceptanceCriteria) missing.push("handoff");
 
   if (missing.length > 0) {
     throw new ValidationError(
-      `PM analysis incomplete — missing stages: ${missing.join(", ")}`,
+      `Neel analysis incomplete — missing: ${missing.join(", ")}`,
       { jiraKey: record.jiraKey, status: record.status, missingStages: missing }
     );
   }
@@ -241,13 +241,89 @@ export function buildTechAgentHandoffFromRecord(
 ): TechAgentHandoff {
   requireStages(record);
 
-  const enrichment = record.enrichment!;
-  const classification = record.classification!;
-  const impact = record.codebaseImpact!;
-  const effort = record.effortEstimate!;
-  const impl = record.implementation!;
-  const prio = record.prioritization!;
-  const ac = record.acceptanceCriteria!;
+  const enrichment = record.enrichment ?? {
+    cleanSummary: record.ticketInput.summary,
+    realUserProblem: record.solutioning?.problemStatement ?? "",
+    missingContext: [],
+    relatedTicketsSummary: "",
+    reporterContext: record.ticketInput.reporter,
+    okrAlignment: "",
+    redFlags: record.questionMode?.flagsRaised ?? [],
+  };
+  const classification = record.classification ?? {
+    type: record.neelIntake?.ticketType ?? "task",
+    subtype: record.neelIntake?.ticketType ?? "task",
+    severity: "medium",
+    severityReasoning: record.neelIntake?.reasoning ?? "",
+    affectedUserSegment: "unknown",
+    estimatedUsersAffected: "unknown",
+    revenueRisk: "none",
+    strategicAlignment: 0.5,
+    strategicAlignmentReason: "",
+    isDuplicate: false,
+    duplicateOf: null,
+    classificationConfidence: 0.8,
+    requiresHumanEscalation: false,
+    escalationReason: null,
+  };
+  const impact = record.codebaseImpact ?? {
+    affectedFiles: (record.codebaseAnalysis?.relevantModules ?? []).map((m) => ({
+      path: m.path,
+      reason: m.reason,
+      role: m.role,
+      confidence: 0.8,
+      riskLevel: "medium",
+    })),
+    recentChangeConnection: "",
+    dependencyWarnings: record.codebaseAnalysis?.architectureConstraints ?? [],
+    scopeAssessment: record.codebaseAnalysis?.scopeAssessment ?? "medium",
+    suggestedFirstFile: record.codebaseAnalysis?.suggestedFirstFile ?? "",
+  };
+  const effort = record.effortEstimate ?? {
+    tshirt: "M",
+    storyPoints: "5",
+    confidenceInEstimate: 0.6,
+    breakdown: { investigation: "4h", implementation: "16h", testing: "8h", review: "4h" },
+    riskFactors: record.codebaseAnalysis?.technicalRisks ?? [],
+    assumptions: [],
+    recommendedApproach: record.solutioning?.recommendedApproach ?? "",
+    estimateConfidenceNote: "",
+  };
+  const impl = record.implementation ?? {
+    approachSummary: record.solutioning?.recommendedApproach ?? "",
+    implementationSteps: (record.handoffPackage?.engineeringTickets ?? []).map((t, i) => ({
+      step: String(i + 1),
+      action: t.title,
+      why: t.description,
+      watchOut: t.technicalNotes.join("; "),
+    })),
+    whereNotToTouch: record.solutioning?.explicitNonGoals ?? [],
+    testingGuidance: (record.codebaseAnalysis?.testableAcceptanceCriteria ?? []).join("\n"),
+    alternativeApproach: "",
+    openQuestionsForEngineer: (record.generatedPrd?.openQuestions ?? []).map((q) => q.question),
+  };
+  const prio = record.prioritization ?? {
+    recommendation: "proceed",
+    recommendationReasoning: record.solutioning?.problemStatement ?? "",
+    impactScore: "medium",
+    costOfInaction: "unknown",
+    tradeoff: "",
+    conditionsToRevisit: "",
+    suggestedOwner: "",
+    suggestedSprint: "",
+    escalateToHuman: false,
+    escalationReason: null,
+  };
+  const ac = record.acceptanceCriteria ?? {
+    userStory: record.questionMode?.discoverySummary?.slice(0, 200) ?? "",
+    happyPath: (record.handoffPackage?.engineeringTickets?.[0]?.acceptanceCriteria ?? []).map(
+      (c) => ({ given: c, when: "run", then: "pass" })
+    ),
+    edgeCases: [],
+    explicitlyOutOfScope: record.solutioning?.explicitNonGoals ?? [],
+    regressionRisks: record.codebaseAnalysis?.technicalRisks ?? [],
+    definitionOfDone: record.handoffPackage?.definitionOfDone ?? [],
+  };
 
   const scope = resolveRepoScope();
   const branchName = scope?.defaultBranch ?? "main";

@@ -3,9 +3,18 @@ import { motion } from "framer-motion";
 import {
   PM_STAGE_ORDER,
   PM_STAGE_LABELS,
+  NEEL_NAME,
   getPmHandoff,
   startPmCodingPipeline,
 } from "../../entities/pm-agents";
+import {
+  NeelCodebaseSection,
+  NeelConversationPanel,
+  NeelDiscoverySection,
+  NeelHandoffPackageSection,
+  NeelIntakeSection,
+  NeelPostShipSection,
+} from "./NeelSections";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import { motionSafe, pageStagger, sectionFadeUp } from "../../lib/motion";
 
@@ -557,6 +566,9 @@ export function PmAnalysisOutputs({
   onResume,
   resuming,
   resumeStageLabel,
+  onAnswer,
+  onConfirm,
+  interactionBusy,
 }) {
   if (!analysis) return null;
 
@@ -564,7 +576,7 @@ export function PmAnalysisOutputs({
     <Panel key="progress">
       <PanelHeader
         kicker={analysis.jiraKey}
-        title={analysis.ticketInput?.summary ?? "PM analysis"}
+        title={analysis.ticketInput?.summary ?? `${NEEL_NAME} analysis`}
         right={
           <span className="type-kicker">
             {analysis.status}
@@ -576,15 +588,27 @@ export function PmAnalysisOutputs({
         <PmStageProgress analysis={analysis} />
       </div>
     </Panel>,
-    <PmBriefSection key="brief" enrichment={analysis.enrichment} />,
-    <PmClassificationSection key="class" classification={analysis.classification} />,
-    <PmImpactSection key="impact" impact={analysis.codebaseImpact} />,
-    <PmEffortSection key="effort" effort={analysis.effortEstimate} />,
-    <PmImplementationSection key="impl" impl={analysis.implementation} />,
-    <PmPrioritizationSection key="prio" prio={analysis.prioritization} />,
-    <PmAcceptanceSection key="ac" ac={analysis.acceptanceCriteria} />,
+    <NeelConversationPanel
+      key="conversation"
+      analysis={analysis}
+      onAnswer={onAnswer}
+      onConfirm={onConfirm}
+      busy={interactionBusy}
+    />,
+    <NeelIntakeSection key="intake" intake={analysis.neelIntake} />,
+    <NeelDiscoverySection key="discovery" questionMode={analysis.questionMode} />,
+    <NeelCodebaseSection key="codebase" analysis={analysis.codebaseAnalysis} />,
+    analysis.solutioning?.humanConfirmed || analysis.status === "COMPLETED" ? (
+      <Panel key="solution">
+        <PanelHeader kicker="Stage 4" title="Confirmed solution direction" />
+        <div className="px-5 py-4 sm:px-6 whitespace-pre-wrap text-[14px] text-ink-dim">
+          {analysis.solutioning?.summaryMarkdown ?? analysis.solutioning?.recommendedApproach}
+        </div>
+      </Panel>
+    ) : null,
     <PmPrdSection key="prd" prd={analysis.generatedPrd} />,
-    <PmArtifactsSection key="artifacts" artifacts={analysis.artifacts} />,
+    <NeelHandoffPackageSection key="handoff-pkg" handoffPackage={analysis.handoffPackage} />,
+    <NeelPostShipSection key="postship" postShip={analysis.postShip} />,
     <PmTechHandoffSection
       key="handoff"
       jiraKey={analysis.jiraKey}

@@ -2,9 +2,12 @@ import { Router } from "express";
 import { getTechAgentHandoff } from "../../agents/pm/handoff";
 import { buildPmPipelineContext } from "../../agents/pm/pmPipelineContext";
 import {
+  confirmNeelSolution,
   getPmResumeStage,
+  runNeelPostShip,
   runPmAnalysisPipeline,
   runPmRetrospective,
+  submitNeelAnswer,
   estimateAnalysisCost,
 } from "../../agents/pm/orchestrator";
 import { enqueueIntakeFromJiraKey } from "../../pipeline/jira/intakeEnqueueService";
@@ -24,8 +27,11 @@ router.get("/analyses", (_req, res) => {
     status: r.status,
     currentStage: r.currentStage,
     summary: r.ticketInput.summary,
-    recommendation: r.prioritization?.recommendation ?? null,
+    agent: r.agentName ?? "Neel",
+    ticketType: r.neelIntake?.ticketType ?? r.classification?.type ?? null,
+    recommendation: r.prioritization?.recommendation ?? r.solutioning?.recommendedApproach?.slice(0, 80) ?? null,
     severity: r.classification?.severity ?? null,
+    awaiting: r.status === "AWAITING_INPUT" || r.status === "AWAITING_CONFIRMATION",
     startedAt: r.startedAt,
     completedAt: r.completedAt ?? null,
     costUsd: estimateAnalysisCost(r),
@@ -102,6 +108,46 @@ router.post("/analyze/:ticketId/resume", async (req, res, next) => {
   }
 });
 
+router.post("/analyze/:ticketId/answer", async (req, res, next) => {
+  try {
+    const jiraKey = req.params.ticketId.trim().toUpperCase();
+    const answer = String(req.body?.answer ?? "").trim();
+    if (!answer) throw new ValidationError("answer is required");
+
+    startPmAnalysisBackground(jiraKey, () => submitNeelAnswer(jiraKey, answer));
+
+    res.status(202).json({
+      jiraKey,
+      status: "RUNNING",
+      message: "Neel continued with your answer",
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/analyze/:ticketId/confirm", async (req, res, next) => {
+  try {
+    const jiraKey = req.params.ticketId.trim().toUpperCase();
+    const confirmed = req.body?.confirmed !== false;
+    const feedback = req.body?.feedback ? String(req.body.feedback) : undefined;
+
+    startPmAnalysisBackground(jiraKey, () =>
+      confirmNeelSolution(jiraKey, confirmed, feedback)
+    );
+
+    res.status(202).json({
+      jiraKey,
+      status: confirmed ? "RUNNING" : "RUNNING",
+      message: confirmed
+        ? "Direction confirmed — Neel is writing the PRD"
+        : "Direction rejected — Neel is revising the approach",
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post("/analyze/:ticketId", async (req, res, next) => {
   try {
     const jiraKey = req.params.ticketId.trim().toUpperCase();
@@ -112,21 +158,48 @@ router.post("/analyze/:ticketId", async (req, res, next) => {
       res.status(202).json({
         jiraKey,
         status: "RUNNING",
-        message: "Analysis already in progress",
+        message: "Neel is already working on this ticket",
         analysisId: existing?.id,
       });
       return;
     }
 
-    const body = req.body as { ticket?: Partial<PmTicketInput> } | undefined;
+    const body = req.body as {
+      ticket?: Partial<PmTicketInput>;
+      mode?: "interactive" | "auto";
+    } | undefined;
     startPmAnalysisBackground(jiraKey, () =>
-      runPmAnalysisPipeline({ jiraKey, ticket: body?.ticket })
+      runPmAnalysisPipeline({
+        jiraKey,
+        ticket: body?.ticket,
+        mode: body?.mode ?? "interactive",
+      })
     );
 
     res.status(202).json({
       jiraKey,
       status: "RUNNING",
-      message: "PM analysis pipeline started",
+      message: "Neel started product discovery",
+      agent: "Neel",
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/post-ship/:ticketId", async (req, res, next) => {
+  try {
+    const jiraKey = req.params.ticketId.trim().toUpperCase();
+    const body = (req.body ?? {}) as RetrospectiveInput;
+    const record = await runNeelPostShip({
+      jiraKey,
+      metricsInput: body.metricsInput,
+      launchNotes: body.launchNotes,
+    });
+    res.json({
+      jiraKey,
+      postShip: record.postShip,
+      costUsd: estimateAnalysisCost(record),
     });
   } catch (err) {
     next(err);
@@ -212,7 +285,10 @@ router.post("/retrospective/:ticketId", async (req, res, next) => {
     const jiraKey = req.params.ticketId.trim().toUpperCase();
     const body = (req.body ?? {}) as RetrospectiveInput;
 
-    const record = await runPmRetrospective({ jiraKey, retrospective: body });
+    const record = await runPmRetrospective({
+      jiraKey,
+      humanFeedback: body.overrideReason ?? body.humanDecision,
+    });
     res.json({
       jiraKey,
       retrospective: record.retrospective,

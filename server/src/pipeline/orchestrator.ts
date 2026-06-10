@@ -3,7 +3,10 @@ import { EngineeringAgent } from "../agents/engineeringAgent";
 import { runCanaryCycle } from "../canaryAgent";
 import { runEngineeringCodingAgentic } from "../engineeringCodingAgent";
 import { runQaAgentic } from "../qaAgent";
-import { attachQaReportToJira } from "../qa/report/reportAttacher";
+import { completeTicketInJira } from "../jira/writeback/completeTicketInJira";
+import type { QaExecutionReport } from "../qa/report/reportGenerator";
+import type { GeneratedPRD } from "../prd/prdGenerator";
+import { orgIntelligence } from "../orgIntelligence";
 import { codebaseQueryService } from "../codebaseIntelligence/queryService";
 import { resolveRepoScope } from "../codebaseIntelligence/repoScope";
 import {
@@ -13,7 +16,6 @@ import {
 import { auditRepo } from "../db/repositories/auditRepo";
 import { pipelineRepo } from "../db/repositories/pipelineRepo";
 import { ticketRepo } from "../db/repositories/ticketRepo";
-import { getPipelineJiraClient } from "../pipeline/jira/client";
 import { indexer } from "../rag/indexer";
 import { retriever } from "../rag/retriever";
 import { unifiedRetriever } from "../rag/unifiedRetriever";
@@ -62,6 +64,13 @@ export class PipelineOrchestrator {
         normalizedTicket,
       );
       const prdValidation = await this.validatePrdStage(pipeline.id, productStage.agentOutput);
+      await orgIntelligence.captureValidation({
+        pipelineId: pipeline.id,
+        jiraKey: normalizedTicket.jiraKey,
+        sourceType: "PRD",
+        validation: prdValidation,
+        components: normalizedTicket.components ?? [],
+      });
       if (!(await this.continueOrPause(pipeline.id, "PRD_VALIDATION", prdValidation))) {
         await ticketRepo.setStatus(ticket.id, "AWAITING_HUMAN");
         return;
@@ -90,6 +99,14 @@ export class PipelineOrchestrator {
         implementationOutput,
         productStage.agentOutput.parsed
       );
+      await orgIntelligence.captureValidation({
+        pipelineId: pipeline.id,
+        jiraKey: normalizedTicket.jiraKey,
+        sourceType: "ENGINEERING",
+        validation: implementationValidation,
+        components: normalizedTicket.components ?? [],
+        implementation: implementationOutput.parsed,
+      });
       if (
         !(await this.continueOrPause(
           pipeline.id,
@@ -132,6 +149,14 @@ export class PipelineOrchestrator {
         qaOutput,
         productStage.agentOutput.parsed
       );
+      await orgIntelligence.captureValidation({
+        pipelineId: pipeline.id,
+        jiraKey: normalizedTicket.jiraKey,
+        sourceType: "QA_FAILURE",
+        validation: qaValidation,
+        components: normalizedTicket.components ?? [],
+        qa: qaOutput.parsed,
+      });
       if (!(await this.continueOrPause(pipeline.id, "QA_VALIDATION", qaValidation))) {
         await ticketRepo.setStatus(ticket.id, "AWAITING_HUMAN");
         return;
@@ -144,34 +169,49 @@ export class PipelineOrchestrator {
         });
       }
 
-      if (qaStage.executionReport) {
-        await attachQaReportToJira(
-          normalizedTicket.jiraKey,
-          qaOutput.parsed,
-          qaStage.executionReport
-        );
-      }
       await indexer.indexQaReport(
         normalizedTicket.jiraTicketId,
         normalizedTicket.jiraKey,
         qaOutput.parsed
       );
 
-      await this.writeBackToJira(pipeline.id, normalizedTicket.jiraKey, {
+      const generatedPrd = this.extractGeneratedPrd(productStage.enrichedPrdDocument, productStage.agentOutput);
+      const canaryCriticals = canaryResult?.findings
+        .filter((f) => f.severity === "critical")
+        .map((f) => ({ title: f.title, description: f.description })) ?? [];
+
+      const jiraResult = await this.completeOutputStage(pipeline.id, normalizedTicket.jiraKey, {
         prd: productStage.agentOutput.parsed,
-        prdDocument: productStage.enrichedPrdDocument,
+        generatedPrd,
         implementation: implementationOutput.parsed,
         qa: qaOutput.parsed,
+        executionReport: qaStage.executionReport as Record<string, unknown> | undefined,
         validations: {
           prd: prdValidation,
           implementation: implementationValidation,
           qa: qaValidation,
         },
+        canaryCriticals,
+      });
+
+      await orgIntelligence.capturePipelineComplete({
+        pipelineId: pipeline.id,
+        jiraKey: normalizedTicket.jiraKey,
+        components: normalizedTicket.components ?? [],
+        prd: productStage.agentOutput.parsed,
+        implementation: implementationOutput.parsed,
+        qa: qaOutput.parsed,
+        validations: { prd: prdValidation, implementation: implementationValidation, qa: qaValidation },
+      });
+
+      await auditRepo.log(pipeline.id, "JIRA_WRITEBACK_COMPLETED", {
+        jiraKey: normalizedTicket.jiraKey,
+        ...jiraResult,
       });
 
       await stateManager.complete(pipeline.id);
       await ticketRepo.setStatus(ticket.id, "COMPLETED");
-      logger.info({ pipelineId: pipeline.id }, "pipeline completed");
+      logger.info({ pipelineId: pipeline.id, jiraResult }, "pipeline completed");
     } catch (err) {
       if (err instanceof DiscoveryPausedError) {
         await ticketRepo.setStatus(ticket.id, "AWAITING_HUMAN");
@@ -187,6 +227,260 @@ export class PipelineOrchestrator {
       logger.error({ err, pipelineId: pipeline.id }, "pipeline failed");
       throw err;
     }
+  }
+
+  async resume(pipelineId: string): Promise<void> {
+    const pipeline = await pipelineRepo.findById(pipelineId);
+    if (!pipeline) throw new Error(`Pipeline ${pipelineId} not found`);
+
+    const ticket = pipeline.ticket;
+    const normalizedTicket = ticket.normalizedData as unknown as NormalizedTicket;
+    const completedStages = new Set(await pipelineRepo.listCompletedStages(pipelineId));
+
+    logger.info({ pipelineId, completedStages: [...completedStages] }, "pipeline resume started");
+    await pipelineRepo.setStage(pipelineId, pipeline.currentStage, "RUNNING");
+    await ticketRepo.setStatus(ticket.id, "PROCESSING");
+    await auditRepo.log(pipelineId, "PIPELINE_RESUMED", { ticketId: ticket.id });
+
+    try {
+      if (!completedStages.has("INGESTION")) {
+        await this.ingest(pipelineId, normalizedTicket);
+      }
+
+      let productStage: {
+        agentOutput: AgentOutput<PrdOutput>;
+        enrichedPrdDocument: Record<string, unknown>;
+      };
+      if (!completedStages.has("PRODUCT_AGENT")) {
+        productStage = await this.runProductAgent(pipelineId, normalizedTicket.jiraKey, normalizedTicket);
+      } else {
+        productStage = this.loadProductStageFromLog(
+          (await pipelineRepo.getStageOutput(pipelineId, "PRODUCT_AGENT"))!
+        );
+      }
+
+      let prdValidation: ValidationResult;
+      const prdValLog = await pipelineRepo.getStageOutput(pipelineId, "PRD_VALIDATION");
+      if (prdValLog?.validationResult) {
+        prdValidation = prdValLog.validationResult as unknown as ValidationResult;
+      } else {
+        prdValidation = await this.validatePrdStage(pipelineId, productStage.agentOutput);
+      }
+      if (!(await this.continueOrPause(pipelineId, "PRD_VALIDATION", prdValidation))) {
+        await ticketRepo.setStatus(ticket.id, "AWAITING_HUMAN");
+        return;
+      }
+      if (!completedStages.has("PRD_VALIDATION")) {
+        await indexer.indexPrd(
+          normalizedTicket.jiraTicketId,
+          normalizedTicket.jiraKey,
+          productStage.agentOutput.parsed
+        );
+      }
+
+      let implementationOutput: AgentOutput<ImplementationOutput>;
+      if (!completedStages.has("ENGINEERING_AGENT")) {
+        implementationOutput = await this.runEngineeringAgent(
+          pipelineId,
+          normalizedTicket.jiraKey,
+          productStage.agentOutput.parsed,
+          productStage.enrichedPrdDocument
+        );
+        implementationOutput = await this.runEngineeringCodingAgent(
+          pipelineId,
+          normalizedTicket,
+          productStage.agentOutput.parsed,
+          implementationOutput,
+          productStage.enrichedPrdDocument
+        );
+      } else {
+        const engLog = await pipelineRepo.getStageOutput(pipelineId, "ENGINEERING_AGENT");
+        implementationOutput = {
+          raw: JSON.stringify(engLog?.output),
+          parsed: engLog?.output as unknown as ImplementationOutput,
+          metadata: { inputTokens: 0, outputTokens: 0, costUsd: 0, durationMs: 0 },
+        };
+      }
+
+      let implementationValidation: ValidationResult;
+      const implValLog = await pipelineRepo.getStageOutput(pipelineId, "IMPLEMENTATION_VALIDATION");
+      if (implValLog?.validationResult) {
+        implementationValidation = implValLog.validationResult as unknown as ValidationResult;
+      } else {
+        implementationValidation = await this.validateImplementationStage(
+          pipelineId,
+          implementationOutput,
+          productStage.agentOutput.parsed
+        );
+      }
+      if (
+        !(await this.continueOrPause(pipelineId, "IMPLEMENTATION_VALIDATION", implementationValidation))
+      ) {
+        await ticketRepo.setStatus(ticket.id, "AWAITING_HUMAN");
+        return;
+      }
+      if (!completedStages.has("IMPLEMENTATION_VALIDATION")) {
+        await indexer.indexImplementation(
+          normalizedTicket.jiraTicketId,
+          normalizedTicket.jiraKey,
+          implementationOutput.parsed
+        );
+      }
+
+      let qaStage: {
+        agentOutput: AgentOutput<QaOutput>;
+        executionReport?: QaExecutionReport;
+        toolCallLog: unknown[];
+      };
+      if (!completedStages.has("QA_AGENT")) {
+        qaStage = await this.runQaAgent(
+          pipelineId,
+          normalizedTicket.jiraKey,
+          productStage.agentOutput.parsed,
+          implementationOutput.parsed
+        );
+      } else {
+        const qaLog = await pipelineRepo.getStageOutput(pipelineId, "QA_AGENT");
+        const out = qaLog?.output as {
+          qa: QaOutput;
+          executionReport?: QaExecutionReport;
+        } | null;
+        if (!out?.qa) throw new Error("QA stage output missing on resume");
+        qaStage = {
+          agentOutput: {
+            raw: JSON.stringify(out.qa),
+            parsed: out.qa,
+            metadata: { inputTokens: 0, outputTokens: 0, costUsd: 0, durationMs: 0 },
+          },
+          executionReport: out.executionReport,
+          toolCallLog: [],
+        };
+      }
+      const qaOutput = qaStage.agentOutput;
+
+      const canaryResult = await runCanaryCycle({
+        pipelineId,
+        jiraKey: normalizedTicket.jiraKey,
+        trigger: "pipeline",
+        environment: "staging",
+        scope: "changed_files",
+        orientation: {
+          prdSummary: productStage.agentOutput.parsed.title,
+          implementationSummary: implementationOutput.parsed.summary,
+          qaSummary: qaOutput.parsed.testSummary,
+        },
+      });
+
+      let qaValidation: ValidationResult;
+      const qaValLog = await pipelineRepo.getStageOutput(pipelineId, "QA_VALIDATION");
+      if (qaValLog?.validationResult) {
+        qaValidation = qaValLog.validationResult as unknown as ValidationResult;
+      } else {
+        qaValidation = await this.validateQaStage(pipelineId, qaOutput, productStage.agentOutput.parsed);
+      }
+      if (!(await this.continueOrPause(pipelineId, "QA_VALIDATION", qaValidation))) {
+        await ticketRepo.setStatus(ticket.id, "AWAITING_HUMAN");
+        return;
+      }
+
+      await indexer.indexQaReport(
+        normalizedTicket.jiraTicketId,
+        normalizedTicket.jiraKey,
+        qaOutput.parsed
+      );
+
+      const generatedPrd = this.extractGeneratedPrd(productStage.enrichedPrdDocument, productStage.agentOutput);
+      const canaryCriticals = canaryResult?.findings
+        .filter((f) => f.severity === "critical")
+        .map((f) => ({ title: f.title, description: f.description })) ?? [];
+
+      const jiraResult = await this.completeOutputStage(pipelineId, normalizedTicket.jiraKey, {
+        prd: productStage.agentOutput.parsed,
+        generatedPrd,
+        implementation: implementationOutput.parsed,
+        qa: qaOutput.parsed,
+        executionReport: qaStage.executionReport as Record<string, unknown> | undefined,
+        validations: {
+          prd: prdValidation,
+          implementation: implementationValidation,
+          qa: qaValidation,
+        },
+        canaryCriticals,
+      });
+
+      await auditRepo.log(pipelineId, "JIRA_WRITEBACK_COMPLETED", {
+        jiraKey: normalizedTicket.jiraKey,
+        ...jiraResult,
+      });
+
+      await stateManager.complete(pipelineId);
+      await ticketRepo.setStatus(ticket.id, "COMPLETED");
+      logger.info({ pipelineId }, "pipeline resume completed");
+    } catch (err) {
+      if (err instanceof DiscoveryPausedError) {
+        await ticketRepo.setStatus(ticket.id, "AWAITING_HUMAN");
+        return;
+      }
+      const message = err instanceof Error ? err.message : String(err);
+      await stateManager.fail(pipelineId, "OUTPUT", message);
+      await ticketRepo.setStatus(ticket.id, "FAILED");
+      throw err;
+    }
+  }
+
+  private loadProductStageFromLog(stageLog: { output: unknown }): {
+    agentOutput: AgentOutput<PrdOutput>;
+    enrichedPrdDocument: Record<string, unknown>;
+  } {
+    const output = stageLog.output as Record<string, unknown>;
+    const prd = output.prd as PrdOutput;
+    const generatedPrd = (output.generatedPrd ?? (output.discovery as Record<string, unknown>)?.generatedPrd) as
+      | GeneratedPRD
+      | undefined;
+    const enrichedPrdDocument: Record<string, unknown> = {
+      prdOutput: prd,
+      generatedPrd,
+      ...(output.discovery ? { discovery: output.discovery } : {}),
+    };
+    return {
+      agentOutput: {
+        raw: JSON.stringify(prd),
+        parsed: prd,
+        metadata: { inputTokens: 0, outputTokens: 0, costUsd: 0, durationMs: 0 },
+      },
+      enrichedPrdDocument,
+    };
+  }
+
+  private extractGeneratedPrd(
+    enrichedPrdDocument: Record<string, unknown>,
+    agentOutput: AgentOutput<PrdOutput>
+  ): GeneratedPRD | undefined {
+    const fromDoc = enrichedPrdDocument.generatedPrd as GeneratedPRD | undefined;
+    if (fromDoc) return fromDoc;
+    try {
+      return JSON.parse(agentOutput.raw) as GeneratedPRD;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async completeOutputStage(
+    pipelineId: string,
+    jiraKey: string,
+    payload: Parameters<typeof completeTicketInJira>[1]
+  ) {
+    const stageLog = await pipelineRepo.startStage({
+      pipelineId,
+      stage: "OUTPUT",
+      inputJson: { jiraKey, payload } as unknown as Prisma.InputJsonValue,
+    });
+    const result = await completeTicketInJira(jiraKey, payload);
+    await pipelineRepo.completeStage({
+      stageLogId: stageLog.id,
+      output: result as unknown as Prisma.InputJsonValue,
+    });
+    return result;
   }
 
   private async ingest(
@@ -298,6 +592,7 @@ export class PipelineOrchestrator {
       stageLogId: stageLog.id,
       output: {
         prd: discovery.prdOutput,
+        generatedPrd: discovery.prd,
         scores: discovery.scores,
         toolCallLog: discovery.toolCallLog,
         discovery: {
@@ -620,24 +915,6 @@ export class PipelineOrchestrator {
     });
     if (result.passed) await stateManager.advance(pipelineId, "OUTPUT");
     return result;
-  }
-
-  private async writeBackToJira(
-    pipelineId: string,
-    jiraKey: string,
-    output: Record<string, unknown>
-  ): Promise<void> {
-    const stageLog = await pipelineRepo.startStage({
-      pipelineId,
-      stage: "OUTPUT",
-      inputJson: { jiraKey, output } as unknown as Prisma.InputJsonValue,
-    });
-    await getPipelineJiraClient().addAttachmentNote(jiraKey, "Agentos pipeline output", output);
-    await pipelineRepo.completeStage({
-      stageLogId: stageLog.id,
-      output: { jiraKey, written: true },
-    });
-    await auditRepo.log(pipelineId, "JIRA_WRITEBACK_COMPLETED", { jiraKey });
   }
 
   private async continueOrPause(

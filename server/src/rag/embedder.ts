@@ -212,6 +212,27 @@ SUGGESTED FIX: ${input.suggestedFix ?? "—"}
 
     logger.info({ jiraKey: input.jiraKey, findingId: input.findingId }, "canary finding embedded");
   },
+
+  async embedOrgIntelligence(
+    recordId: string,
+    jiraKey: string,
+    text: string,
+    metadata: Record<string, unknown>
+  ): Promise<void> {
+    const embedding = await this.embed(text);
+    await vectorStore.upsert({
+      jiraTicketId: recordId,
+      jiraKey,
+      contentType: "org_intelligence",
+      content: text,
+      embedding,
+      metadata: {
+        ...metadata,
+        embeddedAt: new Date().toISOString(),
+      },
+    });
+    logger.info({ jiraKey, recordId }, "org intelligence embedded");
+  },
 };
 
 export function prepareTextForEmbedding(text: string): string {

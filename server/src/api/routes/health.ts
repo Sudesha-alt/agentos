@@ -1,13 +1,22 @@
 import { Router } from "express";
 import { getPrisma } from "../../db/client";
+import { getPipelineQueueState, getQueueStats } from "../../queue/inProcessRunner";
 
 const router = Router();
 
 router.get("/healthz", (_req, res) => {
+  const queue = getPipelineQueueState();
+  const stats = getQueueStats();
   res.json({
     status: "ok",
     timestamp: new Date().toISOString(),
     openaiChatTokenParam: "max_completion_tokens",
+    pipelineQueue: {
+      activeJiraKey: queue.activeJiraKey,
+      pending: stats.pending,
+      active: stats.active,
+      completed: stats.completed,
+    },
   });
 });
 

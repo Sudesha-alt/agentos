@@ -14,7 +14,7 @@ export async function runPmStage<T>(input: {
   }
 
   const { parsed, usage, raw } = await completionJson<T>({
-    source: `pm_${input.stage}`,
+    source: `neel_${input.stage}`,
     systemPrompt: input.systemPrompt,
     userPrompt: input.userPrompt,
     maxTokens: input.maxTokens ?? 4000,

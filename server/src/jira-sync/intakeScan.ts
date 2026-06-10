@@ -4,29 +4,60 @@ import {
 } from "../pipeline/jira/intakeConfig";
 import { listIntakeColumnTickets } from "../pipeline/jira/boardService";
 import { enqueueIntakeFromJiraKey } from "../pipeline/jira/intakeEnqueueService";
+import { shouldEnqueueJiraKey, logIntakeSkipped } from "../pipeline/jira/intakeDedup";
 import { isJiraKeyInPipelineQueue } from "../queue/inProcessRunner";
 import { logger } from "../utils/logger";
 import { listJiraIssuesByStatus } from "./issueRepository";
 
+export type IntakeScanSource = "live-jira" | "synced-db" | "startup" | "poll" | "manual";
+
 export interface IntakeScanResult {
   scanned: number;
   enqueued: number;
-  source: "live-jira" | "synced-db";
+  skipped: number;
+  source: IntakeScanSource;
   errors: Array<{ jiraKey: string; message: string }>;
+  skipReasons: Array<{ jiraKey: string; reason: string; message: string }>;
 }
 
 async function enqueueIssueKeys(
   keys: string[],
-  source: IntakeScanResult["source"]
+  source: IntakeScanSource
 ): Promise<IntakeScanResult> {
   let enqueued = 0;
+  let skipped = 0;
   const errors: IntakeScanResult["errors"] = [];
+  const skipReasons: IntakeScanResult["skipReasons"] = [];
 
   for (const jiraKey of keys) {
-    if (isJiraKeyInPipelineQueue(jiraKey)) continue;
+    if (isJiraKeyInPipelineQueue(jiraKey)) {
+      skipped += 1;
+      continue;
+    }
+
+    const dedup = await shouldEnqueueJiraKey(jiraKey);
+    if (!dedup.enqueue) {
+      skipped += 1;
+      const scanSource: "poll" | "scan" | "startup" =
+        source === "poll" ? "poll" : source === "startup" ? "startup" : "scan";
+      await logIntakeSkipped(
+        jiraKey,
+        dedup.reason!,
+        dedup.message ?? dedup.reason!,
+        scanSource
+      );
+      skipReasons.push({
+        jiraKey,
+        reason: dedup.reason!,
+        message: dedup.message ?? dedup.reason!,
+      });
+      continue;
+    }
+
     try {
       const result = await enqueueIntakeFromJiraKey(jiraKey);
       if (result.enqueued > 0) enqueued += result.enqueued;
+      skipped += result.skipped;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       errors.push({ jiraKey, message });
@@ -34,19 +65,24 @@ async function enqueueIssueKeys(
     }
   }
 
-  if (enqueued > 0 || errors.length > 0) {
-    logger.info({ scanned: keys.length, enqueued, source, errors: errors.length }, "intake scan complete");
+  if (enqueued > 0 || errors.length > 0 || skipReasons.length > 0) {
+    logger.info(
+      { scanned: keys.length, enqueued, skipped, source, errors: errors.length },
+      "intake scan complete"
+    );
   }
 
-  return { scanned: keys.length, enqueued, source, errors };
+  return { scanned: keys.length, enqueued, skipped, source, errors, skipReasons };
 }
 
 /** Enqueue pipeline intake for issues in AI Worker — live Jira first, synced DB fallback. */
-export async function scanIntakeFromSyncedIssues(): Promise<IntakeScanResult> {
+export async function scanIntakeFromSyncedIssues(
+  source: IntakeScanSource = "startup"
+): Promise<IntakeScanResult> {
   const intake = getPipelineIntakeMapping();
   const statuses = intake.aiWorkerStatuses ?? [];
   if (statuses.length === 0) {
-    return { scanned: 0, enqueued: 0, source: "synced-db", errors: [] };
+    return { scanned: 0, enqueued: 0, skipped: 0, source, errors: [], skipReasons: [] };
   }
 
   try {
@@ -60,7 +96,7 @@ export async function scanIntakeFromSyncedIssues(): Promise<IntakeScanResult> {
       ),
     ];
     if (keys.length > 0) {
-      return enqueueIssueKeys(keys, "live-jira");
+      return enqueueIssueKeys(keys, source === "startup" ? "live-jira" : source);
     }
   } catch (err) {
     logger.warn({ err }, "live Jira intake scan failed — falling back to synced DB");
@@ -71,5 +107,5 @@ export async function scanIntakeFromSyncedIssues(): Promise<IntakeScanResult> {
     .filter((issue) => isPipelineIntakeStatus(issue.status))
     .map((issue) => issue.jiraKey);
 
-  return enqueueIssueKeys(keys, "synced-db");
+  return enqueueIssueKeys(keys, source === "startup" ? "synced-db" : source);
 }

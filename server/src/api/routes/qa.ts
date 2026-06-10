@@ -1,7 +1,76 @@
 import { Router } from "express";
+import { prisma } from "../../db/client";
 import { canaryRunRepo } from "../../db/repositories/canaryRunRepo";
+import type { QaOutput } from "../../types/agents";
 
 const router = Router();
+
+router.get("/pipeline-reports", async (_req, res, next) => {
+  try {
+    const stages = await prisma.pipelineStageLog.findMany({
+      where: { stage: "QA_AGENT", status: "COMPLETED" },
+      orderBy: { completedAt: "desc" },
+      take: 50,
+      include: {
+        pipeline: { include: { ticket: true } },
+      },
+    });
+
+    res.json({
+      reports: stages.map((s) => {
+        const out = s.output as { qa?: QaOutput } | null;
+        const qa = out?.qa;
+        const total = qa?.testCases?.length ?? 0;
+        const passed = total;
+        return {
+          pipelineId: s.pipelineId,
+          jiraKey: s.pipeline.ticket.jiraKey,
+          ticketId: s.pipeline.ticketId,
+          testCount: total,
+          passRate: total > 0 ? Math.round((passed / total) * 100) : 0,
+          completedAt: s.completedAt?.toISOString(),
+          testSummary: qa?.testSummary,
+        };
+      }),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/pipeline-reports/:pipelineId", async (req, res, next) => {
+  try {
+    const stage = await prisma.pipelineStageLog.findFirst({
+      where: {
+        pipelineId: req.params.pipelineId,
+        stage: "QA_AGENT",
+        status: "COMPLETED",
+      },
+      orderBy: { completedAt: "desc" },
+      include: { pipeline: { include: { ticket: true } } },
+    });
+    if (!stage) {
+      res.status(404).json({ error: "not_found" });
+      return;
+    }
+    const out = stage.output as {
+      qa?: QaOutput;
+      executionReport?: Record<string, unknown>;
+      toolCallLog?: unknown[];
+    } | null;
+    res.json({
+      pipelineId: stage.pipelineId,
+      jiraKey: stage.pipeline.ticket.jiraKey,
+      ticketId: stage.pipeline.ticketId,
+      testCases: out?.qa?.testCases ?? [],
+      executionReport: out?.executionReport,
+      testSummary: out?.qa?.testSummary,
+      completedAt: stage.completedAt?.toISOString(),
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.get("/coverage", (_req, res) => {
   res.json({

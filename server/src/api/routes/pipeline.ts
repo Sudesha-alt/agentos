@@ -5,6 +5,7 @@ import { ticketRepo } from "../../db/repositories/ticketRepo";
 import {
   isTicketInPipelineQueue,
   isJiraKeyInPipelineQueue,
+  resumePipelineInBackground,
 } from "../../queue/inProcessRunner";
 import { enqueueIntakeFromJiraKey } from "../../pipeline/jira/intakeEnqueueService";
 import { NotFoundError, ValidationError } from "../../utils/errors";
@@ -27,6 +28,21 @@ router.get("/:pipelineId", async (req, res, next) => {
     const pipeline = await pipelineRepo.findWithLatestStages(req.params.pipelineId);
     if (!pipeline) throw new NotFoundError("Pipeline not found");
     res.json(pipeline);
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/:pipelineId/resume", async (req, res, next) => {
+  try {
+    const pipeline = await pipelineRepo.findById(req.params.pipelineId);
+    if (!pipeline) throw new NotFoundError("Pipeline not found");
+    const ticket = pipeline.ticket;
+    if (isTicketInPipelineQueue(ticket.id) || isJiraKeyInPipelineQueue(ticket.jiraKey)) {
+      throw new ValidationError("Ticket already active or queued");
+    }
+    const result = resumePipelineInBackground(ticket.id, ticket.jiraKey, pipeline.id);
+    res.status(202).json({ pipelineId: pipeline.id, ...result });
   } catch (err) {
     next(err);
   }

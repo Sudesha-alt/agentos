@@ -8,8 +8,11 @@ const restQaAdapter = {
   coverage: () => fetchJson(apiPath("/api/qa/coverage")),
   heatmap: () => fetchJson(apiPath("/api/qa/heatmap")),
   failures: () => fetchJson(apiPath("/api/qa/failures")),
-  reports: () => fetchJson(apiPath("/api/qa/reports")),
-  report: (ticketId) => fetchJson(apiPath(`/api/qa/reports/${ticketId}`)),
+  reports: () => fetchJson(apiPath("/api/qa/pipeline-reports")),
+  report: (pipelineId) => fetchJson(apiPath(`/api/qa/pipeline-reports/${pipelineId}`)),
+  pipelineReports: () => fetchJson(apiPath("/api/qa/pipeline-reports")),
+  pipelineReport: (pipelineId) =>
+    fetchJson(apiPath(`/api/qa/pipeline-reports/${pipelineId}`)),
 };
 
 const mockQaAdapter = {
@@ -36,4 +39,12 @@ export function useQaFailures(options = {}) {
 
 export function useQaReports(options = {}) {
   return useResource(() => qaAdapter.reports(), [], { pollMs: options.pollMs });
+}
+
+export function useQaPipelineReport(pipelineId, options = {}) {
+  return useResource(
+    () => (pipelineId ? qaAdapter.pipelineReport(pipelineId) : Promise.resolve(null)),
+    [pipelineId],
+    { pollMs: options.pollMs }
+  );
 }

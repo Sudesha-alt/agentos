@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   analyzePmTicket,
+  answerNeelQuestion,
+  confirmNeelDirection,
   getPmResumeStage,
+  NEEL_NAME,
   PM_STAGE_LABELS,
   PM_STAGE_ORDER,
   resumePmAnalysis,
@@ -12,17 +15,27 @@ import {
 } from "../../entities/pm-agents";
 import { useJiraSyncIssues } from "../../entities/jira-sync";
 import { usePipelineIntakeTickets } from "../../entities/pipeline-jira";
-import { PmAnalysisOutputs } from "../../widgets/pm-analysis/PmAnalysisSections";
+import { NeelWorkspace } from "../../widgets/pm-analysis/NeelWorkspace";
+import { NeelStageStepper } from "../../widgets/pm-analysis/NeelStageStepper";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
 import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
 import Spinner from "../components/Spinner";
+
+const PRINCIPLES = [
+  "One question at a time",
+  "Confirm before PRD",
+  "Codebase-informed ACs",
+  "Simplest version first",
+];
+
 export default function PmAgents() {
   const [searchParams] = useSearchParams();
-  const ticketFromUrl = searchParams.get("ticket")?.trim().toUpperCase() || "PLT-1287";
-  const [ticketInput, setTicketInput] = useState(ticketFromUrl);
-  const [activeKey, setActiveKey] = useState(ticketFromUrl);
+  const ticketFromUrl = searchParams.get("ticket")?.trim().toUpperCase() || "";
+  const [ticketInput, setTicketInput] = useState(ticketFromUrl || "PLT-1287");
+  const [activeKey, setActiveKey] = useState(ticketFromUrl || "PLT-1287");
   const [analyzing, setAnalyzing] = useState(false);
   const [retroRunning, setRetroRunning] = useState(false);
+  const [interactionBusy, setInteractionBusy] = useState(false);
   const [error, setError] = useState(null);
 
   const { data: listData, refetch: refetchList } = usePmAnalyses();
@@ -35,7 +48,14 @@ export default function PmAgents() {
   const intakeTickets = intake?.items ?? [];
   const syncedTickets = syncedIssues?.items ?? [];
 
-  const isRunning = analysis?.status === "RUNNING" || analyzing;
+  const isRunning =
+    analysis?.status === "RUNNING" ||
+    analyzing ||
+    analysis?.status === "AWAITING_INPUT" ||
+    analysis?.status === "AWAITING_CONFIRMATION";
+
+  const needsAttention =
+    analysis?.status === "AWAITING_INPUT" || analysis?.status === "AWAITING_CONFIRMATION";
 
   useEffect(() => {
     if (ticketFromUrl) {
@@ -45,7 +65,11 @@ export default function PmAgents() {
   }, [ticketFromUrl]);
 
   useEffect(() => {
-    if (analysis?.status === "RUNNING") {
+    if (
+      analysis?.status === "RUNNING" ||
+      analysis?.status === "AWAITING_INPUT" ||
+      analysis?.status === "AWAITING_CONFIRMATION"
+    ) {
       setAnalyzing(true);
     }
     if (analysis?.status === "COMPLETED" || analysis?.status === "FAILED") {
@@ -89,14 +113,39 @@ export default function PmAgents() {
     }
   }
 
+  async function handleAnswer(answer) {
+    setInteractionBusy(true);
+    setError(null);
+    try {
+      await answerNeelQuestion(activeKey, answer);
+      setAnalyzing(true);
+      await refetchAnalysis();
+    } catch (err) {
+      setError(err.message ?? "Failed to send answer");
+    } finally {
+      setInteractionBusy(false);
+    }
+  }
+
+  async function handleConfirm(body) {
+    setInteractionBusy(true);
+    setError(null);
+    try {
+      await confirmNeelDirection(activeKey, body);
+      setAnalyzing(true);
+      await refetchAnalysis();
+    } catch (err) {
+      setError(err.message ?? "Failed to confirm direction");
+    } finally {
+      setInteractionBusy(false);
+    }
+  }
+
   async function handleRetrospective() {
     setRetroRunning(true);
     setError(null);
     try {
-      await runPmRetrospective(activeKey, {
-        humanDecision: analysis?.prioritization?.recommendation,
-        actualPoints: analysis?.effortEstimate?.storyPoints,
-      });
+      await runPmRetrospective(activeKey, {});
       await refetchAnalysis();
     } catch (err) {
       setError(err.message ?? "Retrospective failed");
@@ -110,49 +159,95 @@ export default function PmAgents() {
     setTicketInput(key);
   }
 
+  const showEmptyLoader =
+    isRunning && analysis?.status === "RUNNING" && !analysis?.neelIntake && !needsAttention;
+
   return (
     <AnimatedAppPage wide>
-      <PageIntro
-        kicker="Product operations"
-        title="PM Agents"
-        body="Nine-stage product intelligence pipeline — from ticket enrichment through prioritization, acceptance criteria, and stakeholder artifacts. Active runs also appear in Pipeline Explorer."
-      />
-
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
-        <Panel>
-          <PanelHeader kicker="Analyze" title="Ticket input" />
-          <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-end sm:px-6">
-            <label className="flex-1">
-              <span className="type-kicker">Jira key</span>
-              <input
-                type="text"
-                value={ticketInput}
-                onChange={(e) => setTicketInput(e.target.value)}
-                placeholder="PLT-1287"
-                className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm text-app-ink outline-none focus:border-indigo/40 focus:ring-2 focus:ring-indigo/10"
-              />
-            </label>            <button
-              type="button"
-              disabled={isRunning || !ticketInput.trim()}
-              onClick={handleAnalyze}
-              className="app-btn-primary disabled:opacity-50"
+      <header className="grid gap-4 pb-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+        <PageIntro
+          kicker="Product discovery agent"
+          title={NEEL_NAME}
+          body="Conversational PM that classifies tickets, discovers requirements one question at a time, pressure-tests against your codebase, and writes a PRD only after you confirm the direction."
+        />
+        <ul className="flex flex-wrap gap-2 lg:justify-end">
+          {PRINCIPLES.map((p) => (
+            <li
+              key={p}
+              className="rounded-full border border-app-border bg-app-surface-muted/50 px-3 py-1 text-[11px] text-app-ink-dim"
             >
-              {isRunning ? "Analyzing…" : "Analyze ticket"}
-            </button>
-          </div>
-          {(syncedTickets.length > 0 || intakeTickets.length > 0) && (
-            <div className="border-t border-hairline px-5 py-3 sm:px-6 space-y-3">
+              {p}
+            </li>
+          ))}
+        </ul>
+      </header>
+
+      {/* Ticket launcher */}
+      <Panel>
+        <PanelHeader
+          kicker="New session"
+          title="Start with a Jira ticket"
+          body="Pick from synced issues or enter a key manually."
+        />
+        <div className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-end sm:px-6">
+          <label className="min-w-0 flex-1">
+            <span className="type-kicker">Jira key</span>
+            <input
+              type="text"
+              value={ticketInput}
+              onChange={(e) => setTicketInput(e.target.value.toUpperCase())}
+              placeholder="PLT-1287"
+              className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-4 py-2.5 font-mono text-sm text-app-ink outline-none transition focus:border-indigo/40 focus:ring-2 focus:ring-indigo/10"
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !isRunning) handleAnalyze();
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            disabled={isRunning || !ticketInput.trim()}
+            onClick={handleAnalyze}
+            className="app-btn-primary shrink-0 disabled:opacity-50"
+          >
+            {isRunning && !needsAttention
+              ? `${NEEL_NAME} is working…`
+              : needsAttention
+                ? "Session in progress"
+                : `Analyze with ${NEEL_NAME}`}
+          </button>
+        </div>
+
+        {(syncedTickets.length > 0 || intakeTickets.length > 0) && (
+          <div className="border-t border-app-border px-5 py-4 sm:px-6">
+            <div className="grid gap-4 sm:grid-cols-2">
+              {intakeTickets.length > 0 && (
+                <div>
+                  <p className="type-kicker text-indigo">AI Worker queue</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {intakeTickets.slice(0, 6).map((t) => (
+                      <button
+                        key={t.key}
+                        type="button"
+                        onClick={() => selectFromList(t.key)}
+                        className="rounded-full border border-indigo/30 bg-indigo/10 px-3 py-1 font-mono text-[12px] text-indigo transition hover:bg-indigo/15"
+                      >
+                        {t.key}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               {syncedTickets.length > 0 && (
                 <div>
                   <p className="type-kicker">Synced from Jira</p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {syncedTickets.slice(0, 10).map((t) => (
+                    {syncedTickets.slice(0, 8).map((t) => (
                       <button
                         key={t.jiraKey}
                         type="button"
                         onClick={() => selectFromList(t.jiraKey)}
-                        className="rounded-full border border-app-border px-2.5 py-1 text-[12px] text-app-ink-dim hover:border-indigo/40 hover:text-indigo"
                         title={t.summary}
+                        className="rounded-full border border-app-border px-3 py-1 font-mono text-[12px] text-app-ink-dim transition hover:border-indigo/30 hover:text-indigo"
                       >
                         {t.jiraKey}
                       </button>
@@ -160,65 +255,39 @@ export default function PmAgents() {
                   </div>
                 </div>
               )}
-              {intakeTickets.length > 0 && (
-                <div>
-                  <p className="type-kicker">AI Worker intake</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {intakeTickets.slice(0, 8).map((t) => (
-                      <button
-                        key={t.key}
-                        type="button"
-                        onClick={() => selectFromList(t.key)}
-                        className="rounded-full border border-indigo/30 bg-indigo/10 px-2.5 py-1 text-[12px] text-indigo hover:border-indigo"
-                      >
-                        {t.key}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}            </div>
-          )}
-          {error && (
-            <p className="border-t border-hairline px-5 py-3 text-[13px] text-danger sm:px-6">{error}</p>
-          )}
-        </Panel>
+            </div>
+          </div>
+        )}
 
-        <Panel>
-          <PanelHeader kicker="History" title="Recent analyses" />
-          <ul className="max-h-[220px] overflow-y-auto px-3 py-2">
-            {(listData?.items ?? []).map((item) => (
-              <li key={item.id}>
-                <button
-                  type="button"
-                  onClick={() => selectFromList(item.jiraKey)}
-                  className={`w-full rounded-lg px-3 py-2 text-left hover:bg-canvas/50 ${
-                    activeKey === item.jiraKey ? "bg-indigo/10" : ""
-                  }`}
-                >
-                  <p className="text-[12px] font-medium text-app-ink">{item.jiraKey}</p>
-                  <p className="truncate text-[11px] text-app-ink-dim">{item.summary}</p>
-                  <p className="mt-0.5 type-kicker">{item.status}</p>                </button>
-              </li>
-            ))}
-            {!listData?.items?.length && (
-              <li className="px-3 py-4 text-[13px] text-ink-dim">No analyses yet.</li>
-            )}
-          </ul>
-        </Panel>
-      </div>
-
-      {isRunning && !analysis?.enrichment && (
-        <div className="flex items-center justify-center gap-3 py-10">
-          <Spinner />
-          <p className="text-sm text-app-ink-dim">
-            Running PM pipeline ({PM_STAGE_ORDER.length} stages)…
+        {error && (
+          <p className="border-t border-danger/20 bg-danger/5 px-5 py-3 text-[13px] text-danger sm:px-6">
+            {error}
           </p>
+        )}
+      </Panel>
+
+      {showEmptyLoader && (
+        <div className="flex flex-col items-center justify-center gap-4 rounded-app border border-dashed border-app-border py-16">
+          <Spinner />
+          <div className="text-center">
+            <p className="text-sm font-medium text-app-ink">{NEEL_NAME} is reading the ticket</p>
+            <p className="mt-1 text-[13px] text-app-ink-dim">Stage 1 — intake & classification</p>
+          </div>
+          <div className="w-full max-w-xs px-6">
+            <NeelStageStepper analysis={analysis} compact />
+          </div>
         </div>
       )}
 
-      {analysis && (
-        <PmAnalysisOutputs
+      {analysis && !showEmptyLoader && (
+        <NeelWorkspace
           analysis={analysis}
+          historyItems={listData?.items}
+          activeKey={activeKey}
+          onSelectTicket={selectFromList}
+          onAnswer={handleAnswer}
+          onConfirm={handleConfirm}
+          interactionBusy={interactionBusy}
           onRetrospective={handleRetrospective}
           retroRunning={retroRunning}
           onResume={analysis.status === "FAILED" ? handleResume : undefined}
@@ -229,6 +298,33 @@ export default function PmAgents() {
               : null
           }
         />
+      )}
+
+      {!analysis && !showEmptyLoader && (
+        <div className="rounded-app border border-dashed border-app-border px-6 py-20 text-center">
+          <div className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-indigo/10 font-display text-2xl text-indigo">
+            N
+          </div>
+          <p className="mt-4 text-[15px] font-medium text-app-ink">
+            No active session
+          </p>
+          <p className="mx-auto mt-2 max-w-md text-[14px] text-app-ink-dim">
+            Enter a Jira key above to start. {NEEL_NAME} will classify the ticket, ask discovery
+            questions one at a time, analyze your codebase, and produce a PRD with engineering
+            tickets.
+          </p>
+          <ol className="mx-auto mt-8 grid max-w-lg gap-2 text-left sm:grid-cols-2">
+            {PM_STAGE_ORDER.map((stage, i) => (
+              <li
+                key={stage}
+                className="flex items-center gap-2 rounded-app-sm border border-app-border/80 bg-app-surface-muted/30 px-3 py-2 text-[12px] text-app-ink-dim"
+              >
+                <span className="font-mono text-[10px] text-indigo">{i + 1}</span>
+                {PM_STAGE_LABELS[stage]}
+              </li>
+            ))}
+          </ol>
+        </div>
       )}
     </AnimatedAppPage>
   );

@@ -191,6 +191,21 @@ model HumanOverride {
   @@index([pipelineId, stage])
 }
 
+model OrgIntelligenceRecord {
+  id         String   @id @default(cuid())
+  sourceType String
+  jiraKey    String
+  pipelineId String?
+  component  String?
+  signal     String   @db.Text
+  metadata   Json     @default("{}")
+  createdAt  DateTime @default(now())
+
+  @@index([jiraKey, createdAt])
+  @@index([sourceType, createdAt])
+  @@index([component])
+}
+
 model AuditLog {
   id         String   @id @default(cuid())
   pipelineId String

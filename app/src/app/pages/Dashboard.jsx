@@ -8,7 +8,7 @@ import { chipFadeUp, pageStagger } from "../../lib/motion";
 
 const QUICK_ACTIONS = [
   { to: "/app/pipelines", label: "Pipeline Explorer", tone: "lavender" },
-  { to: "/app/pm-agents", label: "PM Agents", tone: "peach" },
+  { to: "/app/pm-agents", label: "Neel", tone: "peach" },
   { to: "/app/codebase", label: "Codebase", tone: "mint" },
   { to: "/app/jira", label: "Jira", tone: "butter" },
   { to: "/app/git", label: "GitHub", tone: "lavender" },
