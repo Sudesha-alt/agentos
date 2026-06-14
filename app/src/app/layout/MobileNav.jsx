@@ -4,11 +4,11 @@ import { APP_NAV } from "../../shared/config/app";
 export default function MobileNav() {
   return (
     <nav className="app-glass sticky top-[4.25rem] z-10 flex gap-2 overflow-x-auto border-b border-app-border px-4 py-2.5 md:hidden">
-      {APP_NAV.filter((item) => item.to !== "/app/settings").map((item) => (
+      {APP_NAV.map((item) => (
         <NavLink
           key={item.to}
           to={item.to}
-          end={item.end}
+          end={item.to === "/app/settings" ? false : item.end}
           className={({ isActive }) =>
             `shrink-0 rounded-full px-3.5 py-2 text-xs font-medium transition-all ${
               isActive

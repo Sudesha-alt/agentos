@@ -37,11 +37,26 @@ export const pageStagger = (delay = 0.06) => ({
 
 /** App shell — section fade-in */
 export const sectionFadeUp = {
-  hidden: { opacity: 0, y: 12 },
+  hidden: { opacity: 0, y: 8 },
   show: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.35, ease: EASE },
+    transition: { duration: 0.28, ease: EASE },
+  },
+};
+
+/** Route-level page crossfade (AppShell outlet) */
+export const pageRouteFade = {
+  hidden: { opacity: 0, y: 6 },
+  show: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.22, ease: EASE },
+  },
+  exit: {
+    opacity: 0,
+    y: -4,
+    transition: { duration: 0.14, ease: EASE },
   },
 };
 
@@ -74,6 +89,7 @@ export function motionSafe(variants) {
     return {
       hidden: { opacity: 1, y: 0 },
       show: { opacity: 1, y: 0, transition: { duration: 0 } },
+      exit: { opacity: 1, y: 0, transition: { duration: 0 } },
     };
   }
   return variants;

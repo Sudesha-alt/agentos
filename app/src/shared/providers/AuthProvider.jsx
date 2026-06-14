@@ -6,6 +6,7 @@ import {
 } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 import { authAdapter } from "../../entities/auth";
+import AppPageFallback from "../ui/AppPageFallback";
 import { AuthContext, useAuth } from "./useAuth";
 
 export function AuthProvider({ children }) {
@@ -76,12 +77,9 @@ export function RequireAuth({ children }) {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-canvas px-5 text-center">
-        <div>
-          <p className="editorial-kicker text-ink-mute">Auth</p>
-          <p className="mt-3 font-mono text-[12px] text-ink-dim">
-            Restoring your workspace session...
-          </p>
+      <div className="app-shell app-shell-gradient flex min-h-screen items-center justify-center px-5 py-10">
+        <div className="w-full max-w-[82rem]">
+          <AppPageFallback />
         </div>
       </div>
     );

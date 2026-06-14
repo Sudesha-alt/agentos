@@ -11,8 +11,8 @@ const QUICK_ACTIONS = [
   { to: "/app/pipelines", label: "Pipeline Explorer", tone: "lavender" },
   { to: "/app/pm-agents", label: AGENT_NAMES.VIRIN, tone: "peach" },
   { to: "/app/codebase", label: AGENT_NAMES.ANANTA, tone: "mint" },
-  { to: "/app/jira", label: "Jira", tone: "butter" },
-  { to: "/app/git", label: "GitHub", tone: "lavender" },
+  { to: "/app/settings/integrations/jira", label: "Jira", tone: "butter" },
+  { to: "/app/settings/integrations/github", label: "GitHub", tone: "lavender" },
   { to: "/app/qa", label: AGENT_NAMES.NEEL, tone: "mint" },
 ];
 
@@ -35,7 +35,7 @@ export default function Dashboard() {
 
   return (
     <AnimatedAppPage className="space-y-6">
-      <section className="app-card p-6 sm:p-8">
+      <section className="app-card-interactive p-6 sm:p-8">
         <p className="type-kicker">Workspace overview</p>
         <h1 className="mt-2 type-page-title">Welcome back, {name}</h1>
         <p className="mt-2 type-page-lede">

@@ -17,6 +17,7 @@ import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
 import { AppTabButton } from "../../shared/ui/AppChrome";
 import { Link } from "react-router-dom";
 import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
+import { AgentPageWithChat } from "../../widgets/agent-chat/AgentPageWithChat";
 
 const HEATMAP_CELL = {
   pass: "bg-success",
@@ -82,8 +83,11 @@ export default function QaCenter() {
     }
   }
 
+  const qaContextKey = selectedPipelineId || selectedRun?.id || "";
+
   return (
     <AnimatedAppPage wide>
+      <AgentPageWithChat domain="neel" contextKey={qaContextKey}>
       <PageIntro
         kicker="QA"
         title={AGENT_NAMES.NEEL}
@@ -355,6 +359,7 @@ export default function QaCenter() {
           ) : null}
         </>
       )}
+      </AgentPageWithChat>
     </AnimatedAppPage>
   );
 }

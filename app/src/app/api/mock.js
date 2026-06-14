@@ -1105,7 +1105,7 @@ function buildMockGitIntegrationSetup() {
         "QA sandbox clone",
       ],
       installUrl: "https://github.com/apps/agentos-dev/installations/new",
-      setupUrl: "/app/git",
+      setupUrl: "/app/settings/integrations/github",
       webhookUrl,
     },
     webhooks: {

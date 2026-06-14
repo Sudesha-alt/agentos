@@ -1,6 +1,6 @@
 const PANEL_STYLES = {
   light: {
-    panel: "rounded-app border border-app-border bg-app-surface shadow-app-card",
+    panel: "rounded-app border border-app-border bg-app-surface shadow-app-card transition-[box-shadow,border-color] duration-300 ease-out",
     headerBorder: "border-app-border",
     kicker: "type-kicker",
     title: "type-section-title",
@@ -28,7 +28,7 @@ export function PanelHeader({ kicker, title, right, body, className = "", varian
     <header
       className={`border-b ${styles.headerBorder} px-5 py-4 sm:px-6 sm:py-5 ${className}`}
     >
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           {kicker ? <p className={styles.kicker}>{kicker}</p> : null}
           <h2 className={variant === "light" ? `mt-1 ${styles.title}` : `mt-2 ${styles.title}`}>

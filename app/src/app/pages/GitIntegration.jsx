@@ -15,9 +15,9 @@ import IndexProgressBar from "../../widgets/index-progress/IndexProgressBar";
 import LabelPill from "../components/LabelPill";
 import Spinner from "../components/Spinner";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
-import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
+import { SettingsPageShell } from "../layout/SettingsPageShell";
 
-export default function GitIntegration() {
+export default function GitIntegration({ embedded = false }) {
   const { data: setup, error, loading, refetch } = useGitIntegrationSetup();
 
   if (loading && !setup) {
@@ -237,31 +237,28 @@ function GitIntegrationContent({ setup, refetch }) {
   }
 
   return (
-    <AnimatedAppPage wide className="pb-16">
-      <PageIntro
-        kicker="GitHub integration"
-        title={
-          connected
-            ? "GitHub connected"
-            : needsRepoPick
-              ? "Finish GitHub setup"
-              : "Connect GitHub"
-        }
-        body={
-          connected
-            ? "Repository access for codebase indexing, visualization, branch push, pull requests, and QA sandbox clones."
-            : needsRepoPick
-              ? "The GitHub App is installed — pick which repository Agentos should index and push to."
-              : "Install the Agentos GitHub App for one-click access — read, write, push, and open PRs without copying tokens."
-        }
-        right={
-          connected ? (
+    <SettingsPageShell
+      embedded={embedded}
+      className="pb-16"
+      kicker="GitHub integration"
+      title={
+        connected
+          ? "GitHub connected"
+          : needsRepoPick
+            ? "Finish GitHub setup"
+            : "Connect GitHub"
+      }
+      body="Connect a repository so Ananta can index your codebase and the pipeline can read implementation context."
+    >
+      {(connected || needsRepoPick) && !embedded ? (
+        <div className="flex justify-end">
+          {connected ? (
             <LabelPill label={connectedLabel ?? "Connected"} tone="success" />
           ) : needsRepoPick ? (
             <LabelPill label="Select repository" tone="warning" />
-          ) : null
-        }
-      />
+          ) : null}
+        </div>
+      ) : null}
 
       {(connected || indexRunId) && (
         <IndexProgressBar
@@ -444,7 +441,7 @@ function GitIntegrationContent({ setup, refetch }) {
       ) : (
         <BitbucketManualPanel setup={setup} refetch={refetch} />
       )}
-    </AnimatedAppPage>
+    </SettingsPageShell>
   );
 }
 

@@ -1,7 +1,8 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import Logo from "../../components/Logo";
 import { APP_NAV_SECTIONS } from "../../shared/config/app";
 import { usePipelineList } from "../../entities/pipeline";
+import { useSidebarCollapsed } from "../../shared/hooks/useSidebarCollapsed";
 
 const NAV_ICONS = {
   "/app": IconDashboard,
@@ -19,19 +20,45 @@ const NAV_ICONS = {
 };
 
 export default function Sidebar() {
+  const location = useLocation();
+  const { collapsed, toggleCollapsed } = useSidebarCollapsed();
   const { items: pipelines } = usePipelineList(undefined, { pollMs: 12_000 });
   const reviewCount = pipelines.filter((p) => p.status === "PAUSED").length;
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-[17.5rem] flex-col px-4 py-6 md:flex">
-      <div className="mb-8 px-2">
-        <Logo variant="light" href="/app" />
+    <aside
+      className={`fixed inset-y-0 left-0 z-30 hidden flex-col py-6 transition-[width,padding] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] md:flex ${
+        collapsed ? "w-16 px-2" : "w-[17.5rem] px-4"
+      }`}
+    >
+      <button
+        type="button"
+        onClick={toggleCollapsed}
+        className="absolute -right-3 top-[4.5rem] z-40 flex size-6 items-center justify-center rounded-full border border-app-border bg-app-surface text-app-ink-dim shadow-app-card transition hover:border-indigo/30 hover:text-app-ink"
+        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        aria-expanded={!collapsed}
+      >
+        <IconChevron collapsed={collapsed} />
+      </button>
+
+      <div className={`mb-8 ${collapsed ? "flex justify-center px-0" : "px-2"}`}>
+        {collapsed ? (
+          <NavLink to="/app" aria-label="AgentOS home" className="inline-flex">
+            <LogoMark />
+          </NavLink>
+        ) : (
+          <Logo variant="light" href="/app" />
+        )}
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-1">
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden px-1">
         {APP_NAV_SECTIONS.map((section, sectionIndex) => (
           <div key={section.id} className={sectionIndex > 0 ? "mt-7" : ""}>
-            <p className="mb-2 px-3 type-kicker">{section.label}</p>
+            {!collapsed ? (
+              <p className="mb-2 px-3 type-kicker">{section.label}</p>
+            ) : sectionIndex > 0 ? (
+              <div className="my-3 border-t border-app-border/60" aria-hidden />
+            ) : null}
             <ul className="space-y-0.5">
               {section.items.map((item) => {
                 const Icon = NAV_ICONS[item.to] ?? IconDashboard;
@@ -39,34 +66,55 @@ export default function Sidebar() {
                   <li key={item.to}>
                     <NavLink
                       to={item.to}
-                      end={item.end}
-                      className={({ isActive }) =>
-                        `group flex items-center gap-2.5 rounded-full px-3 py-2 type-nav transition-all duration-200 ${
-                          isActive
+                      end={item.to === "/app/settings" ? false : item.end}
+                      title={collapsed ? item.label : undefined}
+                      aria-label={collapsed ? item.label : undefined}
+                      className={({ isActive }) => {
+                        const active =
+                          isActive ||
+                          (item.to === "/app/settings" &&
+                            location.pathname.startsWith("/app/settings"));
+                        return `group flex items-center rounded-full py-2 type-nav transition-all duration-200 ease-out ${
+                          collapsed ? "justify-center px-2" : "gap-2.5 px-3"
+                        } ${
+                          active
                             ? "bg-app-surface text-app-ink shadow-app-nav-active"
                             : "text-app-ink-dim hover:bg-white/50 hover:text-app-ink"
-                        }`
-                      }
+                        }`;
+                      }}
                     >
-                      {({ isActive }) => (
-                        <>
-                          <span
-                            className={`flex size-7 items-center justify-center rounded-full transition-colors ${
-                              isActive
-                                ? "bg-app-lavender/60 text-app-accent"
-                                : "bg-transparent text-app-ink-mute group-hover:text-app-ink-dim"
-                            }`}
-                          >
-                            <Icon />
-                          </span>
-                          <span className="min-w-0 truncate">{item.label}</span>
-                          {item.to === "/app/pipelines" && reviewCount > 0 ? (
-                            <span className="ml-auto flex size-5 shrink-0 items-center justify-center rounded-full bg-danger text-[10px] font-semibold text-white">
-                              {reviewCount > 9 ? "9+" : reviewCount}
+                      {({ isActive }) => {
+                        const active =
+                          isActive ||
+                          (item.to === "/app/settings" &&
+                            location.pathname.startsWith("/app/settings"));
+                        return (
+                          <>
+                            <span
+                              className={`relative flex size-7 shrink-0 items-center justify-center rounded-full transition-colors ${
+                                active
+                                  ? "bg-app-lavender/60 text-app-accent"
+                                  : "bg-transparent text-app-ink-mute group-hover:text-app-ink-dim"
+                              }`}
+                            >
+                              <Icon />
+                              {collapsed && item.to === "/app/pipelines" && reviewCount > 0 ? (
+                                <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-danger ring-2 ring-app-surface" />
+                              ) : null}
                             </span>
-                          ) : null}
-                        </>
-                      )}
+                            {!collapsed ? (
+                              <>
+                                <span className="min-w-0 truncate">{item.label}</span>
+                                {item.to === "/app/pipelines" && reviewCount > 0 ? (
+                                  <span className="ml-auto flex size-5 shrink-0 items-center justify-center rounded-full bg-danger text-[10px] font-semibold text-white">
+                                    {reviewCount > 9 ? "9+" : reviewCount}
+                                  </span>
+                                ) : null}
+                              </>
+                            ) : null}
+                          </>
+                        );
+                      }}
                     </NavLink>
                   </li>
                 );
@@ -75,18 +123,32 @@ export default function Sidebar() {
           </div>
         ))}
       </nav>
-
-      <div className="app-card mt-4 p-3.5">
-        <div className="flex items-center justify-between">
-          <span className="type-kicker">System</span>
-          <span className="size-1.5 rounded-full bg-success shadow-[0_0_6px_1px_rgba(34,197,94,0.35)]" />
-        </div>
-        <p className="mt-1.5 text-base font-semibold tracking-tight text-app-ink">
-          Operational
-        </p>
-        <p className="mt-0.5 text-xs text-app-ink-mute">AgentOS · v0.8.0</p>
-      </div>
     </aside>
+  );
+}
+
+function LogoMark() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <circle cx="9" cy="16" r="2.6" fill="#8B7CF6" />
+      <circle cx="16" cy="16" r="2.6" className="fill-app-ink" />
+      <circle cx="23" cy="16" r="2.6" fill="#8B7CF6" />
+      <path d="M11.6 16 H13.4 M18.6 16 H20.4" stroke="#8B7CF6" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+function IconChevron({ collapsed }) {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden>
+      <path
+        d={collapsed ? "M4 2.5 L7.5 6 L4 9.5" : "M8 2.5 L4.5 6 L8 9.5"}
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -134,7 +196,7 @@ function IconGitHub() {
   return (
     <svg width="16" height="16" viewBox="0 0 14 14" fill="none" aria-hidden>
       <path
-        d="M7 1.5C4.5 1.5 2.5 3.5 2.5 6c0 2 1.3 3.7 3.1 4.3.2.1.3 0 .3-.2v-1.2c-1.3.3-1.5-.6-1.5-.6-.2-.4-.5-.6-.5-.6-.4-.3 0-.3 0-.3.5 0 .7.3.7.6 0 .3.5 1 .9.5.2-.2.4-.6.4-.9v-.5c-1-.1-2.1-.5-2.1-2.3 0-.5.2-1 .5-1.3 0-.5-.1-1 .1-1.2.1-.1.4-.2 1 .2.3-.1.6-.1.9-.1.3 0 .6 0 .9.1.6-.4.9-.3 1-.2.2.2.3.7.2 1.2.3.3.5.8.5 1.3 0 1.8-1.2 2.2-2.2 2.3.2.2.3.5.3.8v1.2c0 .2.1.3.3.2 1.8-.6 3.1-2.3 3.1-4.3 0-2.5-2-4.5-4.5-4.5z"
+        d="M7 1.5C4.5 1.5 2.5 3.5 2.5 6c0 2 1.3 3.7 3.1 4.3.2.1.3 0 .3-.2v-1.2c-1.3.3-1.5-.6-1.5-.6-.2-.4-.5-.6-.5-.6-.4-.3 0-.3 0-.3.5 0 .7.3.7.6 0 .3.5 1 .9.5.2-.2.4-.6.4-.9v-.5c-1-.1-2.1-.5-2.1-2.3 0-.5.2-1 .5-1.3 0-.5-.1-1 .1-1.2.1-.1.4-.2 1-.2.3-.1.6-.1.9-.1.3 0 .6 0 .9.1.6-.4.9-.3 1-.2.2.2.3.7.2 1.2.3.3.5.8.5 1.3 0 1.8-1.2 2.2-2.2 2.3.2.2.3.5.3.8v1.2c0 .2.1.3.3.2 1.8-.6 3.1-2.3 3.1-4.3 0-2.5-2-4.5-4.5-4.5z"
         stroke="currentColor"
         strokeWidth="0.85"
       />

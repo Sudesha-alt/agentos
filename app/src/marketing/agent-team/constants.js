@@ -14,7 +14,7 @@ export const AGENTS = [
     role: "Product",
     roleDetail: "PM & discovery",
     gradient: "olive",
-    image: "/marketing/agents/neel.png",
+    image: "/marketing/agents/virin.png",
     headline: "Shapes the spec your team can ship",
     teammateIntro:
       "Hi, I'm Virin — your Product teammate. I take rough ideas and Jira tickets, run discovery against company context, and hand off a PRD the whole team trusts.",
@@ -54,7 +54,7 @@ export const AGENTS = [
     role: "QA",
     roleDetail: "Test & release",
     gradient: "lavender",
-    image: "/marketing/agents/virin.png",
+    image: "/marketing/agents/neel.png",
     headline: "Signs off before anything ships",
     teammateIntro:
       "I'm Neel — your QA teammate. I generate test cases from the PRD, track coverage, run canary checks, and hold the gate until we're confident — then write back to Jira.",

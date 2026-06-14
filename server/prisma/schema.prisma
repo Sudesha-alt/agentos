@@ -222,6 +222,31 @@ model CompanyProfile {
   updatedBy       String?
 }
 
+model AgentChatThread {
+  id          String   @id @default(cuid())
+  agentDomain String
+  contextKey  String   @default("")
+  title       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  messages    AgentChatMessage[]
+
+  @@unique([agentDomain, contextKey])
+  @@index([agentDomain])
+}
+
+model AgentChatMessage {
+  id        String   @id @default(cuid())
+  threadId  String
+  thread    AgentChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  role      String
+  content   String   @db.Text
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([threadId, createdAt])
+}
+
 model AuditLog {
   id         String   @id @default(cuid())
   pipelineId String
@@ -364,6 +389,16 @@ model CodebaseIndexRun {
 
   @@index([repoOwner, repoName, status])
   @@index([startedAt])
+}
+
+model WorkspaceBilling {
+  id            String   @id @default("default")
+  planId        String   @default("pilot")
+  runsUsed      Int      @default(0)
+  runsCap       Int      @default(20)
+  pilotEndsAt   DateTime?
+  billingCycle  String   @default("monthly")
+  updatedAt     DateTime @updatedAt
 }
 
 model GithubInstallation {

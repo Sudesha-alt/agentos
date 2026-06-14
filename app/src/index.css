@@ -214,8 +214,21 @@ html.lenis body {
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
   }
+  @media (max-width: 767px) {
+    .app-glass {
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
+    }
+  }
   .app-card {
-    @apply rounded-app border border-app-border bg-app-surface shadow-app-card;
+    @apply rounded-app border border-app-border bg-app-surface shadow-app-card transition-[box-shadow,border-color,transform] duration-300 ease-out;
+  }
+  .app-card-interactive {
+    @apply app-card hover:-translate-y-px hover:border-app-ink/10 hover:shadow-app-float;
+  }
+  .app-page-transition {
+    will-change: opacity, transform;
   }
   .app-pill {
     @apply inline-flex items-center gap-2 rounded-full border border-app-border bg-app-surface px-4 py-2 text-sm font-medium text-app-ink transition-all duration-200 hover:border-app-ink/15 hover:shadow-app-card;

@@ -35,6 +35,27 @@ html.app-theme ::-webkit-scrollbar-thumb:hover {
     min-height: 100vh;
   }
 
+  .app-shell main {
+    min-width: 0;
+  }
+
+  .app-shell a:focus-visible,
+  .app-shell button:focus-visible {
+    outline: 2px solid rgba(99, 102, 241, 0.45);
+    outline-offset: 2px;
+  }
+
+  .app-shell aside {
+    will-change: width;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .app-shell aside,
+    .app-page-transition {
+      will-change: auto;
+    }
+  }
+
   /* Typography */
   .app-shell .text-ink {
     color: #1a1a1a;

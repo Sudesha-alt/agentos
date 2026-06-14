@@ -15,9 +15,9 @@ import PipelineQueuePanel from "../../widgets/pipeline-queue/PipelineQueuePanel"
 import JiraSyncStatusPanel from "../../widgets/jira-sync/JiraSyncStatusPanel";
 import JiraTicketBrowser from "../../widgets/jira-sync/JiraTicketBrowser";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
-import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
+import { SettingsPageShell } from "../layout/SettingsPageShell";
 
-export default function JiraIntegration() {
+export default function JiraIntegration({ embedded = false }) {
   const {
     data: setup,
     error: setupError,
@@ -166,12 +166,12 @@ function JiraIntegrationContent({ setup, refetchSetup }) {
   }
 
   return (
-    <AnimatedAppPage wide>
-      <PageIntro
-        kicker="Jira"
-        title="Jira pipeline"
-        body="Connect Jira once to sync all project tickets, pick the AI Worker column for pipeline intake, and browse or analyze tickets from AgentOS."
-      />
+    <SettingsPageShell
+      embedded={embedded}
+      kicker="Jira"
+      title="Jira pipeline"
+      body="Connect Jira once to sync tickets, pick the AI Worker column for pipeline intake, and browse tickets from AgentOS."
+    >
 
       {statusMessage ? (
         <p className="rounded-app-sm border border-success/30 bg-success/10 px-4 py-2.5 text-sm text-success">
@@ -350,6 +350,6 @@ function JiraIntegrationContent({ setup, refetchSetup }) {
           </p>
         </Panel>
       ) : null}
-    </AnimatedAppPage>
+    </SettingsPageShell>
   );
 }

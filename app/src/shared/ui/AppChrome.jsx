@@ -23,7 +23,7 @@ export function AppTabButton({ active, onClick, children, className = "" }) {
 export function AppPage({ children, className = "", wide = false }) {
   return (
     <div
-      className={`mx-auto w-full space-y-5 ${wide ? "max-w-[96rem]" : "max-w-[82rem]"} ${className}`}
+      className={`mx-auto w-full min-w-0 space-y-5 ${wide ? "max-w-[96rem]" : "max-w-[82rem]"} ${className}`}
     >
       {children}
     </div>

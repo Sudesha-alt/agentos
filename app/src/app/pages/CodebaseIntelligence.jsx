@@ -17,6 +17,7 @@ import { AGENT_NAMES } from "../../shared/config/app";
 import { PageIntro } from "../../shared/ui/Panel";
 import { AppTabButton } from "../../shared/ui/AppChrome";
 import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
+import { AgentPageWithChat } from "../../widgets/agent-chat/AgentPageWithChat";
 import { tabPanelFade, motionSafe } from "../../lib/motion";
 
 const CodebaseVisualization = lazy(
@@ -92,6 +93,7 @@ export default function CodebaseIntelligence() {
 
   return (
     <AnimatedAppPage wide>
+      <AgentPageWithChat domain="ananta" contextKey={branch}>
       <PageIntro
         kicker="Tech"
         title={AGENT_NAMES.ANANTA}
@@ -133,6 +135,7 @@ export default function CodebaseIntelligence() {
           </AnimatePresence>
         </>
       ) : null}
+      </AgentPageWithChat>
     </AnimatedAppPage>
   );
 }

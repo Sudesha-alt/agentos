@@ -8,7 +8,7 @@ import {
 } from "../../entities/company-intelligence";
 import { AGENT_NAMES } from "../../shared/config/app";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
-import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
+import { SettingsPageShell } from "../layout/SettingsPageShell";
 
 function linesToArray(text) {
   return text
@@ -31,7 +31,7 @@ function Field({ label, hint, children }) {
   );
 }
 
-export default function CompanyIntelligence() {
+export default function CompanyIntelligence({ embedded = false }) {
   const { data, loading, refetch } = useCompanyProfile();
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -226,12 +226,14 @@ export default function CompanyIntelligence() {
   }
 
   return (
-    <AnimatedAppPage wide>
-      <PageIntro
-        kicker="Business intelligence"
-        title="Company profile"
-        body={`Start with your website — we scrape public pages and pre-fill company details. Review and edit anything before saving. ${AGENT_NAMES.VIRIN} validates every idea against this before writing a PRD.`}
-      />
+    <SettingsPageShell
+      embedded={embedded}
+      backTo="/app/settings/plan"
+      backLabel="← Settings"
+      kicker="Business intelligence"
+      title="Company profile"
+      body={`Start with your website — we scrape public pages and pre-fill company details. Review and edit before saving. ${AGENT_NAMES.VIRIN} validates every idea against this before writing a PRD.`}
+    >
 
       <form onSubmit={handleSave} className="space-y-5">
         <Panel>
@@ -515,6 +517,6 @@ export default function CompanyIntelligence() {
           {error && <span className="text-[13px] text-danger">{error}</span>}
         </div>
       </form>
-    </AnimatedAppPage>
+    </SettingsPageShell>
   );
 }

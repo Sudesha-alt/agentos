@@ -19,6 +19,7 @@ import { useJiraSyncIssues } from "../../entities/jira-sync";
 import { usePipelineIntakeTickets } from "../../entities/pipeline-jira";
 import { NeelWorkspace } from "../../widgets/pm-analysis/NeelWorkspace";
 import { NeelStageStepper } from "../../widgets/pm-analysis/NeelStageStepper";
+import { AgentPageWithChat } from "../../widgets/agent-chat/AgentPageWithChat";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
 import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
 import Spinner from "../components/Spinner";
@@ -170,6 +171,7 @@ export default function PmAgents() {
 
   return (
     <AnimatedAppPage wide>
+      <AgentPageWithChat domain="virin" contextKey={activeKey ?? ""}>
       <header className="grid gap-4 pb-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
         <PageIntro
           kicker="Product"
@@ -196,7 +198,7 @@ export default function PmAgents() {
             body={`${AGENT_NAMES.VIRIN} validates every idea against your business context and revenue model. Add company details so discovery and PRD stages can judge fit.`}
             right={
               <Link
-                to="/app/company-intelligence"
+                to="/app/settings/company"
                 className="rounded-full border border-indigo/30 bg-indigo/10 px-4 py-2 text-[12px] font-medium text-indigo hover:bg-indigo/15"
               >
                 Set up company profile →
@@ -350,6 +352,7 @@ export default function PmAgents() {
           </ol>
         </div>
       )}
+      </AgentPageWithChat>
     </AnimatedAppPage>
   );
 }

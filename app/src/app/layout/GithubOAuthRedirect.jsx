@@ -11,7 +11,13 @@ export default function GithubOAuthRedirect() {
 
   useEffect(() => {
     const path = location.pathname.replace(/\/$/, "") || "/";
-    if (path === "/app/git" || path === "/app/github") return;
+    if (
+      path === "/app/settings/integrations/github" ||
+      path === "/app/git" ||
+      path === "/app/github"
+    ) {
+      return;
+    }
 
     const params = new URLSearchParams(location.search);
     const hasGithubCallback =
@@ -21,7 +27,7 @@ export default function GithubOAuthRedirect() {
 
     if (!hasGithubCallback) return;
 
-    navigate(`/app/git${location.search}`, { replace: true });
+    navigate(`/app/settings/integrations/github${location.search}`, { replace: true });
   }, [location.pathname, location.search, navigate]);
 
   return null;

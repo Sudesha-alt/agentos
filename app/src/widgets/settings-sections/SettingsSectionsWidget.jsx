@@ -10,76 +10,63 @@ export default function SettingsSectionsWidget({
   pending,
   savedAt,
   error,
+  mode = "full",
 }) {
+  const pipelineOnly = mode === "pipeline";
+
   return (
     <form onSubmit={onSubmit} className="space-y-5">
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: EASE }}
-      >
-        <Panel>
-          <PanelHeader
-            kicker="Integrations"
-            title="Integrations hub"
-            body="Connect external services for ticket intake and repository access."
-          />
-          <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
-            <IntegrationCard
-              to="/app/jira"
-              title="Jira integration"
-              description="AI Worker queue, board webhooks, column mapping, and pipeline ingress from Jira tickets."
+      {!pipelineOnly ? (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: EASE }}
+        >
+          <Panel>
+            <PanelHeader
+              kicker="Integrations"
+              title="Integrations hub"
+              body="Connect external services for ticket intake and repository access."
             />
-            <IntegrationCard
-              to="/app/git"
-              title="GitHub integration"
-              description="GitHub App or PAT for codebase indexing, branch push, pull requests, and QA sandboxes."
-            />
-          </div>
-        </Panel>
-      </motion.div>
+            <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
+              <IntegrationCard
+                to="/app/settings/integrations/jira"
+                title="Jira integration"
+                description="AI Worker queue, board webhooks, column mapping, and pipeline ingress from Jira tickets."
+              />
+              <IntegrationCard
+                to="/app/settings/integrations/github"
+                title="GitHub integration"
+                description="GitHub App or PAT for codebase indexing, branch push, pull requests, and QA sandboxes."
+              />
+            </div>
+          </Panel>
+        </motion.div>
+      ) : null}
 
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: EASE, delay: 0.04 }}
-      >
-        <Panel>
-          <PanelHeader
-            kicker="Integration"
-            title="Jira"
-            body="Credentials and ingress settings for webhook intake and comment writeback."
-          />
-          <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
-            <Field
-              label="Base URL"
-              value={form.jiraBaseUrl}
-              placeholder="https://your-domain.atlassian.net"
-              onChange={(value) => onChange("jiraBaseUrl", value)}
+      {!pipelineOnly ? (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, ease: EASE, delay: 0.04 }}
+        >
+          <Panel>
+            <PanelHeader
+              kicker="Integration"
+              title="Jira"
+              body="Use the Jira integration page for credentials — this legacy form is deprecated."
             />
-            <Field
-              label="Service email"
-              value={form.jiraEmail}
-              placeholder="bot@your-domain.com"
-              onChange={(value) => onChange("jiraEmail", value)}
-            />
-            <Field
-              label="API token"
-              type="password"
-              value={form.jiraApiToken}
-              placeholder="••••••••"
-              onChange={(value) => onChange("jiraApiToken", value)}
-            />
-            <Field
-              label="Webhook secret"
-              type="password"
-              value={form.webhookSecret}
-              placeholder="x-agentos-secret header"
-              onChange={(value) => onChange("webhookSecret", value)}
-            />
-          </div>
-        </Panel>
-      </motion.div>
+            <div className="px-5 py-4 sm:px-6">
+              <Link
+                to="/app/settings/integrations/jira"
+                className="text-[13px] font-medium text-indigo hover:underline"
+              >
+                Open Jira settings →
+              </Link>
+            </div>
+          </Panel>
+        </motion.div>
+      ) : null}
 
       <motion.div
         initial={{ opacity: 0, y: 8 }}

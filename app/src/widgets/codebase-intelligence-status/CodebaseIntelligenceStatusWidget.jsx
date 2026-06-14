@@ -156,7 +156,7 @@ export default function CodebaseIntelligenceStatusWidget({
           <div className="flex flex-wrap items-center gap-3 text-[13px]">
             {!data?.connected ? (
               <Link
-                to="/app/git"
+                to="/app/settings/integrations/github"
                 className="inline-flex rounded-full bg-indigo px-6 py-2.5 font-mono text-[11px] uppercase tracking-[0.16em] text-white transition-opacity hover:opacity-90"
               >
                 Connect GitHub

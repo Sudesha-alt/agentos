@@ -1,21 +1,39 @@
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   useCostsSummary,
   useCostsDaily,
   useCostsByFeature,
   useCostsRoi,
 } from "../../entities/costs";
+import { BILLING_PLANS } from "../../shared/config/billingPlans";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
 import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
 
+const PLAN_SUBSCRIPTION = {
+  starter: 1999,
+  growth: 4999,
+  enterprise: 40000 / 12,
+};
+
 export default function CostIntelligence() {
+  const [searchParams] = useSearchParams();
+  const planParam = searchParams.get("plan") ?? "growth";
+  const plan = BILLING_PLANS.find((p) => p.id === planParam) ?? BILLING_PLANS[1];
+  const defaultSubscription = PLAN_SUBSCRIPTION[plan.id] ?? 4999;
+
   const { data: summary } = useCostsSummary();
   const { data: daily } = useCostsDaily();
   const { data: features } = useCostsByFeature();
   const [hourlyRate, setHourlyRate] = useState(150);
   const [sprintWeeks, setSprintWeeks] = useState(2);
   const [reworkRate, setReworkRate] = useState(0.25);
-  const { data: roi } = useCostsRoi({ hourlyRate, sprintWeeks, reworkRate });
+  const { data: roi } = useCostsRoi({
+    hourlyRate,
+    sprintWeeks,
+    reworkRate,
+    subscriptionCost: defaultSubscription,
+  });
 
   return (
     <AnimatedAppPage wide>
@@ -111,7 +129,7 @@ export default function CostIntelligence() {
         <PanelHeader
           kicker="ROI"
           title="Annual savings calculator"
-          body="Uses your inputs plus real pipeline throughput assumptions."
+          body={`Pre-filled for ${plan.name} (${plan.priceLabel}${plan.period ? `/${plan.period}` : ""}). Adjust inputs to model your team.`}
         />
         <div className="grid gap-5 px-5 py-5 sm:grid-cols-3">
           <label className="block">

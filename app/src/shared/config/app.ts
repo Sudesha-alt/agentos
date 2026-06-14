@@ -40,9 +40,7 @@ export const APP_NAV = [
   ...AGENT_NAV.map(({ to, label, breadcrumb }) => ({ to, label, breadcrumb })),
   { to: "/app/costs", label: "Cost Intelligence", breadcrumb: "Costs" },
   { to: "/app/audit", label: "Audit Trail", breadcrumb: "Audit" },
-  { to: "/app/settings", label: "Configuration", breadcrumb: "Configuration" },
-  { to: "/app/git", label: "GitHub integration", breadcrumb: "GitHub" },
-  { to: "/app/jira", label: "Jira integration", breadcrumb: "Jira" },
+  { to: "/app/settings", label: "Settings", breadcrumb: "Settings" },
   { to: "/app/jira-search", label: "Board search", breadcrumb: "Search" },
 ] as const;
 
@@ -71,11 +69,6 @@ export const APP_NAV_SECTIONS = [
         label: "Org Intelligence",
         breadcrumb: "Org Intelligence",
       },
-      {
-        to: "/app/company-intelligence",
-        label: "Company Profile",
-        breadcrumb: "Company Profile",
-      },
     ],
   },
   {
@@ -85,11 +78,9 @@ export const APP_NAV_SECTIONS = [
   },
   {
     id: "admin",
-    label: "Admin",
+    label: "Settings",
     items: [
-      { to: "/app/settings", label: "Configuration", breadcrumb: "Configuration" },
-      { to: "/app/git", label: "GitHub integration", breadcrumb: "GitHub" },
-      { to: "/app/jira", label: "Jira integration", breadcrumb: "Jira" },
+      { to: "/app/settings", label: "Workspace settings", breadcrumb: "Settings" },
       { to: "/app/jira-search", label: "Board search", breadcrumb: "Search" },
     ],
   },

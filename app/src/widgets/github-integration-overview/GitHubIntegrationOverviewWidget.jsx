@@ -45,7 +45,7 @@ export default function GitHubIntegrationOverviewWidget({ embedded = false }) {
             ) : null}
             <div className="flex flex-wrap gap-4 text-[13px]">
               <Link
-                to="/app/git"
+                to="/app/settings/integrations/github"
                 className="text-ink-dim transition-colors hover:text-indigo"
               >
                 Open GitHub integration →

@@ -40,7 +40,7 @@ export default function JiraIntakeOverviewWidget({ embedded = false }) {
           </p>
           <PipelineQueueSummary setup={setup} />
           <div className="flex flex-wrap gap-4 text-[13px]">
-            <Link to="/app/jira" className="text-ink-dim transition-colors hover:text-indigo">
+            <Link to="/app/settings/integrations/jira" className="text-ink-dim transition-colors hover:text-indigo">
               Jira pipeline setup →
             </Link>
             <Link

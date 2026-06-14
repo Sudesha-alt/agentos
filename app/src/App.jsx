@@ -1,3 +1,4 @@
+import { lazy } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Marketing from "./pages/Marketing";
 import ContactPage from "./marketing/agent-team/ContactPage";
@@ -5,25 +6,23 @@ import Login from "./pages/Login";
 import AppShell from "./app/layout/AppShell";
 import Dashboard from "./app/pages/Dashboard";
 import Pipelines from "./app/pages/Pipelines";
-import PipelineDetail from "./app/pages/PipelineDetail";
-import Override from "./app/pages/Override";
-import Settings from "./app/pages/Settings";
-import CodebaseIntelligence from "./app/pages/CodebaseIntelligence";
-import QaCenter from "./app/pages/QaCenter";
-import CostIntelligence from "./app/pages/CostIntelligence";
-import AuditTrail from "./app/pages/AuditTrail";
-import PrdViewer from "./app/pages/PrdViewer";
-import GitIntegration from "./app/pages/GitIntegration";
-import JiraIntegration from "./app/pages/JiraIntegration";
-import JiraSearch from "./app/pages/JiraSearch";
-import PmAgents from "./app/pages/PmAgents";
-import OrgIntelligence from "./app/pages/OrgIntelligence";
-import CompanyIntelligence from "./app/pages/CompanyIntelligence";
 import {
   AuthProvider,
   PublicOnlyRoute,
   RequireAuth,
 } from "./shared/providers/AuthProvider";
+
+const PipelineDetail = lazy(() => import("./app/pages/PipelineDetail"));
+const Override = lazy(() => import("./app/pages/Override"));
+const SettingsRoutes = lazy(() => import("./app/pages/SettingsRoutes"));
+const CodebaseIntelligence = lazy(() => import("./app/pages/CodebaseIntelligence"));
+const QaCenter = lazy(() => import("./app/pages/QaCenter"));
+const CostIntelligence = lazy(() => import("./app/pages/CostIntelligence"));
+const AuditTrail = lazy(() => import("./app/pages/AuditTrail"));
+const PrdViewer = lazy(() => import("./app/pages/PrdViewer"));
+const JiraSearch = lazy(() => import("./app/pages/JiraSearch"));
+const PmAgents = lazy(() => import("./app/pages/PmAgents"));
+const OrgIntelligence = lazy(() => import("./app/pages/OrgIntelligence"));
 
 function App() {
   return (
@@ -50,21 +49,21 @@ function App() {
           >
             <Route index element={<Dashboard />} />
             <Route path="pipelines" element={<Pipelines />} />
-            <Route path="pm-agents" element={<PmAgents />} />
             <Route path="pipelines/:id" element={<PipelineDetail />} />
+            <Route path="pm-agents" element={<PmAgents />} />
             <Route path="pipelines/:id/prd" element={<PrdViewer />} />
             <Route path="pipelines/:id/override" element={<Override />} />
             <Route path="codebase" element={<CodebaseIntelligence />} />
             <Route path="qa" element={<QaCenter />} />
             <Route path="org-intelligence" element={<OrgIntelligence />} />
-            <Route path="company-intelligence" element={<CompanyIntelligence />} />
+            <Route path="company-intelligence" element={<Navigate to="/app/settings/company" replace />} />
             <Route path="costs" element={<CostIntelligence />} />
             <Route path="audit" element={<AuditTrail />} />
-            <Route path="git" element={<GitIntegration />} />
-            <Route path="github" element={<GitIntegration />} />
-            <Route path="jira" element={<JiraIntegration />} />
+            <Route path="git" element={<Navigate to="/app/settings/integrations/github" replace />} />
+            <Route path="github" element={<Navigate to="/app/settings/integrations/github" replace />} />
+            <Route path="jira" element={<Navigate to="/app/settings/integrations/jira" replace />} />
             <Route path="jira-search" element={<JiraSearch />} />
-            <Route path="settings" element={<Settings />} />
+            <Route path="settings/*" element={<SettingsRoutes />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -35,7 +35,7 @@ export default function TopBar() {
   }
 
   return (
-    <header className="app-glass sticky top-0 z-20 flex h-[4.25rem] items-center gap-4 border-b border-app-border px-5 sm:px-8 lg:px-10">
+    <header className="app-glass sticky top-0 z-20 flex h-[4.25rem] items-center gap-4 border-b border-app-border px-4 sm:px-8 lg:px-10">
       <button
         type="button"
         onClick={openPalette}
@@ -45,7 +45,7 @@ export default function TopBar() {
           <circle cx="6" cy="6" r="3.5" stroke="currentColor" />
           <path d="M8.5 8.5L12 12" stroke="currentColor" />
         </svg>
-        <span className="truncate">Search codebase, pipelines…</span>
+        <span className="hidden truncate sm:inline">Search codebase, pipelines…</span>
         <kbd className="ml-auto hidden shrink-0 rounded-md border border-app-border bg-app-surface-muted px-1.5 py-0.5 text-[10px] font-medium text-app-ink-mute sm:inline">
           ⌘K
         </kbd>
