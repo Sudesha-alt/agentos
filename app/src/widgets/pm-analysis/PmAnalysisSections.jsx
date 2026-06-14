@@ -8,13 +8,13 @@ import {
   startPmCodingPipeline,
 } from "../../entities/pm-agents";
 import {
-  NeelCodebaseSection,
-  NeelConversationPanel,
-  NeelDiscoverySection,
-  NeelHandoffPackageSection,
-  NeelIntakeSection,
-  NeelPostShipSection,
-} from "./NeelSections";
+  VirinCodebaseSection,
+  VirinConversationPanel,
+  VirinDiscoverySection,
+  VirinHandoffPackageSection,
+  VirinIntakeSection,
+  VirinPostShipSection,
+} from "./VirinSections";
 import { CompetitorAnalysisSection } from "./CompetitorAnalysisSection";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import { motionSafe, pageStagger, sectionFadeUp } from "../../lib/motion";
@@ -589,17 +589,17 @@ export function PmAnalysisOutputs({
         <PmStageProgress analysis={analysis} />
       </div>
     </Panel>,
-    <NeelConversationPanel
+    <VirinConversationPanel
       key="conversation"
       analysis={analysis}
       onAnswer={onAnswer}
       onConfirm={onConfirm}
       busy={interactionBusy}
     />,
-    <NeelIntakeSection key="intake" intake={analysis.neelIntake} />,
-    <NeelDiscoverySection key="discovery" questionMode={analysis.questionMode} />,
+    <VirinIntakeSection key="intake" intake={analysis.neelIntake} />,
+    <VirinDiscoverySection key="discovery" questionMode={analysis.questionMode} />,
     <CompetitorAnalysisSection key="competitors" competitorAnalysis={analysis.competitorAnalysis} />,
-    <NeelCodebaseSection key="codebase" analysis={analysis.codebaseAnalysis} />,
+    <VirinCodebaseSection key="codebase" analysis={analysis.codebaseAnalysis} />,
     analysis.solutioning?.humanConfirmed || analysis.status === "COMPLETED" ? (
       <Panel key="solution">
         <PanelHeader kicker="Stage 4" title="Confirmed solution direction" />
@@ -609,8 +609,8 @@ export function PmAnalysisOutputs({
       </Panel>
     ) : null,
     <PmPrdSection key="prd" prd={analysis.generatedPrd} />,
-    <NeelHandoffPackageSection key="handoff-pkg" handoffPackage={analysis.handoffPackage} />,
-    <NeelPostShipSection key="postship" postShip={analysis.postShip} />,
+    <VirinHandoffPackageSection key="handoff-pkg" handoffPackage={analysis.handoffPackage} />,
+    <VirinPostShipSection key="postship" postShip={analysis.postShip} />,
     <PmTechHandoffSection
       key="handoff"
       jiraKey={analysis.jiraKey}

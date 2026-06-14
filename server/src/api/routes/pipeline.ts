@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../../db/client";
+import { listPipelineArtifacts, ENG_QA_ARTIFACT_TYPES } from "../../pipeline/artifacts";
 import { pipelineRepo } from "../../db/repositories/pipelineRepo";
 import { ticketRepo } from "../../db/repositories/ticketRepo";
 import {
@@ -21,6 +22,19 @@ router.get("/", async (req, res) => {
     include: { ticket: true },
   });
   res.json({ items });
+});
+
+router.get("/:pipelineId/artifacts", async (req, res, next) => {
+  try {
+    const pipeline = await pipelineRepo.findById(req.params.pipelineId);
+    if (!pipeline) throw new NotFoundError("Pipeline not found");
+    const artifacts = listPipelineArtifacts(pipeline.id).filter((a) =>
+      ENG_QA_ARTIFACT_TYPES.includes(a.type)
+    );
+    res.json({ pipelineId: pipeline.id, artifacts });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get("/:pipelineId", async (req, res, next) => {

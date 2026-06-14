@@ -50,7 +50,7 @@ Output JSON:
 
 export const PROMPT_NEXT_QUESTION = `Stage 2 — Question mode (one turn)
 
-You are Neel doing PM discovery. Ask ONE question at a time. Read the last answer before asking the next.
+You are Virin doing PM discovery. Ask ONE question at a time. Read the last answer before asking the next.
 
 Ticket type: {{ticket_type}}
 Symptom vs root cause: {{symptom_vs_root}}
@@ -207,7 +207,7 @@ Output JSON:
 
 export const PROMPT_PRD = `Stage 5 — PRD generation
 
-Neel writes the full PRD after direction was confirmed.
+Virin writes the full PRD after direction was confirmed.
 Success metrics must tie to company strategic goals and revenue model.
 
 COMPANY CONTEXT:
@@ -272,6 +272,55 @@ Use GeneratedPRD schema:
   "confidenceNotes": "honest uncertainty notes"
 }${JSON_ONLY}`;
 
+export const PROMPT_SYSTEM_DESIGN = `Stage — System design (Architect capability)
+
+Produce a structured system design package for engineering. Ground every decision in codebase analysis and discovery.
+
+Discovery summary:
+{{discovery_summary}}
+
+Codebase analysis JSON:
+{{codebase_analysis_json}}
+
+System design scope:
+{{system_design_scope}}
+
+Output JSON:
+{
+  "fileList": ["paths that will be created or modified"],
+  "interfaces": [{"name": "InterfaceName", "methods": ["method signatures"]}],
+  "dataStructures": [{"name": "TypeName", "fields": ["field: type"]}],
+  "sequenceDiagramMermaid": "optional mermaid sequenceDiagram string",
+  "summaryMarkdown": "markdown overview of architecture decisions and tradeoffs"
+}${JSON_ONLY}`;
+
+export const PROMPT_TASK_PLANNING = `Stage — Task planning (Project Manager capability)
+
+Break the system design into ordered engineering tasks. Each task must map to files and dependencies.
+
+System design JSON:
+{{system_design_json}}
+
+Codebase analysis JSON:
+{{codebase_analysis_json}}
+
+Discovery summary:
+{{discovery_summary}}
+
+Output JSON:
+{
+  "tasks": [
+    {
+      "id": "TASK-1",
+      "title": "short actionable title",
+      "files": ["paths to touch"],
+      "dependsOn": ["TASK-0 or empty"],
+      "description": "what to implement and why"
+    }
+  ],
+  "summaryMarkdown": "markdown task plan with dependency notes"
+}${JSON_ONLY}`;
+
 export const PROMPT_HANDOFF = `Stage 6 — Handoff to engineering
 
 Produce a handoff package — not just the PRD.
@@ -302,7 +351,7 @@ Output JSON:
   "teamsInvolved": ["backend", "frontend", etc]
 }${JSON_ONLY}`;
 
-export const PROMPT_POST_SHIP = `Stage 7 — Post-ship retrospective (Neel)
+export const PROMPT_POST_SHIP = `Stage 7 — Post-ship retrospective (Virin)
 
 Compare launch outcomes to PRD success metrics.
 
@@ -324,7 +373,7 @@ Output JSON:
   "retrospectiveSummary": "short executive summary"
 }${JSON_ONLY}`;
 
-export const PROMPT_RETROSPECTIVE = `Neel process retrospective — improve future runs.
+export const PROMPT_RETROSPECTIVE = `Virin process retrospective — improve future runs.
 
 Original classification: {{ticket_type}}
 Discovery turns: {{turn_count}}

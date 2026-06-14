@@ -2,6 +2,16 @@ import type { Prisma, PipelineStage } from "../db/prisma";
 import { EngineeringAgent } from "../agents/engineeringAgent";
 import { runCanaryCycle } from "../canaryAgent";
 import { runEngineeringCodingAgentic } from "../engineeringCodingAgent";
+import {
+  clearCodingArtifacts,
+  getCodingArtifacts,
+} from "../engineering/codingArtifactStore";
+import {
+  MAX_COMPILE_ATTEMPTS,
+  runEngineeringSandboxCompile,
+} from "../engineering/sandboxCompile";
+import { publishPipelineArtifact, mirrorPmContextArtifacts } from "./artifacts";
+import { resolveCodingBranchName } from "../engineeringCodingAgent/inputBuilder";
 import { runQaAgentic } from "../qaAgent";
 import { completeTicketInJira } from "../jira/writeback/completeTicketInJira";
 import type { QaExecutionReport } from "../qa/report/reportGenerator";
@@ -538,11 +548,14 @@ export class PipelineOrchestrator {
           generatedPrd: ctx.generatedPrd,
           source: "pm_agents",
           skippedDiscovery: true,
+          systemDesign: ctx.enrichedPrdDocument.pmSystemDesign ?? null,
+          taskBreakdown: ctx.enrichedPrdDocument.pmTaskBreakdown ?? null,
         } as unknown as Prisma.InputJsonValue,
         confidenceScore: ctx.prdOutput.confidenceScore,
         tokenCount: 0,
         costUsd: 0,
       });
+      mirrorPmContextArtifacts({ pipelineId, pmContext: ctx });
       await stateManager.advance(pipelineId, "PRD_VALIDATION");
       return { agentOutput: output, enrichedPrdDocument: ctx.enrichedPrdDocument };
     }
@@ -680,6 +693,14 @@ export class PipelineOrchestrator {
       tokenCount: output.metadata.inputTokens + output.metadata.outputTokens,
       costUsd: output.metadata.costUsd,
     });
+    publishPipelineArtifact({
+      pipelineId,
+      jiraKey,
+      type: "IMPLEMENTATION_PLAN",
+      producer: "engineering",
+      title: "Implementation plan",
+      payload: output.parsed as unknown as Record<string, unknown>,
+    });
     await stateManager.advance(pipelineId, "IMPLEMENTATION_VALIDATION");
     return output;
   }
@@ -696,14 +717,57 @@ export class PipelineOrchestrator {
       hasPmContext: Boolean(ticket.pmContext),
     });
 
-    const codingResult = await runEngineeringCodingAgentic({
-      pipelineId,
-      jiraKey: ticket.jiraKey,
-      prd,
-      implementation: implementationOutput.parsed,
-      enrichedPrdDocument,
-      pmContext: ticket.pmContext,
-    });
+    const branchName = resolveCodingBranchName();
+    let compileFeedback: string | undefined;
+    let codingResult: Awaited<ReturnType<typeof runEngineeringCodingAgentic>> | null = null;
+
+    for (let attempt = 1; attempt <= MAX_COMPILE_ATTEMPTS; attempt++) {
+      clearCodingArtifacts(pipelineId);
+      codingResult = await runEngineeringCodingAgentic({
+        pipelineId,
+        jiraKey: ticket.jiraKey,
+        prd,
+        implementation: implementationOutput.parsed,
+        enrichedPrdDocument,
+        pmContext: ticket.pmContext,
+        compileFeedback,
+        retainArtifacts: true,
+      });
+
+      const staged = getCodingArtifacts(pipelineId).stagedFiles;
+      if (staged.length === 0) {
+        break;
+      }
+
+      const compile = await runEngineeringSandboxCompile({
+        pipelineId,
+        branchName,
+        stagedFiles: staged,
+      });
+
+      await auditRepo.log(pipelineId, "ENGINEERING_SANDBOX_COMPILE", {
+        jiraKey: ticket.jiraKey,
+        attempt,
+        success: compile.success,
+        sandboxAvailable: compile.sandboxAvailable,
+      });
+
+      if (compile.success || attempt >= MAX_COMPILE_ATTEMPTS) {
+        break;
+      }
+
+      compileFeedback = compile.errors.join("\n\n");
+      logger.warn(
+        { pipelineId, attempt, errors: compile.errors },
+        "engineering sandbox compile failed — retrying coding agent"
+      );
+    }
+
+    clearCodingArtifacts(pipelineId);
+
+    if (!codingResult) {
+      throw new Error("Engineering coding agent did not produce a result");
+    }
 
     const merged: ImplementationOutput = {
       ...implementationOutput.parsed,
@@ -728,6 +792,19 @@ export class PipelineOrchestrator {
           codingResult.metadata.durationMs,
       },
     };
+
+    publishPipelineArtifact({
+      pipelineId,
+      jiraKey: ticket.jiraKey,
+      type: "CODE_SUMMARY",
+      producer: "engineering",
+      title: "Code summary",
+      payload: {
+        codingSummary: codingResult.codingSummary,
+        codeChanges: codingResult.codeChanges,
+        toolCallLog: codingResult.toolCallLog,
+      },
+    });
 
     await auditRepo.log(pipelineId, "ENGINEERING_CODING_COMPLETED", {
       jiraKey: ticket.jiraKey,
@@ -891,6 +968,18 @@ export class PipelineOrchestrator {
       confidenceScore: output.parsed.confidenceScore,
       tokenCount: output.metadata.inputTokens + output.metadata.outputTokens,
       costUsd: output.metadata.costUsd,
+    });
+    publishPipelineArtifact({
+      pipelineId,
+      jiraKey,
+      type: "TEST_PLAN",
+      producer: "qa",
+      title: "QA test plan & report",
+      payload: {
+        testSummary: output.parsed.testSummary,
+        executionReport: result.executionReport ?? null,
+        toolCallLog: result.toolCallLog,
+      },
     });
     await stateManager.advance(pipelineId, "QA_VALIDATION");
     return result;

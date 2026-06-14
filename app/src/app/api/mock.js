@@ -1,6 +1,8 @@
 // In-memory mock backend so the product UI is fully usable without spinning
 // up Postgres / Redis. The shape mirrors the real Express routes 1:1.
 
+import { computeEstimatedRoi } from "../../shared/roi/estimatedRoi";
+
 let used = false;
 function markUsed() {
   used = true;
@@ -1565,24 +1567,37 @@ export const mockApi = {
     await delay(80);
     return { days: MOCK_COSTS.daily };
   },
-  async costsByFeature() {
+  async costsByFeature({ hourlyRate = 150 } = {}) {
     markUsed();
     await delay(80);
-    return { features: MOCK_COSTS.byFeature };
+    const features = MOCK_COSTS.byFeature.map((row) => {
+      const laborValue = row.hoursSaved * hourlyRate;
+      return {
+        ...row,
+        roi: Math.round((laborValue / Math.max(row.cost, 0.01)) * 10) / 10,
+      };
+    });
+    return { features };
   },
-  async costsRoi({ hourlyRate = 150, sprintWeeks = 2, reworkRate = 0.25 }) {
+  async costsRoi(params = {}) {
     markUsed();
     await delay(100);
-    const annualSavings = Math.round(
-      hourlyRate * 40 * 52 * (0.35 + reworkRate * 0.4) * (sprintWeeks / 2)
-    );
+    const roi = computeEstimatedRoi({
+      planId: params.planId ?? "growth",
+      teamSize: params.teamSize ?? 10,
+      hourlyRate: params.hourlyRate ?? 150,
+      pipelineRunsPerMonth: params.pipelineRunsPerMonth ?? 80,
+      sprintWeeks: params.sprintWeeks ?? 2,
+      reworkRate: params.reworkRate ?? 0.25,
+    });
     return {
-      hourlyRate,
-      sprintWeeks,
-      reworkRate,
-      annualSavings,
-      subscriptionCost: 18000,
-      netBenefit: annualSavings - 18000,
+      roi,
+      annualSavings: roi.annualLaborSavings,
+      netBenefit: roi.netAnnualBenefit,
+      subscriptionCost: roi.assumptions.monthlyPrice,
+      hourlyRate: roi.hourlyRate,
+      sprintWeeks: roi.sprintWeeks,
+      reworkRate: roi.reworkRate,
     };
   },
   async listPipelines(status) {

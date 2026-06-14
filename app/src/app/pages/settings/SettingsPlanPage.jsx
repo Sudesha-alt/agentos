@@ -4,11 +4,13 @@ import { Panel, PanelHeader } from "../../../shared/ui/Panel";
 import {
   BILLING_ADDONS,
   BILLING_PLANS,
+  DEFAULT_RUNS_PER_MONTH,
   PILOT_PLAN,
   PIPELINE_RUN_DEFINITION,
   PLAN_COMPARISON_ROWS,
   planRoiCalculatorHref,
 } from "../../../shared/config/billingPlans";
+import { computeEstimatedRoi } from "../../../shared/roi/estimatedRoi";
 
 export default function SettingsPlanPage() {
   const { data: billing } = useWorkspaceBilling();
@@ -111,6 +113,15 @@ export default function SettingsPlanPage() {
 }
 
 function PlanCard({ plan, current }) {
+  const roi = computeEstimatedRoi({
+    planId: plan.id,
+    teamSize: 10,
+    hourlyRate: 150,
+    pipelineRunsPerMonth: DEFAULT_RUNS_PER_MONTH[plan.id] ?? 80,
+    sprintWeeks: 2,
+    reworkRate: 0.25,
+  });
+
   return (
     <div
       className={`flex flex-col rounded-app border p-5 ${
@@ -155,6 +166,10 @@ function PlanCard({ plan, current }) {
       ) : null}
       <p className="mt-2 text-[11px] text-app-ink-mute">
         <span className="font-medium">Best for:</span> {plan.bestFor}
+      </p>
+      <p className="mt-3 rounded-app-sm border border-success/20 bg-success/5 px-3 py-2 text-[11px] text-success">
+        Est. net benefit: ${Math.round(roi.netAnnualBenefit).toLocaleString()}/yr
+        <span className="text-app-ink-mute"> · {roi.roiMultiple}x ROI</span>
       </p>
       <Link
         to={planRoiCalculatorHref(plan.id)}

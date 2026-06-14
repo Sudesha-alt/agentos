@@ -2,12 +2,14 @@ import type {
   CodebaseAnalysisOutput,
   HandoffPackageOutput,
   IntakeOutput,
-  NeelStageId,
   PostShipOutput,
   QuestionModeState,
   SolutioningOutput,
-} from "../neel/types";
-import { NEEL_STAGE_ORDER } from "../neel/types";
+  SystemDesignOutput,
+  TaskBreakdownItem,
+  VirinStageId,
+} from "../virin/types";
+import { VIRIN_STAGE_ORDER } from "../virin/types";
 
 export type PmAnalysisStatus =
   | "RUNNING"
@@ -16,12 +18,12 @@ export type PmAnalysisStatus =
   | "AWAITING_INPUT"
   | "AWAITING_CONFIRMATION";
 
-/** Neel stage IDs (product discovery agent) */
-export type PmStageId = NeelStageId;
+/** Virin stage IDs (product discovery agent) */
+export type PmStageId = VirinStageId;
 
-export const PM_STAGE_ORDER: PmStageId[] = NEEL_STAGE_ORDER;
+export const PM_STAGE_ORDER: PmStageId[] = VIRIN_STAGE_ORDER;
 
-export type NeelRunMode = "interactive" | "auto";
+export type VirinRunMode = "interactive" | "auto";
 
 export interface PmTicketInput {
   jiraKey: string;
@@ -35,7 +37,7 @@ export interface PmTicketInput {
   priority: string;
 }
 
-/** @deprecated Legacy — synced from Neel outputs for pipeline compatibility */
+/** @deprecated Legacy — synced from Virin outputs for pipeline compatibility */
 export interface EnrichmentOutput {
   cleanSummary: string;
   realUserProblem: string;
@@ -46,7 +48,7 @@ export interface EnrichmentOutput {
   redFlags: string[];
 }
 
-/** @deprecated Legacy — synced from Neel intake */
+/** @deprecated Legacy — synced from Virin intake */
 export interface ClassificationOutput {
   type: string;
   subtype: string;
@@ -72,7 +74,7 @@ export interface AffectedFileEntry {
   riskLevel: string;
 }
 
-/** @deprecated Legacy — synced from Neel codebase analysis */
+/** @deprecated Legacy — synced from Virin codebase analysis */
 export interface CodebaseImpactOutput {
   affectedFiles: AffectedFileEntry[];
   recentChangeConnection: string;
@@ -191,13 +193,15 @@ export interface PmAnalysisRecord {
   currentStage: PmStageId | null;
   ticketInput: PmTicketInput;
   context: Record<string, unknown>;
-  /** Neel agent identity */
-  agentName?: "Neel";
-  neelMode?: NeelRunMode;
+  /** Virin agent identity */
+  agentName?: "Virin";
+  neelMode?: VirinRunMode;
   neelIntake?: IntakeOutput;
   questionMode?: QuestionModeState;
-  competitorAnalysis?: import("../neel/types").CompetitorAnalysisState;
+  competitorAnalysis?: import("../virin/types").CompetitorAnalysisState;
   codebaseAnalysis?: CodebaseAnalysisOutput;
+  systemDesign?: SystemDesignOutput;
+  taskBreakdown?: TaskBreakdownItem[];
   solutioning?: SolutioningOutput;
   handoffPackage?: HandoffPackageOutput;
   postShip?: PostShipOutput;
@@ -244,4 +248,6 @@ export type {
   SolutioningOutput,
   HandoffPackageOutput,
   PostShipOutput,
+  SystemDesignOutput,
+  TaskBreakdownItem,
 };

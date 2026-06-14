@@ -108,3 +108,18 @@ export function planRoiCalculatorHref(planId) {
   const params = new URLSearchParams({ plan: planId ?? "growth" });
   return `/app/costs?${params.toString()}`;
 }
+
+/** Structured tier economics for ROI calculator — sync with server/src/roi/assumptions.ts */
+export const PLAN_PRICING = {
+  starter: { monthlyPrice: 1999, runsCap: 40, overagePerRun: 40 },
+  growth: { monthlyPrice: 4999, runsCap: 150, overagePerRun: 35 },
+  enterprise: { monthlyPrice: Math.round(40000 / 12), runsCap: null, overagePerRun: 0 },
+  pilot: { monthlyPrice: 250, runsCap: 20, overagePerRun: 0 },
+};
+
+export const DEFAULT_RUNS_PER_MONTH = {
+  starter: 30,
+  growth: 80,
+  enterprise: 120,
+  pilot: 12,
+};

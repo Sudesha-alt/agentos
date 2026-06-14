@@ -1,34 +1,38 @@
-/** Neel — product discovery & PRD agent types */
+/** Virin — product discovery & PRD agent types */
 
-export type NeelTicketType =
+export type VirinTicketType =
   | "bug"
   | "task"
   | "small_feature"
   | "large_feature"
   | "unclear";
 
-export type NeelStageId =
+export type VirinStageId =
   | "INTAKE"
   | "QUESTION_MODE"
   | "COMPETITOR_ANALYSIS"
   | "CODEBASE_ANALYSIS"
+  | "SYSTEM_DESIGN"
+  | "TASK_PLANNING"
   | "SOLUTIONING"
   | "PRD"
   | "HANDOFF"
   | "POST_SHIP"
   | "RETROSPECTIVE";
 
-export const NEEL_STAGE_ORDER: NeelStageId[] = [
+export const VIRIN_STAGE_ORDER: VirinStageId[] = [
   "INTAKE",
   "QUESTION_MODE",
   "COMPETITOR_ANALYSIS",
   "CODEBASE_ANALYSIS",
+  "SYSTEM_DESIGN",
+  "TASK_PLANNING",
   "SOLUTIONING",
   "PRD",
   "HANDOFF",
 ];
 
-export type NeelAnalysisStatus =
+export type VirinAnalysisStatus =
   | "RUNNING"
   | "COMPLETED"
   | "FAILED"
@@ -44,11 +48,10 @@ export interface DiscoveryTurn {
 }
 
 export interface IntakeOutput {
-  ticketType: NeelTicketType;
+  ticketType: VirinTicketType;
   reasoning: string;
   symptomVsRootCause: string;
   clarifyingQuestion?: string | null;
-  /** 3–4 suggested answers; UI always adds "Other" for free text */
   clarifyingOptions?: string[];
 }
 
@@ -70,6 +73,22 @@ export interface CodebaseAnalysisOutput {
   testableAcceptanceCriteria: string[];
   scopeAssessment: string;
   suggestedFirstFile: string;
+}
+
+export interface SystemDesignOutput {
+  fileList: string[];
+  interfaces: Array<{ name: string; methods: string[] }>;
+  dataStructures: Array<{ name: string; fields: string[] }>;
+  sequenceDiagramMermaid?: string;
+  summaryMarkdown?: string;
+}
+
+export interface TaskBreakdownItem {
+  id: string;
+  title: string;
+  files: string[];
+  dependsOn?: string[];
+  description?: string;
 }
 
 export type BusinessFit = "strong" | "moderate" | "weak" | "misaligned";
@@ -112,10 +131,9 @@ export interface PostShipOutput {
   retrospectiveSummary: string;
 }
 
-export interface NeelNextQuestionResult {
+export interface VirinNextQuestionResult {
   action: "ask" | "ready" | "flag";
   question?: string;
-  /** 3–4 concise answer choices; UI adds "Other" for custom input */
   options?: string[];
   flag?: string;
   reason?: string;
@@ -140,3 +158,5 @@ export interface CompetitorAnalysisState {
   summaryMarkdown?: string;
   completedAt?: string;
 }
+
+export type VirinRunMode = "interactive" | "auto";

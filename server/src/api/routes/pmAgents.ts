@@ -2,14 +2,15 @@ import { Router } from "express";
 import { getTechAgentHandoff } from "../../agents/pm/handoff";
 import { buildPmPipelineContext } from "../../agents/pm/pmPipelineContext";
 import {
-  confirmNeelSolution,
+  confirmVirinSolution,
   getPmResumeStage,
-  runNeelPostShip,
+  runVirinPostShip,
   runPmAnalysisPipeline,
   runPmRetrospective,
-  submitNeelAnswer,
+  submitVirinAnswer,
   estimateAnalysisCost,
 } from "../../agents/pm/orchestrator";
+import { mirrorPmArtifactsToPipeline, buildProductPackageExport } from "../../pipeline/artifacts";
 import { enqueueIntakeFromJiraKey } from "../../pipeline/jira/intakeEnqueueService";
 import { prepareTechAgentHandoff } from "../../agents/tech/orchestrator";
 import { pmAnalysisStore } from "../../agents/pm/store";
@@ -20,6 +21,19 @@ import { NotFoundError, ValidationError } from "../../utils/errors";
 const router = Router();
 const running = new Set<string>();
 
+router.get("/analysis/:ticketId/export", (req, res, next) => {
+  try {
+    const record = pmAnalysisStore.get(req.params.ticketId);
+    if (!record) throw new NotFoundError("PM analysis not found");
+    if (!record.generatedPrd) {
+      throw new ValidationError("PRD not generated — complete Virin analysis first");
+    }
+    res.json(buildProductPackageExport(record));
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get("/analyses", (_req, res) => {
   const items = pmAnalysisStore.list(50).map((r) => ({
     id: r.id,
@@ -27,7 +41,7 @@ router.get("/analyses", (_req, res) => {
     status: r.status,
     currentStage: r.currentStage,
     summary: r.ticketInput.summary,
-    agent: r.agentName ?? "Neel",
+    agent: r.agentName ?? "Virin",
     ticketType: r.neelIntake?.ticketType ?? r.classification?.type ?? null,
     recommendation: r.prioritization?.recommendation ?? r.solutioning?.recommendedApproach?.slice(0, 80) ?? null,
     severity: r.classification?.severity ?? null,
@@ -114,12 +128,12 @@ router.post("/analyze/:ticketId/answer", async (req, res, next) => {
     const answer = String(req.body?.answer ?? "").trim();
     if (!answer) throw new ValidationError("answer is required");
 
-    startPmAnalysisBackground(jiraKey, () => submitNeelAnswer(jiraKey, answer));
+    startPmAnalysisBackground(jiraKey, () => submitVirinAnswer(jiraKey, answer));
 
     res.status(202).json({
       jiraKey,
       status: "RUNNING",
-      message: "Neel continued with your answer",
+      message: "Virin continued with your answer",
     });
   } catch (err) {
     next(err);
@@ -133,15 +147,15 @@ router.post("/analyze/:ticketId/confirm", async (req, res, next) => {
     const feedback = req.body?.feedback ? String(req.body.feedback) : undefined;
 
     startPmAnalysisBackground(jiraKey, () =>
-      confirmNeelSolution(jiraKey, confirmed, feedback)
+      confirmVirinSolution(jiraKey, confirmed, feedback)
     );
 
     res.status(202).json({
       jiraKey,
       status: confirmed ? "RUNNING" : "RUNNING",
       message: confirmed
-        ? "Direction confirmed — Neel is writing the PRD"
-        : "Direction rejected — Neel is revising the approach",
+        ? "Direction confirmed — Virin is writing the PRD"
+        : "Direction rejected — Virin is revising the approach",
     });
   } catch (err) {
     next(err);
@@ -158,7 +172,7 @@ router.post("/analyze/:ticketId", async (req, res, next) => {
       res.status(202).json({
         jiraKey,
         status: "RUNNING",
-        message: "Neel is already working on this ticket",
+        message: "Virin is already working on this ticket",
         analysisId: existing?.id,
       });
       return;
@@ -179,8 +193,8 @@ router.post("/analyze/:ticketId", async (req, res, next) => {
     res.status(202).json({
       jiraKey,
       status: "RUNNING",
-      message: "Neel started product discovery",
-      agent: "Neel",
+      message: "Virin started product discovery",
+      agent: "Virin",
     });
   } catch (err) {
     next(err);
@@ -191,7 +205,7 @@ router.post("/post-ship/:ticketId", async (req, res, next) => {
   try {
     const jiraKey = req.params.ticketId.trim().toUpperCase();
     const body = (req.body ?? {}) as RetrospectiveInput;
-    const record = await runNeelPostShip({
+    const record = await runVirinPostShip({
       jiraKey,
       metricsInput: body.metricsInput,
       launchNotes: body.launchNotes,

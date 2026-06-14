@@ -31,6 +31,8 @@ export interface EngineeringCodingAgentRunInput {
   implementation: ImplementationOutput;
   enrichedPrdDocument: Record<string, unknown>;
   pmContext?: PmPipelineContext;
+  compileFeedback?: string;
+  retainArtifacts?: boolean;
 }
 
 interface CodingAgentJsonOutput {
@@ -64,6 +66,7 @@ export async function runEngineeringCodingAgentic(
       initialUserMessage: buildEngineeringCodingInitialUserMessage({
         ...input,
         branchName,
+        compileFeedback: input.compileFeedback,
       }),
       pipelineId: input.pipelineId,
       jiraKey: input.jiraKey,
@@ -116,6 +119,8 @@ export async function runEngineeringCodingAgentic(
       toolCallLog: loop.toolCallLog,
     };
   } finally {
-    clearCodingArtifacts(input.pipelineId);
+    if (!input.retainArtifacts) {
+      clearCodingArtifacts(input.pipelineId);
+    }
   }
 }

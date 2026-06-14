@@ -13,6 +13,7 @@ export interface EngineeringCodingAgenticInput {
   enrichedPrdDocument: Record<string, unknown>;
   pmContext?: PmPipelineContext;
   branchName: string;
+  compileFeedback?: string;
 }
 
 export function resolveCodingBranchName(): string {
@@ -48,6 +49,13 @@ export function buildEngineeringCodingInitialUserMessage(
   const implSteps = input.implementation.components
     .map((c) => `- ${c.name}: ${c.description} (~${c.estimatedDays}d)`)
     .join("\n");
+
+  const design = input.pmContext?.enrichedPrdDocument?.pmSystemDesign as
+    | Record<string, unknown>
+    | undefined;
+  const tasks = input.pmContext?.enrichedPrdDocument?.pmTaskBreakdown as
+    | Array<{ id: string; title: string; files: string[] }>
+    | undefined;
 
   return `
 Jira: ${input.jiraKey}
@@ -85,6 +93,12 @@ ${affectedFiles.length ? `Affected files (PM analysis):\n${affectedFiles.map((f)
 ${whereNotToTouch.length ? `Where NOT to touch:\n${whereNotToTouch.map((p) => `- ${p}`).join("\n")}` : ""}
 
 ${pmHandoff?.approachSummary ? `PM implementation approach:\n${String(pmHandoff.approachSummary)}` : ""}
+
+${design ? `System design package:\n${JSON.stringify(design, null, 2)}` : ""}
+
+${tasks?.length ? `Task breakdown:\n${tasks.map((t) => `- ${t.id}: ${t.title} (${t.files.join(", ")})`).join("\n")}` : ""}
+
+${input.compileFeedback ? `SANDBOX COMPILE/TEST FEEDBACK — fix these errors before finishing:\n${input.compileFeedback}` : ""}
 
 Begin PHASE 1: read and search the codebase on branch "${input.branchName}",
 then PHASE 2: stage source file changes, then return the final JSON summary.

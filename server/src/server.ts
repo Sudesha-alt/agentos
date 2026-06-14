@@ -12,6 +12,7 @@ import { recoverStaleIndexRuns } from "./codebaseIntelligence/indexRecovery";
 import { migrateJiraMirrorToJiraIssue } from "./jira-sync/migrateMirror";
 import { loadPmAnalysesFromStore } from "./agents/pm/store";
 import { loadCanarySettingsFromStore } from "./canaryAgent/settingsStore";
+import { loadPipelineSettingsFromStore } from "./pipeline/settingsStore";
 import { startCanaryScheduler } from "./canaryAgent/scheduler";
 import { scanIntakeFromSyncedIssues } from "./jira-sync/intakeScan";
 import {
@@ -25,6 +26,7 @@ async function bootstrap(): Promise<void> {
   initIntakeDb();
   loadPipelineJiraCredentialsFromStore();
   loadCanarySettingsFromStore();
+  loadPipelineSettingsFromStore();
   const pmLoaded = loadPmAnalysesFromStore();
   if (pmLoaded > 0) {
     logger.info({ count: pmLoaded }, "restored PM analyses from sqlite");

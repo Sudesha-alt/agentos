@@ -130,7 +130,7 @@ function requireStages(record: PmAnalysisRecord): void {
 
   if (missing.length > 0) {
     throw new ValidationError(
-      `Neel analysis incomplete — missing: ${missing.join(", ")}`,
+      `Virin analysis incomplete — missing: ${missing.join(", ")}`,
       { jiraKey: record.jiraKey, status: record.status, missingStages: missing }
     );
   }
@@ -574,6 +574,8 @@ ${AFTER_MERGE}
 ${snapshotSection}
 `.trim();
 }
+
+export { mirrorPmArtifactsToPipeline } from "../../pipeline/artifacts";
 
 export async function getTechAgentHandoff(ticketId: string): Promise<{
   handoff: TechAgentHandoff;

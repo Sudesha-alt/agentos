@@ -137,6 +137,13 @@ export default function SettingsSectionsWidget({
               value={String(form.qaCoverageThreshold)}
               onChange={(value) => onChange("qaCoverageThreshold", clamp(value, 0, 100))}
             />
+            <Field
+              label="System design complexity ≥"
+              value={String(form.systemDesignComplexityThreshold ?? 5)}
+              onChange={(value) =>
+                onChange("systemDesignComplexityThreshold", clamp(value, 1, 10))
+              }
+            />
           </div>
         </Panel>
       </motion.div>

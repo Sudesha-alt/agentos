@@ -2,13 +2,13 @@ import { useState } from "react";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import { VIRIN_NAME } from "../../entities/pm-agents";
 
-export function NeelConversationPanel({ analysis, onAnswer, onConfirm, busy, prominent = false }) {
+export function VirinConversationPanel({ analysis, onAnswer, onConfirm, busy, prominent = false }) {
   const status = analysis?.status;
   const pendingQuestion = analysis?.pendingQuestion;
 
   if (status === "AWAITING_INPUT" && pendingQuestion) {
     return (
-      <NeelInputPanel
+      <VirinInputPanel
         prominent={prominent}
         kicker={`${VIRIN_NAME} asks`}
         title="One question at a time"
@@ -128,7 +128,7 @@ export function NeelConversationPanel({ analysis, onAnswer, onConfirm, busy, pro
 
 const OTHER_OPTION_ID = "__other__";
 
-function NeelInputPanel({
+function VirinInputPanel({
   kicker,
   title,
   prompt,
@@ -272,7 +272,7 @@ function NeelInputPanel({
   );
 }
 
-export function NeelDiscoverySection({ questionMode, expanded = false }) {
+export function VirinDiscoverySection({ questionMode, expanded = false }) {
   if (!questionMode?.conversation?.length && !questionMode?.discoverySummary) {
     return (
       <Panel>
@@ -351,7 +351,7 @@ export function NeelDiscoverySection({ questionMode, expanded = false }) {
   );
 }
 
-export function NeelIntakeSection({ intake }) {
+export function VirinIntakeSection({ intake }) {
   if (!intake) return null;
   const typeLabel = intake.ticketType?.replace(/_/g, " ") ?? "unknown";
 
@@ -377,7 +377,7 @@ export function NeelIntakeSection({ intake }) {
   );
 }
 
-export function NeelCodebaseSection({ analysis: codebaseAnalysis, expanded = false }) {
+export function VirinCodebaseSection({ analysis: codebaseAnalysis, expanded = false }) {
   if (!codebaseAnalysis) {
     return (
       <Panel>
@@ -471,7 +471,7 @@ export function NeelCodebaseSection({ analysis: codebaseAnalysis, expanded = fal
   );
 }
 
-export function NeelHandoffPackageSection({ handoffPackage, expanded = false }) {
+export function VirinHandoffPackageSection({ handoffPackage, expanded = false }) {
   if (!handoffPackage) {
     return (
       <Panel>
@@ -561,7 +561,7 @@ export function NeelHandoffPackageSection({ handoffPackage, expanded = false }) 
   );
 }
 
-export function NeelPostShipSection({ postShip }) {
+export function VirinPostShipSection({ postShip }) {
   if (!postShip) return null;
   return (
     <Panel>

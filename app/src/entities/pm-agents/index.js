@@ -5,8 +5,6 @@ import { useResource } from "../../shared/lib/useResource";
 import { mockApi } from "../../app/api/mock";
 
 export const VIRIN_NAME = "Virin";
-/** @deprecated Use VIRIN_NAME — PM/product agent display name. */
-export const NEEL_NAME = VIRIN_NAME;
 
 const pm = (path) => apiPath("/api", `/pm-agents${path}`);
 
@@ -49,6 +47,8 @@ const restPmAdapter = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
+  exportPackage: (ticketId) =>
+    fetchJson(pm(`/analysis/${encodeURIComponent(ticketId)}/export`)),
   getHandoff: (ticketId) =>
     fetchJson(pm(`/handoff/${encodeURIComponent(ticketId)}`)),
   runHandoff: (ticketId) =>
@@ -74,6 +74,7 @@ const mockPmAdapter = {
   resume: (ticketId) => mockApi.resumePmTicket(ticketId),
   retrospective: (ticketId, body) => mockApi.runPmRetrospective(ticketId, body),
   postShip: () => Promise.resolve({ postShip: null }),
+  exportPackage: (ticketId) => mockApi.getPmAnalysis(ticketId),
   getHandoff: (ticketId) => mockApi.getPmHandoff(ticketId),
   runHandoff: (ticketId) => mockApi.runPmHandoff(ticketId),
   startPipeline: (ticketId) => mockApi.startPmPipeline(ticketId),
@@ -86,6 +87,8 @@ export const PM_STAGE_LABELS = {
   QUESTION_MODE: "Discovery conversation",
   COMPETITOR_ANALYSIS: "Competitor analysis",
   CODEBASE_ANALYSIS: "Codebase analysis",
+  SYSTEM_DESIGN: "System design",
+  TASK_PLANNING: "Task plan",
   SOLUTIONING: "Solution direction",
   PRD: "PRD generation",
   HANDOFF: "Engineering handoff",
@@ -98,6 +101,8 @@ export const PM_STAGE_ORDER = [
   "QUESTION_MODE",
   "COMPETITOR_ANALYSIS",
   "CODEBASE_ANALYSIS",
+  "SYSTEM_DESIGN",
+  "TASK_PLANNING",
   "SOLUTIONING",
   "PRD",
   "HANDOFF",
@@ -115,11 +120,11 @@ export function analyzePmTicket(ticketId, body) {
   return adapter.analyze(ticketId, body);
 }
 
-export function answerNeelQuestion(ticketId, answer) {
+export function answerVirinQuestion(ticketId, answer) {
   return adapter.answer(ticketId, answer);
 }
 
-export function confirmNeelDirection(ticketId, body) {
+export function confirmVirinDirection(ticketId, body) {
   return adapter.confirm(ticketId, body);
 }
 
@@ -142,8 +147,12 @@ export function runPmRetrospective(ticketId, body) {
   return adapter.retrospective(ticketId, body);
 }
 
-export function runNeelPostShip(ticketId, body) {
+export function runVirinPostShip(ticketId, body) {
   return adapter.postShip(ticketId, body);
+}
+
+export function exportProductPackage(ticketId) {
+  return adapter.exportPackage(ticketId);
 }
 
 export function getPmHandoff(ticketId) {

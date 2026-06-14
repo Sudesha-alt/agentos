@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
-import { usePipelineDetail } from "../../entities/pipeline";
+import { usePipelineArtifacts, usePipelineDetail } from "../../entities/pipeline";
 import { usePipelineAudit } from "../../entities/audit";
 import { useRunPipeline } from "../../features/run-pipeline/model/useRunPipeline";
 import StageTimeline from "../components/StageTimeline";
@@ -17,11 +17,25 @@ import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
 export default function PipelineDetail() {
   const { id } = useParams();
   const { item, loading } = usePipelineDetail(id, { pollMs: 6000 });
+  const { artifacts } = usePipelineArtifacts(id, { pollMs: 8000 });
   const { items: auditItems } = usePipelineAudit(id, { pollMs: 9000 });
   const { run, pending: rerunning } = useRunPipeline();
 
   const stages = useMemo(() => item?.stages ?? [], [item]);
   const [selectedStageId, setSelectedStageId] = useState(null);
+  const [mainTab, setMainTab] = useState("stages");
+
+  const productPackage = useMemo(() => {
+    const productStage = stages.find((s) => s.stage === "PRODUCT_AGENT");
+    const output = productStage?.outputJson ?? productStage?.output;
+    if (!output || typeof output !== "object") return null;
+    if (output.source !== "pm_agents") return null;
+    return {
+      prdTitle: output.generatedPrd?.title ?? output.prd?.title ?? null,
+      systemDesign: output.systemDesign ?? null,
+      taskBreakdown: output.taskBreakdown ?? null,
+    };
+  }, [stages]);
 
   const effectiveStageId = useMemo(() => {
     if (selectedStageId && stages.some((s) => s.id === selectedStageId)) {
@@ -106,6 +120,89 @@ export default function PipelineDetail() {
         />
       </header>
 
+      {productPackage ? (
+        <Panel>
+          <PanelHeader
+            kicker="Virin"
+            title="Product package (read-only)"
+            body="PRD, system design, and task plan mirrored from PM workspace at pipeline start."
+          />
+          <div className="grid gap-4 px-5 py-4 sm:grid-cols-3 sm:px-6">
+            <div className="rounded-app-sm border border-hairline bg-surface/30 p-4">
+              <p className="type-kicker">PRD</p>
+              <p className="mt-1 text-[13px] text-ink">{productPackage.prdTitle ?? "—"}</p>
+            </div>
+            <div className="rounded-app-sm border border-hairline bg-surface/30 p-4">
+              <p className="type-kicker">System design</p>
+              <p className="mt-1 text-[13px] text-ink-dim">
+                {productPackage.systemDesign?.fileList?.length
+                  ? `${productPackage.systemDesign.fileList.length} files`
+                  : "Not generated"}
+              </p>
+            </div>
+            <div className="rounded-app-sm border border-hairline bg-surface/30 p-4">
+              <p className="type-kicker">Tasks</p>
+              <p className="mt-1 text-[13px] text-ink-dim">
+                {Array.isArray(productPackage.taskBreakdown)
+                  ? `${productPackage.taskBreakdown.length} tasks`
+                  : productPackage.taskBreakdown?.tasks?.length
+                    ? `${productPackage.taskBreakdown.tasks.length} tasks`
+                    : "Not generated"}
+              </p>
+            </div>
+          </div>
+        </Panel>
+      ) : null}
+
+      <div className="flex gap-2">
+        {[
+          { id: "stages", label: "Stages" },
+          { id: "artifacts", label: "Artifacts (Eng/QA)" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setMainTab(tab.id)}
+            className={`rounded-full px-4 py-2 text-[13px] transition ${
+              mainTab === tab.id
+                ? "border border-indigo/40 bg-indigo/10 text-ink"
+                : "border border-hairline text-ink-dim hover:text-ink"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {mainTab === "artifacts" ? (
+        <Panel>
+          <PanelHeader
+            kicker="MetaGPT"
+            title="Pipeline artifacts"
+            body="Implementation plan, code summary, and test plan produced by Ananta and Neel (QA)."
+          />
+          {artifacts.length === 0 ? (
+            <p className="px-5 py-8 text-[13px] text-ink-dim sm:px-6">
+              No engineering or QA artifacts yet — they appear after the implementation and QA stages complete.
+            </p>
+          ) : (
+            <ul className="divide-y divide-hairline">
+              {artifacts.map((artifact) => (
+                <li key={artifact.id} className="px-5 py-4 sm:px-6">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-[11px] text-indigo">{artifact.type}</span>
+                    <span className="text-[14px] font-medium text-ink">{artifact.title}</span>
+                    <span className="text-[11px] text-ink-mute">{artifact.producer}</span>
+                  </div>
+                  <pre className="mt-3 max-h-48 overflow-auto rounded-app-sm border border-hairline bg-surface/30 p-3 text-[11px] text-ink-dim">
+                    {JSON.stringify(artifact.payload, null, 2)}
+                  </pre>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      ) : (
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(380px,1.2fr)]">
         <Panel>
           <PanelHeader
@@ -141,6 +238,7 @@ export default function PipelineDetail() {
           <AuditFeedWidget items={auditItems.length ? auditItems : item.auditLogs} />
         </div>
       </div>
+      )}
     </AnimatedAppPage>
   );
 }

@@ -4,6 +4,11 @@ import {
   loadCanarySettingsFromStore,
   saveCanarySettings,
 } from "../../canaryAgent/settingsStore";
+import {
+  getPublicPipelineSettings,
+  loadPipelineSettingsFromStore,
+  savePipelineSettings,
+} from "../../pipeline/settingsStore";
 import { workspaceBillingStore } from "../../billing/workspaceBillingStore";
 import { ValidationError } from "../../utils/errors";
 
@@ -50,9 +55,22 @@ router.put("/billing", async (req, res, next) => {
 
 router.get("/", (_req, res) => {
   loadCanarySettingsFromStore();
+  loadPipelineSettingsFromStore();
   res.json({
     canary: getPublicCanarySettings(),
+    pipeline: getPublicPipelineSettings(),
   });
+});
+
+router.put("/pipeline", (req, res) => {
+  const threshold =
+    req.body?.systemDesignComplexityThreshold !== undefined
+      ? Number(req.body.systemDesignComplexityThreshold)
+      : undefined;
+  const pipeline = savePipelineSettings({
+    systemDesignComplexityThreshold: threshold,
+  });
+  res.json({ pipeline });
 });
 
 router.put("/", (req, res) => {

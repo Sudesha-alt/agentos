@@ -15,6 +15,7 @@ export const DEFAULT_SETTINGS = SettingsSchema.parse({
   prdConfidenceThreshold: 0.7,
   implementationConfidenceThreshold: 0.7,
   qaCoverageThreshold: 95,
+  systemDesignComplexityThreshold: 5,
   canaryStagingBaseUrl: "",
   canaryProductionBaseUrl: "",
   canaryAuthToken: "",
@@ -47,7 +48,7 @@ async function fetchServerCanarySettings() {
   }
 }
 
-async function saveServerCanarySettings(settings) {
+async function saveServerSettings(settings) {
   if (DATA_MODE !== DATA_MODES.REST) return null;
   const body = {
     canaryStagingBaseUrl: settings.canaryStagingBaseUrl,
@@ -56,11 +57,21 @@ async function saveServerCanarySettings(settings) {
   if (settings.canaryAuthToken?.trim()) {
     body.canaryAuthToken = settings.canaryAuthToken;
   }
-  return fetchJson(apiPath("/api/settings"), {
+  await fetchJson(apiPath("/api/settings"), {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  if (settings.systemDesignComplexityThreshold !== undefined) {
+    await fetchJson(apiPath("/api/settings/pipeline"), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        systemDesignComplexityThreshold: settings.systemDesignComplexityThreshold,
+      }),
+    });
+  }
+  return null;
 }
 
 const settingsAdapter = {
@@ -69,18 +80,29 @@ const settingsAdapter = {
     const serverCanary = await fetchServerCanarySettings();
     if (!serverCanary) return local;
 
+    let pipelineThreshold = local.systemDesignComplexityThreshold;
+    try {
+      const serverSettings = await fetchJson(apiPath("/api/settings"));
+      if (serverSettings?.pipeline?.systemDesignComplexityThreshold != null) {
+        pipelineThreshold = serverSettings.pipeline.systemDesignComplexityThreshold;
+      }
+    } catch {
+      /* optional */
+    }
+
     return SettingsSchema.parse({
       ...local,
       canaryStagingBaseUrl: serverCanary.stagingBaseUrl ?? local.canaryStagingBaseUrl,
       canaryProductionBaseUrl:
         serverCanary.productionBaseUrl ?? local.canaryProductionBaseUrl,
       canaryAuthToken: local.canaryAuthToken,
+      systemDesignComplexityThreshold: pipelineThreshold,
     });
   },
   async save(settings) {
     const parsed = SettingsSchema.parse(settings);
     writeLocalSettings(parsed);
-    await saveServerCanarySettings(parsed);
+    await saveServerSettings(parsed);
     return parsed;
   },
 };

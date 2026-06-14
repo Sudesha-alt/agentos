@@ -4,8 +4,9 @@ import { useCompanyProfile } from "../../entities/company-intelligence";
 import { AGENT_NAMES } from "../../shared/config/app";
 import {
   analyzePmTicket,
-  answerNeelQuestion,
-  confirmNeelDirection,
+  answerVirinQuestion,
+  confirmVirinDirection,
+  exportProductPackage,
   getPmResumeStage,
   PM_STAGE_LABELS,
   PM_STAGE_ORDER,
@@ -17,8 +18,8 @@ import {
 } from "../../entities/pm-agents";
 import { useJiraSyncIssues } from "../../entities/jira-sync";
 import { usePipelineIntakeTickets } from "../../entities/pipeline-jira";
-import { NeelWorkspace } from "../../widgets/pm-analysis/NeelWorkspace";
-import { NeelStageStepper } from "../../widgets/pm-analysis/NeelStageStepper";
+import { VirinWorkspace } from "../../widgets/pm-analysis/VirinWorkspace";
+import { VirinStageStepper } from "../../widgets/pm-analysis/VirinStageStepper";
 import { AgentPageWithChat } from "../../widgets/agent-chat/AgentPageWithChat";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
 import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
@@ -39,6 +40,7 @@ export default function PmAgents() {
   const [analyzing, setAnalyzing] = useState(false);
   const [retroRunning, setRetroRunning] = useState(false);
   const [interactionBusy, setInteractionBusy] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
   const [error, setError] = useState(null);
 
   const { data: companyProfile } = useCompanyProfile();
@@ -124,7 +126,7 @@ export default function PmAgents() {
     setInteractionBusy(true);
     setError(null);
     try {
-      await answerNeelQuestion(activeKey, answer);
+      await answerVirinQuestion(activeKey, answer);
       setAnalyzing(true);
       await refetchAnalysis();
     } catch (err) {
@@ -138,13 +140,32 @@ export default function PmAgents() {
     setInteractionBusy(true);
     setError(null);
     try {
-      await confirmNeelDirection(activeKey, body);
+      await confirmVirinDirection(activeKey, body);
       setAnalyzing(true);
       await refetchAnalysis();
     } catch (err) {
       setError(err.message ?? "Failed to confirm direction");
     } finally {
       setInteractionBusy(false);
+    }
+  }
+
+  async function handleExportPackage() {
+    setExportBusy(true);
+    setError(null);
+    try {
+      const pkg = await exportProductPackage(activeKey);
+      const blob = new Blob([JSON.stringify(pkg, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${activeKey}-product-package.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.message ?? "Export failed");
+    } finally {
+      setExportBusy(false);
     }
   }
 
@@ -300,13 +321,13 @@ export default function PmAgents() {
             <p className="mt-1 text-[13px] text-app-ink-dim">Stage 1 — intake & classification</p>
           </div>
           <div className="w-full max-w-xs px-6">
-            <NeelStageStepper analysis={analysis} compact />
+            <VirinStageStepper analysis={analysis} compact />
           </div>
         </div>
       )}
 
       {analysis && !showEmptyLoader && (
-        <NeelWorkspace
+        <VirinWorkspace
           analysis={analysis}
           historyItems={listData?.items}
           activeKey={activeKey}
@@ -318,6 +339,8 @@ export default function PmAgents() {
           retroRunning={retroRunning}
           onResume={analysis.status === "FAILED" ? handleResume : undefined}
           resuming={analyzing}
+          onExportPackage={handleExportPackage}
+          exportBusy={exportBusy}
           resumeStageLabel={
             analysis.status === "FAILED"
               ? PM_STAGE_LABELS[getPmResumeStage(analysis)] ?? null

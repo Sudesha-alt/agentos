@@ -1,14 +1,14 @@
-/** PM agents API — powered by Neel product discovery agent */
+/** PM agents API — powered by Virin product discovery agent */
 export {
-  runNeelPipeline as runPmAnalysisPipeline,
-  getNeelResumeStage as getPmResumeStage,
-  submitNeelAnswer,
-  confirmNeelSolution,
-  runNeelPostShip,
-  runNeelRetrospective as runPmRetrospective,
-  estimateNeelCost as estimateAnalysisCost,
-  NEEL_STAGE_ORDER as PM_STAGE_ORDER,
-} from "../neel/orchestrator";
+  runVirinPipeline as runPmAnalysisPipeline,
+  getVirinResumeStage as getPmResumeStage,
+  submitVirinAnswer,
+  confirmVirinSolution,
+  runVirinPostShip,
+  runVirinRetrospective as runPmRetrospective,
+  estimateVirinCost as estimateAnalysisCost,
+  VIRIN_STAGE_ORDER as PM_STAGE_ORDER,
+} from "../virin/orchestrator";
 
 import { mergeUsage } from "../../llm/openaiCompletion";
 import type { PmAnalysisRecord } from "./types";

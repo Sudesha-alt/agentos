@@ -14,7 +14,7 @@ const STATUS_LABELS = {
   AWAITING_CONFIRMATION: "Confirm direction",
 };
 
-export function NeelStatusBadge({ status }) {
+export function VirinStatusBadge({ status }) {
   const key = status ?? "RUNNING";
   return (
     <span
@@ -30,7 +30,7 @@ export function NeelStatusBadge({ status }) {
   );
 }
 
-export function NeelTicketTypeBadge({ type }) {
+export function VirinTicketTypeBadge({ type }) {
   if (!type) return null;
   const label = String(type).replace(/_/g, " ");
   return (

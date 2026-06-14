@@ -170,6 +170,7 @@ export const SettingsSchema = z.object({
   prdConfidenceThreshold: z.number(),
   implementationConfidenceThreshold: z.number(),
   qaCoverageThreshold: z.number(),
+  systemDesignComplexityThreshold: z.number(),
   canaryStagingBaseUrl: z.string(),
   canaryProductionBaseUrl: z.string(),
   canaryAuthToken: z.string(),

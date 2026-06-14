@@ -23,6 +23,9 @@ const restPipelineAdapter = {
       await fetchJson(pipelines(`/pipelines/${id}`))
     );
   },
+  async listArtifacts(id) {
+    return fetchJson(pipelines(`/pipelines/${id}/artifacts`));
+  },
   async run(ticketId) {
     return RunPipelineResponseSchema.parse(
       await fetchJson(pipelines(`/pipelines/${ticketId}/run`), {
@@ -38,6 +41,9 @@ const mockPipelineAdapter = {
   },
   async detail(id) {
     return PipelineDetailSchema.parse(await mockApi.getPipeline(id));
+  },
+  async listArtifacts(id) {
+    return mockApi.getPipelineArtifacts?.(id) ?? { pipelineId: id, artifacts: [] };
   },
   async run(ticketId) {
     return RunPipelineResponseSchema.parse(await mockApi.runPipeline(ticketId));
@@ -98,6 +104,18 @@ export function usePipelineList(status, options = {}) {
   return {
     ...query,
     items: (query.data?.items ?? []).map(mapPipelineSummary),
+  };
+}
+
+export function usePipelineArtifacts(id, options = {}) {
+  const query = useResource(
+    () => (id ? pipelineAdapter.listArtifacts(id) : Promise.resolve(null)),
+    [id],
+    { pollMs: options.pollMs ?? 8000 }
+  );
+  return {
+    ...query,
+    artifacts: query.data?.artifacts ?? [],
   };
 }
 

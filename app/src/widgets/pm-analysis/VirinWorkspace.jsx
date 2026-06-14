@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 import { VIRIN_NAME, PM_STAGE_LABELS } from "../../entities/pm-agents";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
-import { NeelStatusBadge, NeelTicketTypeBadge } from "./NeelStatusBadge";
-import { NeelStageStepper } from "./NeelStageStepper";
+import { VirinStatusBadge, VirinTicketTypeBadge } from "./VirinStatusBadge";
+import { VirinStageStepper } from "./VirinStageStepper";
 import {
-  NeelCodebaseSection,
-  NeelConversationPanel,
-  NeelDiscoverySection,
-  NeelHandoffPackageSection,
-  NeelIntakeSection,
-  NeelPostShipSection,
-} from "./NeelSections";
+  VirinCodebaseSection,
+  VirinConversationPanel,
+  VirinDiscoverySection,
+  VirinHandoffPackageSection,
+  VirinIntakeSection,
+  VirinPostShipSection,
+} from "./VirinSections";
 import { CompetitorAnalysisSection } from "./CompetitorAnalysisSection";
 import DiscoveryPrdSection from "../discovery/DiscoveryPrdSection";
 import {
@@ -22,11 +22,13 @@ const TABS = [
   { id: "overview", label: "Overview" },
   { id: "discovery", label: "Discovery" },
   { id: "codebase", label: "Codebase" },
+  { id: "design", label: "Design" },
+  { id: "tasks", label: "Tasks" },
   { id: "prd", label: "PRD" },
   { id: "handoff", label: "Handoff" },
 ];
 
-function NeelHero({ analysis }) {
+function VirinHero({ analysis, onExportPackage, exportBusy }) {
   const ticket = analysis?.ticketInput;
   const needsYou =
     analysis?.status === "AWAITING_INPUT" || analysis?.status === "AWAITING_CONFIRMATION";
@@ -45,15 +47,15 @@ function NeelHero({ analysis }) {
             className="flex size-12 shrink-0 items-center justify-center rounded-2xl border border-indigo/25 bg-indigo/10 font-display text-xl text-indigo"
             aria-hidden
           >
-            N
+            V
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="font-mono text-[13px] font-semibold text-indigo">
                 {analysis?.jiraKey}
               </h2>
-              <NeelStatusBadge status={analysis?.status} />
-              <NeelTicketTypeBadge type={analysis?.neelIntake?.ticketType} />
+              <VirinStatusBadge status={analysis?.status} />
+              <VirinTicketTypeBadge type={analysis?.neelIntake?.ticketType} />
             </div>
             <p className="mt-1.5 text-[15px] font-medium leading-snug text-app-ink">
               {ticket?.summary ?? "Ticket analysis"}
@@ -71,10 +73,20 @@ function NeelHero({ analysis }) {
               ${analysis.costUsd.toFixed(3)} run cost
             </span>
           )}
+          {analysis?.generatedPrd && onExportPackage ? (
+            <button
+              type="button"
+              disabled={exportBusy}
+              onClick={onExportPackage}
+              className="rounded-app-sm border border-app-border bg-app-surface px-3 py-1.5 text-[12px] text-app-ink-dim transition hover:text-app-ink disabled:opacity-50"
+            >
+              {exportBusy ? "Exporting…" : "Export product package"}
+            </button>
+          ) : null}
         </div>
       </div>
       <div className="mt-5 lg:hidden">
-        <NeelStageStepper analysis={analysis} compact />
+        <VirinStageStepper analysis={analysis} compact />
       </div>
     </div>
   );
@@ -89,6 +101,8 @@ function TabBar({ active, onChange, analysis }) {
       {TABS.map((tab) => {
         const disabled =
           (tab.id === "prd" && !hasPrd) ||
+          (tab.id === "design" && !analysis?.systemDesign) ||
+          (tab.id === "tasks" && !analysis?.taskBreakdown?.length) ||
           (tab.id === "handoff" && !hasHandoff && analysis?.status !== "COMPLETED");
         return (
           <button
@@ -118,7 +132,7 @@ function TabBar({ active, onChange, analysis }) {
 function OverviewTab({ analysis, onRetrospective, retroRunning }) {
   return (
     <div className="space-y-5">
-      <NeelIntakeSection intake={analysis.neelIntake} />
+      <VirinIntakeSection intake={analysis.neelIntake} />
       <CompetitorAnalysisSection competitorAnalysis={analysis.competitorAnalysis} />
       {(analysis.solutioning?.humanConfirmed || analysis.status === "COMPLETED") && (
         <Panel>
@@ -165,7 +179,7 @@ function OverviewTab({ analysis, onRetrospective, retroRunning }) {
           </div>
         </Panel>
       )}
-      <NeelPostShipSection postShip={analysis.postShip} />
+      <VirinPostShipSection postShip={analysis.postShip} />
       <PmRetrospectiveSection
         retrospective={analysis.retrospective}
         onRun={onRetrospective}
@@ -175,7 +189,7 @@ function OverviewTab({ analysis, onRetrospective, retroRunning }) {
   );
 }
 
-export function NeelWorkspace({
+export function VirinWorkspace({
   analysis,
   historyItems,
   activeKey,
@@ -188,6 +202,8 @@ export function NeelWorkspace({
   onResume,
   resuming,
   resumeStageLabel,
+  onExportPackage,
+  exportBusy,
 }) {
   const [tab, setTab] = useState("overview");
 
@@ -209,7 +225,7 @@ export function NeelWorkspace({
         <Panel className="hidden xl:block">
           <PanelHeader kicker="Progress" title={`${VIRIN_NAME} pipeline`} />
           <div className="px-4 py-4 sm:px-5">
-            <NeelStageStepper analysis={analysis} />
+            <VirinStageStepper analysis={analysis} />
           </div>
         </Panel>
 
@@ -232,7 +248,7 @@ export function NeelWorkspace({
                       <span className="font-mono text-[11px] font-medium text-app-ink">
                         {item.jiraKey}
                       </span>
-                      <NeelStatusBadge status={item.status} />
+                      <VirinStatusBadge status={item.status} />
                     </div>
                     <p className="mt-1 truncate text-[11px] text-app-ink-dim">{item.summary}</p>
                   </button>
@@ -245,13 +261,17 @@ export function NeelWorkspace({
 
       {/* Main */}
       <div className="min-w-0 space-y-5">
-        <NeelHero analysis={analysis} />
+        <VirinHero
+          analysis={analysis}
+          onExportPackage={onExportPackage}
+          exportBusy={exportBusy}
+        />
 
         {showConversation && (
           <div className="relative">
             <div className="absolute -inset-px rounded-app bg-gradient-to-r from-warning/20 via-indigo/20 to-warning/20 opacity-60 blur-sm" />
             <div className="relative">
-              <NeelConversationPanel
+              <VirinConversationPanel
                 analysis={analysis}
                 onAnswer={onAnswer}
                 onConfirm={onConfirm}
@@ -295,12 +315,63 @@ export function NeelWorkspace({
         )}
         {tab === "discovery" && (
           <div className="space-y-5">
-            <NeelDiscoverySection questionMode={analysis.questionMode} expanded />
+            <VirinDiscoverySection questionMode={analysis.questionMode} expanded />
             <CompetitorAnalysisSection competitorAnalysis={analysis.competitorAnalysis} expanded />
           </div>
         )}
         {tab === "codebase" && (
-          <NeelCodebaseSection analysis={analysis.codebaseAnalysis} expanded />
+          <VirinCodebaseSection analysis={analysis.codebaseAnalysis} expanded />
+        )}
+        {tab === "design" && analysis.systemDesign && (
+          <Panel>
+            <PanelHeader kicker="Architect" title="System design" />
+            <div className="space-y-4 px-5 py-5 sm:px-6">
+              {analysis.systemDesign.summaryMarkdown ? (
+                <pre className="whitespace-pre-wrap text-[13px] text-app-ink-dim">
+                  {analysis.systemDesign.summaryMarkdown}
+                </pre>
+              ) : null}
+              {analysis.systemDesign.fileList?.length ? (
+                <div>
+                  <p className="type-kicker">File list</p>
+                  <ul className="mt-2 list-disc space-y-1 pl-4 text-[13px] text-app-ink-dim">
+                    {analysis.systemDesign.fileList.map((f) => (
+                      <li key={f}>{f}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {analysis.systemDesign.sequenceDiagramMermaid ? (
+                <div>
+                  <p className="type-kicker">Sequence diagram (Mermaid)</p>
+                  <pre className="mt-2 overflow-x-auto rounded-app-sm border border-app-border bg-app-surface-muted/40 p-3 text-[12px] text-app-ink-dim">
+                    {analysis.systemDesign.sequenceDiagramMermaid}
+                  </pre>
+                </div>
+              ) : null}
+            </div>
+          </Panel>
+        )}
+        {tab === "tasks" && analysis.taskBreakdown?.length > 0 && (
+          <Panel>
+            <PanelHeader kicker="Task plan" title="Engineering tasks" />
+            <ul className="divide-y divide-app-border px-5 py-2 sm:px-6">
+              {analysis.taskBreakdown.map((task) => (
+                <li key={task.id} className="py-4">
+                  <p className="font-mono text-[12px] text-indigo">{task.id}</p>
+                  <p className="mt-1 text-[14px] font-medium text-app-ink">{task.title}</p>
+                  {task.description ? (
+                    <p className="mt-1 text-[13px] text-app-ink-dim">{task.description}</p>
+                  ) : null}
+                  {task.files?.length ? (
+                    <p className="mt-2 text-[12px] text-app-ink-mute">
+                      Files: {task.files.join(", ")}
+                    </p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </Panel>
         )}
         {tab === "prd" && analysis.generatedPrd && (
           <Panel>
@@ -312,7 +383,7 @@ export function NeelWorkspace({
         )}
         {tab === "handoff" && (
           <div className="space-y-5">
-            <NeelHandoffPackageSection handoffPackage={analysis.handoffPackage} expanded />
+            <VirinHandoffPackageSection handoffPackage={analysis.handoffPackage} expanded />
             <PmTechHandoffSection
               jiraKey={analysis.jiraKey}
               analysisComplete={analysis.status === "COMPLETED"}

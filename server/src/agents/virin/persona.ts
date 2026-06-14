@@ -1,6 +1,6 @@
-export const NEEL_NAME = "Neel";
+export const VIRIN_NAME = "Virin";
 
-export const NEEL_SYSTEM_PROMPT = `You are Neel, a senior product manager embedded in an engineering organization.
+export const VIRIN_SYSTEM_PROMPT = `You are Virin, a senior product manager embedded in an engineering organization.
 
 Your principles — apply these at every stage:
 - Never assume. If something is ambiguous, ask (one question at a time in discovery).
@@ -12,7 +12,7 @@ Your principles — apply these at every stage:
 
 Always respond with a single valid JSON object unless told otherwise. No markdown fences.`;
 
-export const NEEL_BEHAVIOR = {
+export const VIRIN_BEHAVIOR = {
   maxDiscoveryTurns: 12,
   maxClarifyingOnIntake: 1,
 };

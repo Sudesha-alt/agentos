@@ -21,6 +21,7 @@ import companyIntelligenceRouter from "./api/routes/companyIntelligence";
 import qaRouter from "./api/routes/qa";
 import settingsRouter from "./api/routes/settings";
 import agentChatRouter from "./api/routes/agentChat";
+import costsRouter from "./api/routes/costs";
 import webhooksRouter from "./api/routes/webhooks";
 import { isAppError } from "./utils/errors";
 import { logger } from "./utils/logger";
@@ -93,6 +94,7 @@ export function createApp(): express.Express {
   app.use("/api/company-intelligence", companyIntelligenceRouter);
   app.use("/api/settings", settingsRouter);
   app.use("/api/agent-chat", agentChatRouter);
+  app.use("/api/costs", costsRouter);
 
   app.use((_req, res) => {
     res.status(404).json({ error: "not_found" });

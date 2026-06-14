@@ -36,6 +36,8 @@ export function buildPmPipelineContext(record: PmAnalysisRecord): PmPipelineCont
       pmAcceptanceCriteria: record.acceptanceCriteria,
       pmPrioritization: record.prioritization,
       pmHandoff: buildTechAgentHandoffFromRecord(record),
+      pmSystemDesign: record.systemDesign ?? null,
+      pmTaskBreakdown: record.taskBreakdown ?? null,
       synthesisSummary: {
         historicalCoverage: 0,
         reusedPatterns: [],

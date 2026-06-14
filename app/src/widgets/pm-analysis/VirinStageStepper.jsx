@@ -1,6 +1,6 @@
 import { PM_STAGE_LABELS, PM_STAGE_ORDER } from "../../entities/pm-agents";
 
-export function NeelStageStepper({ analysis, compact = false }) {
+export function VirinStageStepper({ analysis, compact = false }) {
   const current = analysis?.currentStage;
   const meta = analysis?.stageMeta ?? [];
   const status = analysis?.status;

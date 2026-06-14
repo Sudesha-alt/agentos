@@ -14,7 +14,8 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "test:discovery": "tsx scripts/testDiscovery.ts",
-    "test:scoring": "tsx --test src/discovery/scoring.test.ts"
+    "test:scoring": "tsx --test src/discovery/scoring.test.ts",
+    "test:roi": "tsx --test src/roi/estimatedRoi.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/bedrock-sdk": "^0.29.2",
