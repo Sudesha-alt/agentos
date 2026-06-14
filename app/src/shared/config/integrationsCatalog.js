@@ -16,7 +16,7 @@ export const INTEGRATIONS_CATALOG = [
       "GitHub App or PAT for codebase indexing, branch push, and QA sandboxes.",
     catalogStatus: "available",
     route: "/app/settings/integrations/github",
-    icon: "/marketing/integrations/github.png",
+    icon: "/marketing/integrations/github-wordmark.svg",
     liveStatusKey: "github",
   },
   {
@@ -27,7 +27,7 @@ export const INTEGRATIONS_CATALOG = [
       "AI Worker queue, webhooks, column mapping, and pipeline ingress from tickets.",
     catalogStatus: "available",
     route: "/app/settings/integrations/jira",
-    icon: "/marketing/integrations/jira.png",
+    icon: "/marketing/integrations/jira-wordmark.svg",
     liveStatusKey: "jira",
   },
   {
@@ -48,7 +48,7 @@ export const INTEGRATIONS_CATALOG = [
     description: "Sync workspace data with Supabase Postgres, auth, and edge functions.",
     catalogStatus: "coming_soon",
     route: "/app/settings/integrations/supabase",
-    icon: "/marketing/integrations/supabase.png",
+    icon: "/marketing/integrations/supabase-wordmark.svg",
     liveStatusKey: null,
   },
   {
@@ -69,7 +69,7 @@ export const INTEGRATIONS_CATALOG = [
     description: "Visualize pipeline throughput, agent latency, and cost signals in Grafana.",
     catalogStatus: "coming_soon",
     route: "/app/settings/integrations/grafana",
-    icon: "/marketing/integrations/grafana.png",
+    icon: "/marketing/integrations/grafana-wordmark.svg",
     liveStatusKey: null,
   },
   {

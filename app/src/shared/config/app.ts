@@ -16,72 +16,99 @@ export const AGENT_NAMES = {
   NEEL: "Neel",
 } as const;
 
-/** Agent modules — Virin (product), Ananta (tech), Neel (QA). */
+/** Agent modules — Product, Tech (codebase), Engineering (coding review), QA. */
 export const AGENT_NAV = [
   {
     to: "/app/pm-agents",
-    label: AGENT_NAMES.VIRIN,
+    label: "Product Agent",
     breadcrumb: AGENT_NAMES.VIRIN,
     role: "Product",
   },
   {
     to: "/app/codebase",
-    label: AGENT_NAMES.ANANTA,
+    label: "Tech Agent",
     breadcrumb: AGENT_NAMES.ANANTA,
     role: "Tech",
   },
-  { to: "/app/qa", label: AGENT_NAMES.NEEL, breadcrumb: AGENT_NAMES.NEEL, role: "QA" },
+  {
+    to: "/app/engineering",
+    label: "Engineering Agent",
+    breadcrumb: "Engineering Agent",
+    role: "Engineering",
+  },
+  {
+    to: "/app/qa",
+    label: "QA Agent",
+    breadcrumb: AGENT_NAMES.NEEL,
+    role: "QA",
+  },
 ] as const;
+
+export const TECH_AGENT_SUB_NAV: Array<{
+  tab: string;
+  label: string;
+  to: string;
+}> = [{ tab: "map", label: "Codebase Map", to: "/app/codebase?tab=map" }];
 
 /** Flat list for breadcrumbs and mobile nav. */
 export const APP_NAV = [
-  { to: "/app", label: "Command Center", breadcrumb: "Command Center", end: true },
-  { to: "/app/pipelines", label: "Pipeline Explorer", breadcrumb: "Pipelines" },
+  { to: "/app", label: "Dashboard", breadcrumb: "Dashboard", end: true },
+  { to: "/app/pipelines", label: "Pipelines", breadcrumb: "Pipelines" },
   ...AGENT_NAV.map(({ to, label, breadcrumb }) => ({ to, label, breadcrumb })),
-  { to: "/app/costs", label: "Cost Intelligence", breadcrumb: "Costs" },
+  { to: "/app/org-intelligence", label: "Roadmap", breadcrumb: "Roadmap" },
+  { to: "/app/costs", label: "Cost & ROI", breadcrumb: "Costs" },
+  { to: "/app/settings", label: "Configuration", breadcrumb: "Settings" },
   { to: "/app/audit", label: "Audit Trail", breadcrumb: "Audit" },
-  { to: "/app/settings", label: "Settings", breadcrumb: "Settings" },
-  { to: "/app/jira-search", label: "Board search", breadcrumb: "Search" },
 ] as const;
 
-/** Sidebar groups aligned to the UX blueprint personas. */
+export type PipelineNavTab = "active" | "review" | "history";
+
+export const PIPELINE_SUB_NAV: Array<{
+  tab: PipelineNavTab;
+  label: string;
+  to: string;
+  badgeKey: "active" | "review" | null;
+}> = [
+  { tab: "active", label: "Active", to: "/app/pipelines?tab=active", badgeKey: "active" },
+  {
+    tab: "review",
+    label: "Review Queue",
+    to: "/app/pipelines?tab=review",
+    badgeKey: "review",
+  },
+  { tab: "history", label: "History", to: "/app/pipelines?tab=history", badgeKey: null },
+];
+
+/** Sidebar groups — post-login landing UX. */
 export const APP_NAV_SECTIONS = [
   {
-    id: "executive",
-    label: "Executive",
-    items: [
-      { to: "/app", label: "Command Center", breadcrumb: "Command Center", end: true },
-      { to: "/app/costs", label: "Cost Intelligence", breadcrumb: "Costs" },
-    ],
+    id: "workspace",
+    label: "Workspace",
+    items: [{ to: "/app", label: "Dashboard", breadcrumb: "Dashboard", end: true }],
+    pipelineGroup: true,
   },
   {
     id: "agents",
     label: "Agents",
     items: AGENT_NAV.map(({ to, label, breadcrumb }) => ({ to, label, breadcrumb })),
+    techAgentGroup: true,
   },
   {
-    id: "operations",
-    label: "Operations",
-    items: [
-      { to: "/app/pipelines", label: "Pipeline Explorer", breadcrumb: "Pipelines" },
-      {
-        to: "/app/org-intelligence",
-        label: "Org Intelligence",
-        breadcrumb: "Org Intelligence",
-      },
-    ],
+    id: "intelligence",
+    label: "Intelligence",
+    items: [{ to: "/app/org-intelligence", label: "Roadmap", breadcrumb: "Roadmap" }],
   },
   {
-    id: "compliance",
-    label: "Compliance",
-    items: [{ to: "/app/audit", label: "Audit Trail", breadcrumb: "Audit" }],
+    id: "analytics",
+    label: "Analytics",
+    items: [{ to: "/app/costs", label: "Cost & ROI", breadcrumb: "Costs" }],
   },
   {
-    id: "admin",
+    id: "settings",
     label: "Settings",
     items: [
-      { to: "/app/settings", label: "Workspace settings", breadcrumb: "Settings" },
-      { to: "/app/jira-search", label: "Board search", breadcrumb: "Search" },
+      { to: "/app/settings", label: "Configuration", breadcrumb: "Settings" },
+      { to: "/app/audit", label: "Audit Trail", breadcrumb: "Audit" },
     ],
   },
 ] as const;
@@ -125,6 +152,15 @@ export const STATUS_TONES: Record<PipelineStatus | StageStatus, string> = {
   PENDING: "muted",
   AWAITING_HUMAN: "warning",
 };
+
+/** Consistent state colours across dashboard and engineering agent. */
+export const STATE_COLORS = {
+  running: "text-indigo border-indigo/40 bg-indigo/5",
+  attention: "text-warning border-warning/50 bg-warning/10",
+  success: "text-success border-success/40 bg-success/10",
+  failed: "text-danger border-danger/40 bg-danger/10",
+  agent: "text-violet-700 border-violet-300/60 bg-violet-50",
+} as const;
 
 export const EDITORIAL_METRICS = {
   maxPageWidth: "max-w-[82rem]",

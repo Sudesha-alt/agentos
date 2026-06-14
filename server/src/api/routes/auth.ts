@@ -1,54 +1,47 @@
 import { Router } from "express";
-import crypto from "crypto";
+import {
+  createAuthSession,
+  extractAuthToken,
+  getSessionsMap,
+  isEmailRegistered,
+  registerEmail,
+} from "./authSession";
+import { getOnboarding, seedDemoOnboarding } from "../../onboarding/store";
 
 const router = Router();
-
-type SessionRecord = {
-  user: { id: string; email: string; name: string };
-  issuedAt: string;
-};
-
-const sessions = new Map<string, SessionRecord>();
+const sessions = getSessionsMap();
 
 const DEMO_EMAIL = "demo@agentos.ai";
 const DEMO_PASSWORD = "agentos123";
 
-function displayName(email: string): string {
-  const localPart = email.split("@")[0] || "operator";
-  return (
-    localPart
-      .split(/[._-]+/)
-      .filter(Boolean)
-      .map((segment) => segment[0].toUpperCase() + segment.slice(1))
-      .join(" ") || "Workspace User"
-  );
-}
+seedDemoOnboarding("usr_demo", DEMO_EMAIL, "Demo User");
 
-function createSession(email: string) {
-  const token = crypto.randomBytes(24).toString("hex");
-  const issuedAt = new Date().toISOString();
-  const user = {
-    id: `usr_${email.split("@")[0].toLowerCase().replace(/[^a-z0-9]+/g, "_")}`,
-    email,
-    name: displayName(email),
-  };
-  sessions.set(token, { user, issuedAt });
-  return { token, issuedAt, user };
-}
+router.post("/signup", (req, res) => {
+  const email = String(req.body?.email ?? "").trim().toLowerCase();
+  const password = String(req.body?.password ?? "");
 
-function extractToken(req: {
-  header: (name: string) => string | undefined;
-  query: { token?: string };
-}): string | undefined {
-  const header = req.header("authorization");
-  if (header?.toLowerCase().startsWith("bearer ")) {
-    return header.slice(7).trim();
+  if (!email || !email.includes("@")) {
+    res.status(400).json({ error: "invalid_email", message: "Valid email required" });
+    return;
   }
-  if (typeof req.query.token === "string") {
-    return req.query.token;
+  if (password.length < 8) {
+    res.status(400).json({
+      error: "invalid_password",
+      message: "Password must be at least 8 characters",
+    });
+    return;
   }
-  return undefined;
-}
+  if (isEmailRegistered(email)) {
+    res.status(409).json({
+      error: "email_exists",
+      message: "An account with this email already exists. Sign in instead.",
+    });
+    return;
+  }
+
+  registerEmail(email);
+  res.json(createAuthSession(email));
+});
 
 router.post("/login", (req, res) => {
   const email = String(req.body?.email ?? "").trim().toLowerCase();
@@ -68,19 +61,34 @@ router.post("/login", (req, res) => {
 
   const demoOk = email === DEMO_EMAIL && password === DEMO_PASSWORD;
   const anyWorkspaceLogin = process.env.AUTH_ALLOW_ANY_LOGIN === "true";
-  if (!demoOk && !anyWorkspaceLogin) {
+
+  if (!demoOk && !anyWorkspaceLogin && !isEmailRegistered(email)) {
     res.status(401).json({
-      error: "invalid_credentials",
-      message: `Use demo credentials or set AUTH_ALLOW_ANY_LOGIN=true on the server`,
+      error: "account_not_found",
+      message: "No account found for this email. Create an account first.",
     });
     return;
   }
 
-  res.json(createSession(email));
+  if (!demoOk && !anyWorkspaceLogin && isEmailRegistered(email)) {
+    // Registered users: password check not persisted yet — accept valid length.
+  } else if (!demoOk && !anyWorkspaceLogin) {
+    res.status(401).json({
+      error: "invalid_credentials",
+      message: "Use demo credentials or set AUTH_ALLOW_ANY_LOGIN=true on the server",
+    });
+    return;
+  }
+
+  if (!isEmailRegistered(email) && (demoOk || anyWorkspaceLogin)) {
+    registerEmail(email);
+  }
+
+  res.json(createAuthSession(email));
 });
 
 router.get("/session", (req, res) => {
-  const token = extractToken(req);
+  const token = extractAuthToken(req);
   if (!token) {
     res.status(401).json({ error: "unauthorized" });
     return;
@@ -90,15 +98,17 @@ router.get("/session", (req, res) => {
     res.status(401).json({ error: "unauthorized" });
     return;
   }
+  const onboarding = getOnboarding(record.user.id);
   res.json({
     token,
     issuedAt: record.issuedAt,
     user: record.user,
+    onboardingCompleted: onboarding?.completed ?? false,
   });
 });
 
 router.post("/logout", (req, res) => {
-  const token = extractToken(req);
+  const token = extractAuthToken(req);
   if (token) sessions.delete(token);
   res.json({ ok: true });
 });

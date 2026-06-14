@@ -1,10 +1,10 @@
 import { AGENTS } from "../constants";
 
-const AGENT_IDS = AGENTS.map((a) => a.id);
+const AGENT_IDS = AGENTS.filter((a) => a.image).map((a) => a.id);
 
 export function AgentImage({ agentId, className = "", alt, style }) {
   const agent = AGENTS.find((a) => a.id === agentId);
-  if (!agent) return null;
+  if (!agent?.image) return null;
   return (
     <img
       src={agent.image}

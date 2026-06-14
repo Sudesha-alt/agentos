@@ -19,8 +19,8 @@ export default function IntegrationMarquee() {
               <img
                 src={tool.logo}
                 alt={tool.name}
-                className="block w-auto max-w-none object-contain"
-                style={{ height: tool.height ?? 36, minWidth: tool.minWidth ?? 80 }}
+                className="at-integration-logo block w-auto max-w-none"
+                style={{ height: tool.height ?? 28, minWidth: tool.minWidth ?? 80 }}
                 loading="lazy"
                 draggable={false}
               />

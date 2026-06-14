@@ -15,13 +15,25 @@ const MOCK_PIPELINES = [
   {
     id: "pl_01J7H2",
     ticketId: "tk_01J7H2",
-    currentStage: "QA_VALIDATION",
+    currentStage: "QA_AGENT",
     status: "RUNNING",
     startedAt: minutes(2),
     completedAt: null,
     ticket: {
-      jiraKey: "PLT-1287",
-      normalizedData: { summary: "Add usage-based billing controls" },
+      jiraKey: "PROD-1863",
+      normalizedData: { summary: "QA Agent running checkout regression" },
+    },
+  },
+  {
+    id: "pl_01J7A1",
+    ticketId: "tk_01J7A1",
+    currentStage: "ENGINEERING_AGENT",
+    status: "RUNNING",
+    startedAt: minutes(4),
+    completedAt: null,
+    ticket: {
+      jiraKey: "PROD-1871",
+      normalizedData: { summary: "Engineering Agent writing multi-currency service" },
     },
   },
   {
@@ -29,13 +41,47 @@ const MOCK_PIPELINES = [
     ticketId: "tk_01J6XP",
     currentStage: "PRD_VALIDATION",
     status: "PAUSED",
-    startedAt: minutes(14),
+    startedAt: minutes(23),
     completedAt: null,
     ticket: {
-      jiraKey: "PLT-1271",
-      normalizedData: {
-        summary: "Workspace-level audit log export",
-      },
+      jiraKey: "PROD-1842",
+      normalizedData: { summary: "Multi-currency checkout" },
+    },
+  },
+  {
+    id: "pl_01J6EN",
+    ticketId: "tk_01J6EN",
+    currentStage: "IMPLEMENTATION_VALIDATION",
+    status: "PAUSED",
+    startedAt: minutes(8),
+    completedAt: null,
+    ticket: {
+      jiraKey: "PROD-1851",
+      normalizedData: { summary: "SSO integration for enterprise" },
+    },
+  },
+  {
+    id: "pl_01J6RUN1",
+    ticketId: "tk_01J6RUN1",
+    currentStage: "PRODUCT_AGENT",
+    status: "RUNNING",
+    startedAt: minutes(12),
+    completedAt: null,
+    ticket: {
+      jiraKey: "PROD-1839",
+      normalizedData: { summary: "Pipeline started — PRD generation" },
+    },
+  },
+  {
+    id: "pl_01J6RUN2",
+    ticketId: "tk_01J6RUN2",
+    currentStage: "ENGINEERING_AGENT",
+    status: "RUNNING",
+    startedAt: minutes(6),
+    completedAt: null,
+    ticket: {
+      jiraKey: "PROD-1844",
+      normalizedData: { summary: "PRD generation complete — engineering queued" },
     },
   },
   {
@@ -46,8 +92,8 @@ const MOCK_PIPELINES = [
     startedAt: minutes(42),
     completedAt: minutes(38),
     ticket: {
-      jiraKey: "PLT-1264",
-      normalizedData: { summary: "Slack notification per failed validation gate" },
+      jiraKey: "PROD-1842",
+      normalizedData: { summary: "Multi-currency checkout" },
     },
   },
   {
@@ -712,23 +758,251 @@ function fullPipelineDetail(id) {
   };
 }
 
+const MOCK_ENGINEERING_RUNS = {
+  pl_01J6L1: {
+    pipelineId: "pl_01J6L1",
+    jiraKey: "PROD-1842",
+    summary: "Multi-currency checkout",
+    status: "COMPLETED",
+    branch: "feature/prod-1842-multi-currency",
+    prNumber: 847,
+    prDraft: true,
+    durationMinutes: 18,
+    costUsd: 4.2,
+    toolCallCount: 22,
+    filesCreated: 4,
+    filesModified: 2,
+    testsGenerated: 47,
+    criteriaMapped: 12,
+    criteriaTotal: 12,
+    implementationPlan: {
+      technicalSummary:
+        "A currency conversion layer was added to the checkout flow using the ECB exchange rate API. The service is stateless and exchange rates are cached in Redis with a 1-hour TTL.",
+      criteria: [
+        {
+          id: "AC-1",
+          text: "Given a user in Germany when they view checkout then prices display in EUR",
+          implementation: "CurrencyService.convertPrice()",
+          test: "currency.service.test.ts:L42",
+        },
+        {
+          id: "AC-2",
+          text: "Given EUR selected when exchange rate API is unavailable then USD is shown with a notification",
+          implementation: "CurrencyService.fallbackToDefault()",
+          test: "currency.service.test.ts:L89",
+        },
+      ],
+      risks: [
+        {
+          level: "HIGH",
+          text: "Exchange rate API has no SLA — fallback to cached rates; cold cache falls back to USD.",
+        },
+      ],
+      filesCreated: [
+        { path: "src/services/currency.service.ts", kind: "service" },
+        { path: "src/utils/exchange-rate.helper.ts", kind: "util" },
+        { path: "src/migrations/20260115_currency.ts", kind: "migration" },
+        { path: "src/tests/currency.service.test.ts", kind: "test" },
+      ],
+      filesModified: [
+        { path: "src/routes/checkout.routes.ts", kind: "route" },
+        { path: "src/services/checkout.service.ts", kind: "service" },
+      ],
+    },
+    files: [
+      {
+        path: "src/services/currency.service.ts",
+        change: "created",
+        kind: "service",
+        humanModified: false,
+        summary:
+          "Core conversion service — reads Redis cache, calls ECB API, exposes convertPrice and fallback helpers.",
+        content: `export class CurrencyService {\n  async convertPrice(amount: number, from: string, to: string) {\n    // ...\n  }\n  fallbackToDefault() {\n    // ...\n  }\n}`,
+        criteriaIds: ["AC-1", "AC-2"],
+      },
+      {
+        path: "src/utils/exchange-rate.helper.ts",
+        change: "created",
+        kind: "util",
+        humanModified: false,
+        summary: "HTTP client and cache helpers for ECB rates.",
+        content: `export async function fetchEcbRates() {\n  // ...\n}`,
+        criteriaIds: [],
+      },
+      {
+        path: "src/routes/checkout.routes.ts",
+        change: "modified",
+        kind: "route",
+        humanModified: true,
+        summary: "Wires currency display into checkout GET handler.",
+        content: `// modified checkout route\nrouter.get('/checkout', ...);`,
+        criteriaIds: ["AC-1"],
+        diff: "+ import { CurrencyService }\n+ await currency.convertPrice(...)",
+      },
+    ],
+    toolCalls: [
+      { id: 1, name: "explore_codebase_structure", durationSec: 0.8 },
+      { id: 2, name: "search_historical_implementations", durationSec: 1.2 },
+      { id: 3, name: "read_multiple_files (8)", durationSec: 2.1 },
+      { id: 4, name: "read_file: schema.prisma", durationSec: 0.4 },
+      { id: 5, name: "search_codebase: auth...", durationSec: 0.9 },
+      { id: 6, name: "read_file: auth.middleware", durationSec: 0.3 },
+      { id: 7, name: "create_implementation_plan", durationSec: 0.2 },
+      { id: 8, name: "write_file: currency.service.ts", durationSec: 3.2 },
+      { id: 9, name: "write_file: exchange-rate.helper.ts", durationSec: 1.8 },
+      { id: 22, name: "create_pull_request", durationSec: 1.1 },
+    ],
+    pr: {
+      title: "feat(checkout): multi-currency display with ECB rates",
+      description: "Implements PROD-1842 — currency conversion at checkout with Redis cache and fallback.",
+      labels: ["agent-generated", "checkout"],
+      draft: true,
+      url: "https://github.com/example/repo/pull/847",
+      reviewers: [],
+    },
+    history: [
+      {
+        jiraKey: "PROD-1820",
+        summary: "Checkout tax display",
+        qaFindings: "Missing edge case for zero-decimal currencies",
+        humanChanges: "Updated rounding in checkout.service.ts",
+      },
+    ],
+    liveSteps: null,
+  },
+  pl_01J7A1: {
+    pipelineId: "pl_01J7A1",
+    jiraKey: "PROD-1871",
+    summary: "Engineering Agent writing multi-currency service",
+    status: "RUNNING",
+    branch: "feature/prod-1871-currency",
+    prNumber: null,
+    prDraft: true,
+    durationMinutes: 4,
+    costUsd: 1.2,
+    toolCallCount: 8,
+    filesCreated: 1,
+    filesModified: 0,
+    testsGenerated: 0,
+    criteriaMapped: 8,
+    criteriaTotal: 12,
+    implementationPlan: null,
+    files: [],
+    toolCalls: [],
+    pr: null,
+    history: [],
+    liveSteps: [
+      { id: "s1", label: "Exploring codebase structure…", status: "complete" },
+      { id: "s2", label: "Searching historical implementations", status: "complete" },
+      { id: "s3", label: "Reading relevant files…", status: "complete" },
+      { id: "s4", label: "Creating implementation plan…", status: "complete" },
+      {
+        id: "s5",
+        label: "Writing currency.service.ts…",
+        status: "in_progress",
+        detail: "Writing file — 847 tokens generated",
+      },
+      { id: "s6", label: "Writing exchange-rate.helper.ts…", status: "pending" },
+      { id: "s7", label: "Writing tests…", status: "pending" },
+      { id: "s8", label: "Running implementation check…", status: "pending" },
+      { id: "s9", label: "Creating pull request…", status: "pending" },
+    ],
+  },
+};
+
 const MOCK_METRICS = {
   metrics: [
     { id: "in_pipeline", label: "In pipeline today", value: "3", delta: "+1 vs yesterday", deltaPositive: true },
     { id: "completed_week", label: "Completed this week", value: "12", delta: "+4 vs last week", deltaPositive: true },
     { id: "cycle_reduction", label: "Cycle time reduction", value: "38%", delta: "vs manual baseline", deltaPositive: true },
-    { id: "cost_today", label: "Cost today", value: "$4.82", delta: "-9% vs avg", deltaPositive: true },
-    { id: "interventions", label: "Human interventions", value: "2", delta: "1 PRD · 1 QA", deltaPositive: false },
+    { id: "cost_today", label: "Cost today", value: "$18.40", delta: "-9% vs avg", deltaPositive: true },
+    { id: "interventions", label: "Human interventions", value: "2", delta: "1 PRD · 1 Eng", deltaPositive: false },
+  ],
+};
+
+const MOCK_WEEKLY_TREND = {
+  points: Array.from({ length: 14 }, (_, i) => ({
+    label: i === 13 ? "Today" : `Day ${i + 1}`,
+    featuresCompleted: 2 + Math.round(i * 0.35 + Math.sin(i / 2) * 1.2),
+    humanInterventions: Math.max(0, 4 - Math.round(i * 0.22)),
+  })),
+  summary: {
+    featuresCompleted: "47 features completed this month",
+    avgCycleHours: "4.2",
+    avgCostPerFeature: "4.20",
+  },
+};
+
+const MOCK_AGENT_HEALTH = {
+  agents: [
+    {
+      id: "product",
+      name: "Product Agent",
+      primaryMetric: "Avg confidence",
+      primaryValue: "84%",
+      secondaryMetric: "22 PRDs today",
+      lastRunAt: minutes(4),
+      status: "Healthy",
+    },
+    {
+      id: "engineering",
+      name: "Engineering Agent",
+      primaryMetric: "Avg criteria hit",
+      primaryValue: "97%",
+      secondaryMetric: "18 PRs created",
+      lastRunAt: minutes(12),
+      status: "Healthy",
+    },
+    {
+      id: "qa",
+      name: "QA Agent",
+      primaryMetric: "Pass rate",
+      primaryValue: "94%",
+      secondaryMetric: "47 tests run",
+      lastRunAt: minutes(2),
+      status: "Healthy",
+    },
   ],
 };
 
 const MOCK_ACTIVITY = {
   events: [
-    { id: "ev1", pipelineId: "pl_01J7H2", tone: "progress", message: "PLT-1287 entered Neel — 4 minutes ago", timestamp: minutes(4) },
-    { id: "ev2", pipelineId: "pl_01J6XP", tone: "paused", message: "PLT-1271 paused at PRD gate — confidence 61% — needs review", timestamp: minutes(14) },
-    { id: "ev3", pipelineId: "pl_01J6L1", tone: "complete", message: "PLT-1264 completed — PRD approved — PR #847 created", timestamp: minutes(38) },
-    { id: "ev4", pipelineId: "pl_01J6CK", tone: "failed", message: "PLT-1252 failed at Ananta — integration timeout", timestamp: minutes(82) },
-    { id: "ev5", pipelineId: "pl_01J5W3", tone: "complete", message: "PLT-1244 completed — full pipeline without intervention", timestamp: minutes(132) },
+    {
+      id: "ev1",
+      pipelineId: "pl_01J7H2",
+      jiraKey: "PROD-1863",
+      tone: "progress",
+      live: true,
+      message: "QA Agent running tests…",
+      timestamp: minutes(2),
+    },
+    {
+      id: "ev2",
+      pipelineId: "pl_01J7A1",
+      jiraKey: "PROD-1871",
+      tone: "progress",
+      live: true,
+      message: "Engineering Agent writing code",
+      timestamp: minutes(4),
+    },
+    {
+      id: "ev3",
+      pipelineId: "pl_01J6RUN2",
+      jiraKey: "PROD-1844",
+      tone: "complete",
+      live: false,
+      message: "PRD generation complete ✓",
+      timestamp: minutes(8),
+    },
+    {
+      id: "ev4",
+      pipelineId: "pl_01J6RUN1",
+      jiraKey: "PROD-1839",
+      tone: "progress",
+      live: false,
+      message: "Pipeline started",
+      timestamp: minutes(12),
+    },
   ],
 };
 
@@ -1183,6 +1457,62 @@ export const mockApi = {
     await delay(80);
     return MOCK_CYCLE_TREND;
   },
+  async weeklyTrend() {
+    markUsed();
+    await delay(80);
+    return MOCK_WEEKLY_TREND;
+  },
+  async agentHealth() {
+    markUsed();
+    await delay(80);
+    return MOCK_AGENT_HEALTH;
+  },
+  async dashboardStatus(counts = {}) {
+    markUsed();
+    await delay(60);
+    const running = counts.running ?? 4;
+    const review = counts.review ?? 2;
+    const completedToday = counts.completedToday ?? 12;
+    return {
+      metrics: [
+        {
+          id: "running",
+          label: "Running",
+          value: String(running),
+          tone: "running",
+          href: "/app/pipelines?tab=active",
+        },
+        {
+          id: "review",
+          label: "Need review",
+          value: String(review),
+          tone: "review",
+          href: "/app/pipelines?tab=review",
+        },
+        {
+          id: "completed",
+          label: "Completed",
+          value: String(completedToday),
+          tone: "success",
+          href: "/app/pipelines?tab=history",
+        },
+        {
+          id: "cost",
+          label: "Cost today",
+          value: "$18.40",
+          tone: "neutral",
+          href: "/app/costs",
+        },
+        {
+          id: "pass_rate",
+          label: "Pass rate",
+          value: "94%",
+          tone: "success",
+          href: "/app/qa",
+        },
+      ],
+    };
+  },
   async qaCoverage() {
     markUsed();
     await delay(100);
@@ -1612,6 +1942,27 @@ export const mockApi = {
     markUsed();
     await delay(160);
     return fullPipelineDetail(id);
+  },
+  async listEngineeringRuns() {
+    markUsed();
+    await delay(100);
+    return {
+      items: Object.values(MOCK_ENGINEERING_RUNS).map((r) => ({
+        pipelineId: r.pipelineId,
+        jiraKey: r.jiraKey,
+        summary: r.summary,
+        status: r.status,
+        costUsd: r.costUsd,
+        durationMinutes: r.durationMinutes,
+      })),
+    };
+  },
+  async getEngineeringRun(pipelineId) {
+    markUsed();
+    await delay(120);
+    const run = MOCK_ENGINEERING_RUNS[pipelineId];
+    if (!run) return null;
+    return run;
   },
   async getAudit() {
     markUsed();

@@ -1,15 +1,19 @@
 export const NAV_LINKS = [
   { label: "Agents", href: "#agents" },
-  { label: "One Team", href: "#shared-brain" },
+  { label: "Pricing", href: "#pricing" },
   { label: "Clients", href: "#clients" },
   { label: "Contact", href: "/contact" },
 ];
 
-/** Teammate intros — order matches radial triangle (Virin → Ananta → Neel) */
+/** Teammate intros — Virin → Ananta → Neel */
 export const AGENTS = [
   {
     id: "virin",
     number: "01",
+    chapter: 1,
+    chapterRoman: "I",
+    chapterTitle: "Product Discovery",
+    chapterSubtitle: "Virin shapes the spec your team can ship",
     name: "Virin",
     role: "Product",
     roleDetail: "PM & discovery",
@@ -30,6 +34,10 @@ export const AGENTS = [
   {
     id: "ananta",
     number: "02",
+    chapter: 2,
+    chapterRoman: "II",
+    chapterTitle: "Engineering & Build",
+    chapterSubtitle: "Ananta plans against your real codebase",
     name: "Ananta",
     role: "Tech",
     roleDetail: "Build & integrate",
@@ -50,6 +58,10 @@ export const AGENTS = [
   {
     id: "neel",
     number: "03",
+    chapter: 3,
+    chapterRoman: "III",
+    chapterTitle: "QA & Release",
+    chapterSubtitle: "Neel signs off before anything ships",
     name: "Neel",
     role: "QA",
     roleDetail: "Test & release",
@@ -69,61 +81,49 @@ export const AGENTS = [
   },
 ];
 
-/** Radial layout: clockwise handoff Virin → Ananta → Neel */
-export const RADIAL_AGENTS = [
+/** Marketing chapter cards — three agents + pipeline capstone (Cofounder-style books). */
+export const AGENT_CHAPTERS = [
+  ...AGENTS,
   {
-    id: "virin",
-    role: "Product",
-    color: "#A8C53A",
-    colorSoft: "rgba(168,197,58,0.35)",
-    x: 50,
-    y: 18,
-  },
-  {
-    id: "ananta",
-    role: "Tech",
-    color: "#F2C94C",
-    colorSoft: "rgba(242,201,76,0.35)",
-    x: 84,
-    y: 76,
-  },
-  {
-    id: "neel",
-    role: "QA",
-    color: "#C49EDB",
-    colorSoft: "rgba(201,158,219,0.35)",
-    x: 16,
-    y: 76,
+    id: "pipeline",
+    number: "04",
+    chapter: 4,
+    chapterRoman: "IV",
+    chapterTitle: "One Pipeline",
+    chapterSubtitle: "Three agents, one full pipeline",
+    name: "AgentOS Pipeline",
+    role: "Full loop",
+    roleDetail: "Jira → PRD → build → QA",
+    gradient: "cream",
+    image: null,
+    coverAgents: ["virin", "ananta", "neel"],
+    headline: "Every handoff compounds team intelligence",
+    teammateIntro:
+      "Virin, Ananta, and Neel hand off in sequence — company context, codebase memory, and pipeline history carry forward on every ticket.",
+    body: "From the first Jira ticket to completion writeback, the full pipeline runs with human gates at every critical step.",
+    bullets: [
+      "End-to-end flow from Jira ticket to completion",
+      "Human approval at PRD, engineering, and QA gates",
+      "Audit trail and writeback to Jira when done",
+    ],
+    sectionId: "agent-pipeline",
+    appPath: "/login",
   },
 ];
-
-export const INSIGHT_CHIPS = [
-  "Pattern reused",
-  "Edge case caught",
-  "Module mapped",
-  "Gate passed",
-];
-
-export const SHARED_BRAIN = {
-  headline: "One team. One shared brain. Smarter every loop.",
-  subhead:
-    "Every handoff feeds the intelligence core — company context, codebase memory, and pipeline history compound with each lap.",
-  coreLabel: "Intelligence",
-};
 
 export const HERO_STATS = [
   { value: "7", label: "Pipeline stages" },
   { value: "3", label: "Validation gates" },
-  { value: "1", label: "Virtual product team" },
+  { value: "∞", label: "Tickets per pipeline" },
 ];
 
 export const INTEGRATIONS = [
-  { id: "jira", name: "Jira", detail: "Tickets & writeback", logo: "/marketing/integrations/jira.png", height: 32, minWidth: 88 },
-  { id: "github", name: "GitHub", detail: "Repos & PRs", logo: "/marketing/integrations/github.png", height: 40, minWidth: 40 },
-  { id: "bitbucket", name: "Bitbucket", detail: "Git hosting", logo: "/marketing/integrations/bitbucket.png", height: 28, minWidth: 120 },
-  { id: "confluence", name: "Confluence", detail: "Docs & wiki", logo: "/marketing/integrations/confluence.png", height: 26, minWidth: 130 },
-  { id: "supabase", name: "Supabase", detail: "Vector index", logo: "/marketing/integrations/supabase.png", height: 30, minWidth: 140 },
-  { id: "grafana", name: "Grafana", detail: "Observability", logo: "/marketing/integrations/grafana.png", height: 36, minWidth: 110 },
+  { id: "jira", name: "Jira", detail: "Tickets & writeback", logo: "/marketing/integrations/jira-wordmark.svg", height: 30, minWidth: 88 },
+  { id: "github", name: "GitHub", detail: "Repos & PRs", logo: "/marketing/integrations/github-wordmark.svg", height: 32, minWidth: 110 },
+  { id: "bitbucket", name: "Bitbucket", detail: "Git hosting", logo: "/marketing/integrations/bitbucket-wordmark.svg", height: 26, minWidth: 120 },
+  { id: "confluence", name: "Confluence", detail: "Docs & wiki", logo: "/marketing/integrations/confluence-wordmark.svg", height: 24, minWidth: 130 },
+  { id: "supabase", name: "Supabase", detail: "Vector index", logo: "/marketing/integrations/supabase-wordmark.svg", height: 28, minWidth: 130 },
+  { id: "grafana", name: "Grafana", detail: "Observability", logo: "/marketing/integrations/grafana-wordmark.svg", height: 30, minWidth: 100 },
 ];
 
 export const CLIENT_LOGOS = [
@@ -138,14 +138,14 @@ export const CLIENT_LOGOS = [
 export const CLIENT_METRICS = [
   { value: "Jira", label: "ticket → PRD pipeline" },
   { value: "3", label: "validation gates before ship" },
-  { value: "1", label: "virtual product team" },
+  { value: "100%", label: "audit trail coverage" },
 ];
 
 export const HERO = {
   badge: "Jira · GitHub · Bitbucket · Confluence · Supabase · Grafana",
   headline: "The AI product team for your entire pipeline",
   subhead:
-    "Virin, Ananta, and Neel work as teammates — one shared brain makes every loop smarter.",
+    "Virin, Ananta, and Neel work as teammates — from Jira intake through PRD, build, and QA gates.",
   cta: "Get Started",
   ctaHref: "/login",
   secondaryCta: "Meet the Agents",

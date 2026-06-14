@@ -4,6 +4,7 @@ import Marketing from "./pages/Marketing";
 import ContactPage from "./marketing/agent-team/ContactPage";
 import RoiCalculatorPage from "./pages/RoiCalculatorPage";
 import Login from "./pages/Login";
+import Onboarding from "./pages/Onboarding";
 import AppShell from "./app/layout/AppShell";
 import Dashboard from "./app/pages/Dashboard";
 import Pipelines from "./app/pages/Pipelines";
@@ -11,6 +12,7 @@ import {
   AuthProvider,
   PublicOnlyRoute,
   RequireAuth,
+  RequireOnboardingComplete,
 } from "./shared/providers/AuthProvider";
 
 const PipelineDetail = lazy(() => import("./app/pages/PipelineDetail"));
@@ -24,6 +26,7 @@ const PrdViewer = lazy(() => import("./app/pages/PrdViewer"));
 const JiraSearch = lazy(() => import("./app/pages/JiraSearch"));
 const PmAgents = lazy(() => import("./app/pages/PmAgents"));
 const OrgIntelligence = lazy(() => import("./app/pages/OrgIntelligence"));
+const EngineeringAgent = lazy(() => import("./app/pages/EngineeringAgent"));
 
 function App() {
   return (
@@ -42,10 +45,20 @@ function App() {
             }
           />
           <Route
+            path="/onboarding"
+            element={
+              <RequireAuth>
+                <Onboarding />
+              </RequireAuth>
+            }
+          />
+          <Route
             path="/app"
             element={
               <RequireAuth>
-                <AppShell />
+                <RequireOnboardingComplete>
+                  <AppShell />
+                </RequireOnboardingComplete>
               </RequireAuth>
             }
           >
@@ -53,6 +66,8 @@ function App() {
             <Route path="pipelines" element={<Pipelines />} />
             <Route path="pipelines/:id" element={<PipelineDetail />} />
             <Route path="pm-agents" element={<PmAgents />} />
+            <Route path="engineering" element={<EngineeringAgent />} />
+            <Route path="engineering/:pipelineId" element={<EngineeringAgent />} />
             <Route path="pipelines/:id/prd" element={<PrdViewer />} />
             <Route path="pipelines/:id/override" element={<Override />} />
             <Route path="codebase" element={<CodebaseIntelligence />} />

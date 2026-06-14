@@ -126,7 +126,7 @@ function QaPanel({ activeCase }) {
 
 const PANELS = [PrdPanel, CodePanel, QaPanel];
 
-export default function HeroVisualization() {
+export default function HeroVisualization({ variant = "default", onPhaseChange }) {
   const rootRef = useRef(null);
   const activeRef = useRef(0);
   const transitioningRef = useRef(false);
@@ -146,6 +146,7 @@ export default function HeroVisualization() {
     transitioningRef.current = true;
     activeRef.current = index;
     setPhase(index);
+    onPhaseChange?.(index);
     if (index === 2) setQaCase(0);
 
     const tl = gsap.timeline({
@@ -173,7 +174,7 @@ export default function HeroVisualization() {
         { scale: 1, opacity: 1, duration: 0.2 },
         0.15
       );
-  }, []);
+  }, [onPhaseChange]);
 
   useEffect(() => {
     const root = rootRef.current;
@@ -182,13 +183,14 @@ export default function HeroVisualization() {
     const panels = root.querySelectorAll("[data-hero-panel]");
     gsap.set(panels, { opacity: 0, visibility: "hidden", pointerEvents: "none", y: 10 });
     gsap.set(panels[0], { opacity: 1, visibility: "visible", pointerEvents: "auto", y: 0 });
+    onPhaseChange?.(0);
 
     const phaseTimer = setInterval(() => {
       showPanel((activeRef.current + 1) % PHASES.length);
     }, 5500);
 
     return () => clearInterval(phaseTimer);
-  }, [showPanel]);
+  }, [showPanel, onPhaseChange]);
 
   useEffect(() => {
     if (phase !== 2) return undefined;
@@ -198,20 +200,30 @@ export default function HeroVisualization() {
     return () => clearInterval(t);
   }, [phase]);
 
+  const isLaptop = variant === "laptop";
+
   return (
     <div
       ref={rootRef}
       data-hero-mock
-      className="at-card w-full max-w-[460px] overflow-hidden text-left shadow-2xl"
+      className={`at-card w-full text-left shadow-2xl ${
+        isLaptop ? "at-hero-laptop-viz max-w-none rounded-none" : "max-w-[460px] overflow-hidden"
+      }`}
     >
-      <div className="flex items-center gap-1 border-b border-[#E8E4DE] bg-[#FAF7F0] px-3 py-2.5">
+      <div
+        className={`flex items-center gap-1 border-b border-[#E8E4DE] bg-[#FAF7F0] ${
+          isLaptop ? "px-2 py-1.5" : "px-3 py-2.5"
+        }`}
+      >
         {PHASES.map((p, i) => (
           <button
             key={p.id}
             type="button"
             data-hero-tab
             onClick={() => showPanel(i)}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-full px-2 py-1.5 text-[11px] font-semibold transition-colors"
+            className={`flex flex-1 items-center justify-center gap-1 rounded-full font-semibold transition-colors ${
+              isLaptop ? "px-1.5 py-1 text-[9px]" : "gap-1.5 px-2 py-1.5 text-[11px]"
+            }`}
             style={{
               background: phase === i ? `${p.color}22` : "transparent",
               color: phase === i ? "#2B2D33" : "#6B6B6B",
@@ -225,7 +237,7 @@ export default function HeroVisualization() {
       </div>
 
       {/* Fixed-height stage — panels share one grid cell, only one visible at a time */}
-      <div className="grid min-h-[300px] grid-cols-1 grid-rows-1">
+      <div className={`grid grid-cols-1 grid-rows-1 ${isLaptop ? "at-hero-laptop-stage-grid" : "min-h-[300px]"}`}>
         {PHASES.map((p, i) => {
           const Panel = PANELS[i];
           return (
@@ -235,11 +247,15 @@ export default function HeroVisualization() {
               className="col-start-1 row-start-1 flex flex-col"
               style={{ visibility: i === 0 ? "visible" : "hidden", opacity: i === 0 ? 1 : 0 }}
             >
-              <div className="flex shrink-0 items-center gap-2 border-b border-[#E8E4DE]/60 px-4 py-2 text-[11px] text-[#6B6B6B]">
+              <div
+                className={`flex shrink-0 items-center gap-2 border-b border-[#E8E4DE]/60 text-[#6B6B6B] ${
+                  isLaptop ? "px-2.5 py-1 text-[9px]" : "px-4 py-2 text-[11px]"
+                }`}
+              >
                 <span className="size-2 rounded-full" style={{ background: p.color }} />
                 {p.agent} · {i === 0 ? "Discovery → PRD" : i === 1 ? "Implementation" : "Test validation"}
               </div>
-              <div className="min-h-0 flex-1">
+              <div className={`min-h-0 flex-1 ${isLaptop ? "overflow-hidden" : ""}`}>
                 {i === 2 ? <QaPanel activeCase={qaCase} /> : <Panel />}
               </div>
             </div>

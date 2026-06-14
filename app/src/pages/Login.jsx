@@ -8,7 +8,7 @@ import "../marketing/agent-team/agentTeam.css";
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { login, signup } = useAuth();
   const isSignup = location.state?.mode === "signup";
   const [email, setEmail] = useState(isSignup ? "" : DEMO_CREDENTIAL_HINT.email);
   const [password, setPassword] = useState(isSignup ? "" : DEMO_CREDENTIAL_HINT.password);
@@ -24,8 +24,11 @@ export default function Login() {
     setPending(true);
     setError("");
     try {
-      await login({ email, password });
-      navigate(destination, { replace: true });
+      const session = isSignup
+        ? await signup({ email, password })
+        : await login({ email, password });
+      const target = session.onboardingCompleted === false ? "/onboarding" : destination;
+      navigate(target, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-in failed.");
     } finally {

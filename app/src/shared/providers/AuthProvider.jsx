@@ -50,6 +50,12 @@ export function AuthProvider({ children }) {
     return next;
   }, []);
 
+  const signup = useCallback(async (payload) => {
+    const next = await authAdapter.signup(payload);
+    setSession(next);
+    return next;
+  }, []);
+
   const logout = useCallback(async () => {
     await authAdapter.logout();
     setSession(null);
@@ -62,13 +68,36 @@ export function AuthProvider({ children }) {
       loading,
       isAuthenticated: Boolean(session),
       login,
+      signup,
       logout,
       refresh,
+      onboardingCompleted: session?.onboardingCompleted !== false,
     }),
-    [session, loading, login, logout, refresh]
+    [session, loading, login, signup, logout, refresh]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+export function RequireOnboardingComplete({ children }) {
+  const { loading, isAuthenticated, onboardingCompleted } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return (
+      <div className="app-shell app-shell-gradient flex min-h-screen items-center justify-center px-5 py-10">
+        <div className="w-full max-w-[82rem]">
+          <AppPageFallback />
+        </div>
+      </div>
+    );
+  }
+
+  if (isAuthenticated && !onboardingCompleted) {
+    return <Navigate to="/onboarding" replace state={{ from: location.pathname }} />;
+  }
+
+  return children;
 }
 
 export function RequireAuth({ children }) {
@@ -101,7 +130,7 @@ export function RequireAuth({ children }) {
 }
 
 export function PublicOnlyRoute({ children }) {
-  const { loading, isAuthenticated } = useAuth();
+  const { loading, isAuthenticated, onboardingCompleted } = useAuth();
 
   if (loading) {
     return (
@@ -112,7 +141,7 @@ export function PublicOnlyRoute({ children }) {
   }
 
   if (isAuthenticated) {
-    return <Navigate to="/app" replace />;
+    return <Navigate to={onboardingCompleted ? "/app" : "/onboarding"} replace />;
   }
 
   return children;
