@@ -101,13 +101,19 @@ async function countIndexedFiles(
 }
 
 async function getGraphStatus(
+  organizationId: string,
   repoOwner: string,
   repoName: string,
   branchName: string
 ): Promise<{ ready: boolean; computedAt: string | null; nodeCount: number | null }> {
   const row = await prismaAny.codebaseVisualizationCache.findUnique({
     where: {
-      repoOwner_repoName_branchName: { repoOwner, repoName, branchName },
+      organizationId_repoOwner_repoName_branchName: {
+        organizationId,
+        repoOwner,
+        repoName,
+        branchName,
+      },
     },
     select: { layoutJson: true, computedAt: true },
   });
@@ -129,12 +135,13 @@ async function getGraphStatus(
 }
 
 async function getLastCompletedRun(
+  organizationId: string,
   repoOwner: string,
   repoName: string,
   branchName: string
 ) {
   return prismaAny.codebaseIndexRun.findFirst({
-    where: { repoOwner, repoName, branchName, status: "completed" },
+    where: { organizationId, repoOwner, repoName, branchName, status: "completed" },
     orderBy: { completedAt: "desc" },
   });
 }
@@ -199,10 +206,10 @@ export async function getCodebaseLayerStatus(
       repoName: scope.repoName,
       branchName: branch,
     }),
-    getLastCompletedRun(scope.repoOwner, scope.repoName, branch),
+    getLastCompletedRun(scope.organizationId, scope.repoOwner, scope.repoName, branch),
     countIndexedFiles(scope.repoOwner, scope.repoName, branch),
     countEmbeddings(scope.repoOwner, scope.repoName, branch),
-    getGraphStatus(scope.repoOwner, scope.repoName, branch),
+    getGraphStatus(scope.organizationId, scope.repoOwner, scope.repoName, branch),
   ]);
 
   const progress = latestRun ? indexRunProgress(latestRun) : null;
