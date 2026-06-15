@@ -1,3 +1,5 @@
+import { prisma } from "../db/client";
+
 export type CompanyStage =
   | "idea"
   | "mvp"
@@ -27,71 +29,124 @@ export interface UserOnboardingRecord {
   updatedAt: string;
 }
 
-const records = new Map<string, UserOnboardingRecord>();
-
-export function getOnboarding(userId: string): UserOnboardingRecord | null {
-  return records.get(userId) ?? null;
+function rowToRecord(
+  row: {
+    userId: string;
+    name: string;
+    companyStage: string | null;
+    teamSize: string | null;
+    role: string | null;
+    completed: boolean;
+    completedAt: Date | null;
+    updatedAt: Date;
+  },
+  email: string
+): UserOnboardingRecord {
+  return {
+    userId: row.userId,
+    email,
+    name: row.name,
+    companyStage: (row.companyStage as CompanyStage | null) ?? null,
+    teamSize: (row.teamSize as TeamSize | null) ?? null,
+    role: (row.role as UserRole | null) ?? null,
+    completed: row.completed,
+    completedAt: row.completedAt?.toISOString() ?? null,
+    updatedAt: row.updatedAt.toISOString(),
+  };
 }
 
-export function ensureOnboarding(input: {
+export async function getOnboarding(
+  userId: string
+): Promise<UserOnboardingRecord | null> {
+  const row = await prisma.userOnboarding.findUnique({
+    where: { userId },
+    include: { user: { select: { email: true } } },
+  });
+  if (!row) return null;
+  return rowToRecord(row, row.user.email);
+}
+
+export async function ensureOnboarding(input: {
   userId: string;
   email: string;
   name: string;
   completed?: boolean;
-}): UserOnboardingRecord {
-  const existing = records.get(input.userId);
-  if (existing) return existing;
+}): Promise<UserOnboardingRecord> {
+  const existing = await prisma.userOnboarding.findUnique({
+    where: { userId: input.userId },
+    include: { user: { select: { email: true } } },
+  });
+  if (existing) {
+    return rowToRecord(existing, existing.user.email);
+  }
 
-  const now = new Date().toISOString();
-  const record: UserOnboardingRecord = {
-    userId: input.userId,
-    email: input.email,
-    name: input.name,
-    companyStage: null,
-    teamSize: null,
-    role: null,
-    completed: input.completed ?? false,
-    completedAt: input.completed ? now : null,
-    updatedAt: now,
-  };
-  records.set(input.userId, record);
-  return record;
+  const completed = input.completed ?? false;
+  const row = await prisma.userOnboarding.create({
+    data: {
+      userId: input.userId,
+      name: input.name,
+      completed,
+      completedAt: completed ? new Date() : null,
+    },
+    include: { user: { select: { email: true } } },
+  });
+  return rowToRecord(row, row.user.email);
 }
 
-export function updateOnboarding(
+export async function updateOnboarding(
   userId: string,
   patch: Partial<
     Pick<UserOnboardingRecord, "name" | "companyStage" | "teamSize" | "role">
   >
-): UserOnboardingRecord {
-  const record = records.get(userId);
-  if (!record) {
+): Promise<UserOnboardingRecord> {
+  const existing = await prisma.userOnboarding.findUnique({
+    where: { userId },
+    include: { user: { select: { email: true } } },
+  });
+  if (!existing) {
     throw new Error("onboarding_not_found");
   }
-  const updated: UserOnboardingRecord = {
-    ...record,
-    ...patch,
-    updatedAt: new Date().toISOString(),
-  };
-  records.set(userId, updated);
-  return updated;
+
+  const row = await prisma.userOnboarding.update({
+    where: { userId },
+    data: {
+      ...(patch.name !== undefined ? { name: patch.name } : {}),
+      ...(patch.companyStage !== undefined
+        ? { companyStage: patch.companyStage }
+        : {}),
+      ...(patch.teamSize !== undefined ? { teamSize: patch.teamSize } : {}),
+      ...(patch.role !== undefined ? { role: patch.role } : {}),
+    },
+    include: { user: { select: { email: true } } },
+  });
+  return rowToRecord(row, row.user.email);
 }
 
-export function completeOnboarding(userId: string): UserOnboardingRecord {
-  const record = records.get(userId);
-  if (!record) throw new Error("onboarding_not_found");
-  const now = new Date().toISOString();
-  const updated: UserOnboardingRecord = {
-    ...record,
-    completed: true,
-    completedAt: now,
-    updatedAt: now,
-  };
-  records.set(userId, updated);
-  return updated;
+export async function completeOnboarding(
+  userId: string
+): Promise<UserOnboardingRecord> {
+  const existing = await prisma.userOnboarding.findUnique({
+    where: { userId },
+    include: { user: { select: { email: true } } },
+  });
+  if (!existing) throw new Error("onboarding_not_found");
+
+  const row = await prisma.userOnboarding.update({
+    where: { userId },
+    data: {
+      completed: true,
+      completedAt: new Date(),
+    },
+    include: { user: { select: { email: true } } },
+  });
+  return rowToRecord(row, row.user.email);
 }
 
 /** Demo workspace user — skip onboarding. */
-export function seedDemoOnboarding(userId: string, email: string, name: string) {
-  ensureOnboarding({ userId, email, name, completed: true });
+export async function seedDemoOnboarding(
+  userId: string,
+  email: string,
+  name: string
+) {
+  await ensureOnboarding({ userId, email, name, completed: true });
 }

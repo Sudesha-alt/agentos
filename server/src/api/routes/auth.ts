@@ -2,14 +2,13 @@ import { Router } from "express";
 import {
   createAuthSession,
   extractAuthToken,
-  getSessionsMap,
   isEmailRegistered,
   registerEmail,
+  revokeAuthToken,
 } from "./authSession";
 import { getOnboarding } from "../../onboarding/store";
 
 const router = Router();
-const sessions = getSessionsMap();
 
 const DEMO_EMAIL = "demo@agentos.ai";
 const DEMO_PASSWORD = "agentos123";
@@ -99,27 +98,28 @@ router.post("/login", async (req, res) => {
   }
 });
 
-router.get("/session", (req, res) => {
+router.get("/session", async (req, res) => {
   const token = extractAuthToken(req);
   if (!token) {
     res.status(401).json({ error: "unauthorized" });
     return;
   }
-  const record = sessions.get(token);
-  if (!record) {
+  const { resolveUserFromAuthHeader } = await import("./authSession");
+  const user = resolveUserFromAuthHeader(req);
+  if (!user) {
     res.status(401).json({ error: "unauthorized" });
     return;
   }
-  const onboarding = getOnboarding(record.user.id);
+  const onboarding = await getOnboarding(user.id);
   res.json({
     token,
-    issuedAt: record.issuedAt,
-    user: record.user,
+    issuedAt: new Date().toISOString(),
+    user,
     organization: {
-      id: record.user.organizationId,
-      name: record.user.organizationName,
-      domain: record.user.organizationDomain,
-      role: record.user.organizationRole,
+      id: user.organizationId,
+      name: user.organizationName,
+      domain: user.organizationDomain,
+      role: user.organizationRole,
     },
     onboardingCompleted: onboarding?.completed ?? false,
   });
@@ -127,7 +127,7 @@ router.get("/session", (req, res) => {
 
 router.post("/logout", (req, res) => {
   const token = extractAuthToken(req);
-  if (token) sessions.delete(token);
+  if (token) revokeAuthToken(token);
   res.json({ ok: true });
 });
 
