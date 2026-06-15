@@ -89,17 +89,17 @@ const mockAdapter = {
 
 const restAdapter = {
   async get() {
-    return fetchJson(apiPath("/api/onboarding"), { headers: authHeaders() });
+    return fetchJson(apiPath("/api", "/onboarding"), { headers: authHeaders() });
   },
   async update(patch) {
-    return fetchJson(apiPath("/api/onboarding"), {
+    return fetchJson(apiPath("/api", "/onboarding"), {
       method: "PUT",
       headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify(patch),
     });
   },
   async complete() {
-    const result = await fetchJson(apiPath("/api/onboarding/complete"), {
+    const result = await fetchJson(apiPath("/api", "/onboarding/complete"), {
       method: "POST",
       headers: authHeaders(),
     });

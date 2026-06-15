@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { DATA_MODE } from "../../shared/config/app";
 import { useReadiness } from "../../entities/system";
 import { usePipelineList } from "../../entities/pipeline";
@@ -20,7 +20,6 @@ function userInitials(user) {
 }
 
 export default function TopBar() {
-  const navigate = useNavigate();
   const { data } = useReadiness({ pollMs: 15000 });
   const { user, logout } = useAuth();
   const { items: pipelines } = usePipelineList(undefined, { pollMs: 12_000 });
@@ -31,7 +30,6 @@ export default function TopBar() {
 
   async function handleLogout() {
     await logout();
-    navigate("/login", { replace: true });
   }
 
   return (

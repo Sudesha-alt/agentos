@@ -9,8 +9,13 @@ export function apiOrigin(): string {
 
 export function apiPath(
   prefix: "/api" | "/jira-intake" | "/git-integration",
-  path: string
+  path?: string
 ): string {
+  if (path === undefined) {
+    const full = prefix;
+    const origin = apiOrigin();
+    return origin ? `${origin}${full}` : full;
+  }
   const segment = path.startsWith("/") ? path : `/${path}`;
   const full = `${prefix}${segment}`;
   const origin = apiOrigin();

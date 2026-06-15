@@ -4,12 +4,13 @@ import {
   useMemo,
   useState,
 } from "react";
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { authAdapter } from "../../entities/auth";
 import AppPageFallback from "../ui/AppPageFallback";
 import { AuthContext, useAuth } from "./useAuth";
 
 export function AuthProvider({ children }) {
+  const navigate = useNavigate();
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -59,7 +60,8 @@ export function AuthProvider({ children }) {
   const logout = useCallback(async () => {
     await authAdapter.logout();
     setSession(null);
-  }, []);
+    navigate("/", { replace: true });
+  }, [navigate]);
 
   const value = useMemo(
     () => ({
