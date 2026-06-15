@@ -2,6 +2,7 @@ import type { Request } from "express";
 import {
   getPublicPipelineJiraCredentials,
   savePipelineJiraCredentials,
+  savePipelineJiraCredentialsForOrganization,
   validatePipelineJiraConfig,
 } from "./credentialsStore";
 import { fetchPipelineJiraCurrentUser } from "./client";
@@ -34,11 +35,26 @@ export async function connectPipelineJira(input: {
   boardId?: string;
   webhookUrl?: string;
   autoRegisterWebhook?: boolean;
+  organizationId?: string;
 }) {
   let email = input.email?.trim() || "";
 
+  const persist = async (payload: {
+    baseUrl: string;
+    email: string;
+    apiToken?: string;
+    webhookSecret?: string;
+    projectKeys?: string[];
+    boardId?: string;
+  }) => {
+    if (input.organizationId) {
+      return savePipelineJiraCredentialsForOrganization(input.organizationId, payload);
+    }
+    return savePipelineJiraCredentials(payload);
+  };
+
   if (input.apiToken?.trim()) {
-    savePipelineJiraCredentials({
+    await persist({
       baseUrl: input.baseUrl,
       email: email || "pending@connect",
       apiToken: input.apiToken,
@@ -49,7 +65,7 @@ export async function connectPipelineJira(input: {
     try {
       const me = await fetchPipelineJiraCurrentUser();
       email = me.email;
-      savePipelineJiraCredentials({
+      await persist({
         baseUrl: input.baseUrl,
         email,
         apiToken: input.apiToken,
@@ -65,7 +81,7 @@ export async function connectPipelineJira(input: {
       }
     }
   } else {
-    savePipelineJiraCredentials({
+    await persist({
       baseUrl: input.baseUrl,
       email,
       webhookSecret: input.webhookSecret,

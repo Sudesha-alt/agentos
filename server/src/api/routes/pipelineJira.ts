@@ -34,6 +34,13 @@ import {
   getPipelineQueueState,
   runJiraSyncInBackground,
 } from "../../queue/inProcessRunner";
+import { resolveUserFromAuthHeader } from "./authSession";
+import {
+  activateOrganizationJiraContext,
+  warmOrganizationJiraCredentials,
+} from "../../pipeline/jira/credentialsStore";
+import { setActiveOrganizationId } from "../../organization/context";
+import { getPublicOrganizationJiraConfig } from "../../organization/jiraConfigStore";
 
 const router = Router();
 
@@ -72,6 +79,9 @@ router.get("/setup", async (req, res) => {
 });
 
 router.post("/connect", async (req, res) => {
+  const user = resolveUserFromAuthHeader(req);
+  const organizationId = user?.organizationId;
+
   const baseUrl = String(req.body?.baseUrl ?? "").trim();
   const email = String(req.body?.email ?? "").trim();
   const apiToken = req.body?.apiToken
@@ -95,13 +105,21 @@ router.post("/connect", async (req, res) => {
     return;
   }
 
-  const prior = getPublicPipelineJiraCredentials();
+  const prior = organizationId
+    ? await getPublicOrganizationJiraConfig(organizationId)
+    : getPublicPipelineJiraCredentials();
   if (!apiToken && !prior.hasApiToken) {
     res.status(400).json({ error: "apiToken is required on first connect" });
     return;
   }
 
   try {
+    if (organizationId) {
+      setActiveOrganizationId(organizationId);
+      await warmOrganizationJiraCredentials(organizationId);
+      activateOrganizationJiraContext(organizationId);
+    }
+
     const webhookUrl = pipelineJiraWebhookUrl(req);
     const result = await connectPipelineJira({
       baseUrl,
@@ -112,6 +130,7 @@ router.post("/connect", async (req, res) => {
       boardId,
       webhookUrl,
       autoRegisterWebhook: req.body?.autoRegisterWebhook !== false,
+      organizationId,
     });
     res.json({
       ...result,
@@ -121,6 +140,9 @@ router.post("/connect", async (req, res) => {
   } catch (err) {
     const e = err as Error;
     res.status(502).json({ error: e.message });
+  } finally {
+    setActiveOrganizationId(null);
+    activateOrganizationJiraContext(null);
   }
 });
 

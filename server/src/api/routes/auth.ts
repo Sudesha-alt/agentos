@@ -6,7 +6,7 @@ import {
   isEmailRegistered,
   registerEmail,
 } from "./authSession";
-import { getOnboarding, seedDemoOnboarding } from "../../onboarding/store";
+import { getOnboarding } from "../../onboarding/store";
 
 const router = Router();
 const sessions = getSessionsMap();
@@ -14,9 +14,7 @@ const sessions = getSessionsMap();
 const DEMO_EMAIL = "demo@agentos.ai";
 const DEMO_PASSWORD = "agentos123";
 
-seedDemoOnboarding("usr_demo", DEMO_EMAIL, "Demo User");
-
-router.post("/signup", (req, res) => {
+router.post("/signup", async (req, res) => {
   const email = String(req.body?.email ?? "").trim().toLowerCase();
   const password = String(req.body?.password ?? "");
 
@@ -40,10 +38,17 @@ router.post("/signup", (req, res) => {
   }
 
   registerEmail(email);
-  res.json(createAuthSession(email));
+  try {
+    res.json(await createAuthSession(email));
+  } catch (err) {
+    res.status(500).json({
+      error: "signup_failed",
+      message: err instanceof Error ? err.message : "Could not create account",
+    });
+  }
 });
 
-router.post("/login", (req, res) => {
+router.post("/login", async (req, res) => {
   const email = String(req.body?.email ?? "").trim().toLowerCase();
   const password = String(req.body?.password ?? "");
 
@@ -84,7 +89,14 @@ router.post("/login", (req, res) => {
     registerEmail(email);
   }
 
-  res.json(createAuthSession(email));
+  try {
+    res.json(await createAuthSession(email));
+  } catch (err) {
+    res.status(500).json({
+      error: "login_failed",
+      message: err instanceof Error ? err.message : "Could not sign in",
+    });
+  }
 });
 
 router.get("/session", (req, res) => {
@@ -103,6 +115,12 @@ router.get("/session", (req, res) => {
     token,
     issuedAt: record.issuedAt,
     user: record.user,
+    organization: {
+      id: record.user.organizationId,
+      name: record.user.organizationName,
+      domain: record.user.organizationDomain,
+      role: record.user.organizationRole,
+    },
     onboardingCompleted: onboarding?.completed ?? false,
   });
 });

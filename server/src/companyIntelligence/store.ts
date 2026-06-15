@@ -81,14 +81,27 @@ export const EMPTY_PROFILE: CompanyProfile = {
   updatedBy: null,
 };
 
-export async function getCompanyProfile(): Promise<CompanyProfile> {
-  const row = await prisma.companyProfile.findUnique({ where: { id: DEFAULT_ID } });
-  if (!row) return { ...EMPTY_PROFILE };
-  return rowToProfile(row);
+export async function getCompanyProfile(
+  organizationId?: string
+): Promise<CompanyProfile> {
+  if (organizationId) {
+    const row = await prisma.companyProfile.findUnique({
+      where: { organizationId },
+    });
+    if (row) return rowToProfile(row);
+  }
+
+  const legacy = await prisma.companyProfile.findFirst({
+    where: { id: "default" },
+  });
+  if (legacy) return rowToProfile(legacy);
+
+  return { ...EMPTY_PROFILE };
 }
 
 export async function saveCompanyProfile(
-  input: CompanyProfileInput
+  input: CompanyProfileInput,
+  organizationId?: string
 ): Promise<CompanyProfile> {
   const data = {
     companyName: input.companyName !== undefined ? String(input.companyName) : undefined,
@@ -112,38 +125,71 @@ export async function saveCompanyProfile(
     updatedBy: input.updatedBy !== undefined ? input.updatedBy : undefined,
   };
 
-  const row = await prisma.companyProfile.upsert({
-    where: { id: DEFAULT_ID },
-    create: {
-      id: DEFAULT_ID,
-      companyName: data.companyName ?? "",
-      website: data.website ?? "",
-      productSummary: data.productSummary ?? "",
-      icp: data.icp ?? "",
-      revenueModel: data.revenueModel ?? "",
-      pricingSummary: data.pricingSummary ?? "",
-      businessContext: data.businessContext ?? "",
-      strategicGoals: data.strategicGoals ?? [],
-      nonGoals: data.nonGoals ?? [],
-      competitors: competitorsToJson(data.competitors ?? []),
-      updatedBy: data.updatedBy ?? null,
-    },
-    update: {
-      ...(data.companyName !== undefined ? { companyName: data.companyName } : {}),
-      ...(data.website !== undefined ? { website: data.website } : {}),
-      ...(data.productSummary !== undefined ? { productSummary: data.productSummary } : {}),
-      ...(data.icp !== undefined ? { icp: data.icp } : {}),
-      ...(data.revenueModel !== undefined ? { revenueModel: data.revenueModel } : {}),
-      ...(data.pricingSummary !== undefined ? { pricingSummary: data.pricingSummary } : {}),
-      ...(data.businessContext !== undefined ? { businessContext: data.businessContext } : {}),
-      ...(data.strategicGoals !== undefined ? { strategicGoals: data.strategicGoals } : {}),
-      ...(data.nonGoals !== undefined ? { nonGoals: data.nonGoals } : {}),
-      ...(data.competitors !== undefined
-        ? { competitors: competitorsToJson(data.competitors) }
-        : {}),
-      ...(data.updatedBy !== undefined ? { updatedBy: data.updatedBy } : {}),
-    },
-  });
+  const row = organizationId
+    ? await prisma.companyProfile.upsert({
+        where: { organizationId },
+        create: {
+          organizationId,
+          companyName: data.companyName ?? "",
+          website: data.website ?? "",
+          productSummary: data.productSummary ?? "",
+          icp: data.icp ?? "",
+          revenueModel: data.revenueModel ?? "",
+          pricingSummary: data.pricingSummary ?? "",
+          businessContext: data.businessContext ?? "",
+          strategicGoals: data.strategicGoals ?? [],
+          nonGoals: data.nonGoals ?? [],
+          competitors: competitorsToJson(data.competitors ?? []),
+          updatedBy: data.updatedBy ?? null,
+        },
+        update: {
+          ...(data.companyName !== undefined ? { companyName: data.companyName } : {}),
+          ...(data.website !== undefined ? { website: data.website } : {}),
+          ...(data.productSummary !== undefined ? { productSummary: data.productSummary } : {}),
+          ...(data.icp !== undefined ? { icp: data.icp } : {}),
+          ...(data.revenueModel !== undefined ? { revenueModel: data.revenueModel } : {}),
+          ...(data.pricingSummary !== undefined ? { pricingSummary: data.pricingSummary } : {}),
+          ...(data.businessContext !== undefined ? { businessContext: data.businessContext } : {}),
+          ...(data.strategicGoals !== undefined ? { strategicGoals: data.strategicGoals } : {}),
+          ...(data.nonGoals !== undefined ? { nonGoals: data.nonGoals } : {}),
+          ...(data.competitors !== undefined
+            ? { competitors: competitorsToJson(data.competitors) }
+            : {}),
+          ...(data.updatedBy !== undefined ? { updatedBy: data.updatedBy } : {}),
+        },
+      })
+    : await prisma.companyProfile.upsert({
+        where: { id: DEFAULT_ID },
+        create: {
+          id: DEFAULT_ID,
+          companyName: data.companyName ?? "",
+          website: data.website ?? "",
+          productSummary: data.productSummary ?? "",
+          icp: data.icp ?? "",
+          revenueModel: data.revenueModel ?? "",
+          pricingSummary: data.pricingSummary ?? "",
+          businessContext: data.businessContext ?? "",
+          strategicGoals: data.strategicGoals ?? [],
+          nonGoals: data.nonGoals ?? [],
+          competitors: competitorsToJson(data.competitors ?? []),
+          updatedBy: data.updatedBy ?? null,
+        },
+        update: {
+          ...(data.companyName !== undefined ? { companyName: data.companyName } : {}),
+          ...(data.website !== undefined ? { website: data.website } : {}),
+          ...(data.productSummary !== undefined ? { productSummary: data.productSummary } : {}),
+          ...(data.icp !== undefined ? { icp: data.icp } : {}),
+          ...(data.revenueModel !== undefined ? { revenueModel: data.revenueModel } : {}),
+          ...(data.pricingSummary !== undefined ? { pricingSummary: data.pricingSummary } : {}),
+          ...(data.businessContext !== undefined ? { businessContext: data.businessContext } : {}),
+          ...(data.strategicGoals !== undefined ? { strategicGoals: data.strategicGoals } : {}),
+          ...(data.nonGoals !== undefined ? { nonGoals: data.nonGoals } : {}),
+          ...(data.competitors !== undefined
+            ? { competitors: competitorsToJson(data.competitors) }
+            : {}),
+          ...(data.updatedBy !== undefined ? { updatedBy: data.updatedBy } : {}),
+        },
+      });
 
   return rowToProfile(row);
 }

@@ -60,12 +60,15 @@ export function mapBusinessFitToRevenueRisk(fit: string | undefined): string {
 }
 
 export const companyIntelligence = {
-  async getProfile(): Promise<CompanyProfile> {
-    return getCompanyProfile();
+  async getProfile(organizationId?: string): Promise<CompanyProfile> {
+    return getCompanyProfile(organizationId);
   },
 
-  async saveProfile(input: CompanyProfileInput): Promise<CompanyProfile> {
-    const profile = await saveCompanyProfile(input);
+  async saveProfile(
+    input: CompanyProfileInput,
+    organizationId?: string
+  ): Promise<CompanyProfile> {
+    const profile = await saveCompanyProfile(input, organizationId);
     await this.syncEmbeddings(profile);
     return profile;
   },

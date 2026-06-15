@@ -1,5 +1,10 @@
 import crypto from "crypto";
 import { getDb } from "../../jira-intake/sqliteStore";
+import { getActiveOrganizationId } from "../../organization/context";
+import {
+  loadOrganizationJiraConfig,
+  saveOrganizationJiraConfig,
+} from "../../organization/jiraConfigStore";
 
 export interface PipelineJiraCredentials {
   baseUrl: string;
@@ -21,6 +26,28 @@ export interface PipelineJiraCredentialsPublic {
 }
 
 let runtimeCreds: PipelineJiraCredentials | null = null;
+const orgRuntimeCreds = new Map<string, PipelineJiraCredentials>();
+
+export async function warmOrganizationJiraCredentials(
+  organizationId: string
+): Promise<void> {
+  const fromDb = await loadOrganizationJiraConfig(organizationId);
+  if (!fromDb) return;
+  orgRuntimeCreds.set(organizationId, fromDb);
+  if (getActiveOrganizationId() === organizationId) {
+    runtimeCreds = fromDb;
+  }
+}
+
+export function activateOrganizationJiraContext(organizationId: string | null): void {
+  if (organizationId && orgRuntimeCreds.has(organizationId)) {
+    runtimeCreds = orgRuntimeCreds.get(organizationId)!;
+    return;
+  }
+  if (!organizationId) {
+    runtimeCreds = null;
+  }
+}
 
 function normalizeBaseUrl(url: string): string {
   return url.replace(/\/+$/, "");
@@ -112,6 +139,10 @@ export function loadPipelineJiraCredentialsFromStore(): PipelineJiraCredentials 
 }
 
 export function getActivePipelineJiraCredentials(): PipelineJiraCredentials {
+  const orgId = getActiveOrganizationId();
+  if (orgId && orgRuntimeCreds.has(orgId)) {
+    return orgRuntimeCreds.get(orgId)!;
+  }
   if (runtimeCreds) return runtimeCreds;
   return loadPipelineJiraCredentialsFromStore();
 }
@@ -129,6 +160,11 @@ export function validatePipelineJiraConfig(): void {
   if (missing.length) {
     throw new Error(`Pipeline Jira not configured: ${missing.join(", ")}`);
   }
+}
+
+export function isPipelineJiraConfigured(): boolean {
+  const creds = getActivePipelineJiraCredentials();
+  return Boolean(creds.baseUrl && creds.email && creds.apiToken);
 }
 
 export function getPublicPipelineJiraCredentials(): PipelineJiraCredentialsPublic {
@@ -186,6 +222,23 @@ export function getPublicPipelineJiraCredentials(): PipelineJiraCredentialsPubli
         : "environment"
       : "none",
   };
+}
+
+export async function savePipelineJiraCredentialsForOrganization(
+  organizationId: string,
+  input: {
+    baseUrl: string;
+    email: string;
+    apiToken?: string;
+    webhookSecret?: string;
+    projectKeys?: string[];
+    boardId?: string;
+  }
+): Promise<PipelineJiraCredentials> {
+  const creds = await saveOrganizationJiraConfig(organizationId, input);
+  orgRuntimeCreds.set(organizationId, creds);
+  runtimeCreds = creds;
+  return creds;
 }
 
 export function savePipelineJiraCredentials(input: {

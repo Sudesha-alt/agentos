@@ -2,6 +2,7 @@ import {
   getPipelineIntakeMapping,
   isPipelineIntakeStatus,
 } from "../pipeline/jira/intakeConfig";
+import { isPipelineJiraConfigured } from "../pipeline/jira/credentialsStore";
 import { listIntakeColumnTickets } from "../pipeline/jira/boardService";
 import { enqueueIntakeFromJiraKey } from "../pipeline/jira/intakeEnqueueService";
 import { shouldEnqueueJiraKey, logIntakeSkipped } from "../pipeline/jira/intakeDedup";
@@ -24,6 +25,29 @@ async function enqueueIssueKeys(
   keys: string[],
   source: IntakeScanSource
 ): Promise<IntakeScanResult> {
+  if (keys.length === 0) {
+    return { scanned: 0, enqueued: 0, skipped: 0, source, errors: [], skipReasons: [] };
+  }
+
+  if (!isPipelineJiraConfigured()) {
+    logger.warn(
+      { keyCount: keys.length, source },
+      "intake enqueue skipped — pipeline Jira not configured (baseUrl, email, apiToken)"
+    );
+    return {
+      scanned: keys.length,
+      enqueued: 0,
+      skipped: keys.length,
+      source,
+      errors: [],
+      skipReasons: keys.map((jiraKey) => ({
+        jiraKey,
+        reason: "jira_not_configured",
+        message: "Pipeline Jira credentials are not configured",
+      })),
+    };
+  }
+
   let enqueued = 0;
   let skipped = 0;
   const errors: IntakeScanResult["errors"] = [];

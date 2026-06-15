@@ -1,13 +1,44 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { companyIntelligence } from "../../companyIntelligence";
 import { ValidationError } from "../../utils/errors";
+import { resolveUserFromAuthHeader } from "./authSession";
+import {
+  activateOrganizationJiraContext,
+  warmOrganizationJiraCredentials,
+} from "../../pipeline/jira/credentialsStore";
+import { setActiveOrganizationId } from "../../organization/context";
 
 const router = Router();
 
-router.get("/", async (_req, res, next) => {
+function resolveOrganizationId(req: Request): string | undefined {
+  const user = resolveUserFromAuthHeader(req);
+  return user?.organizationId;
+}
+
+async function withOrganizationContext(
+  req: Request,
+  fn: (organizationId?: string) => Promise<void>
+) {
+  const organizationId = resolveOrganizationId(req);
+  if (organizationId) {
+    setActiveOrganizationId(organizationId);
+    await warmOrganizationJiraCredentials(organizationId);
+    activateOrganizationJiraContext(organizationId);
+  }
   try {
-    const profile = await companyIntelligence.getProfile();
-    res.json({ profile });
+    await fn(organizationId);
+  } finally {
+    setActiveOrganizationId(null);
+    activateOrganizationJiraContext(null);
+  }
+}
+
+router.get("/", async (req, res, next) => {
+  try {
+    await withOrganizationContext(req, async (organizationId) => {
+      const profile = await companyIntelligence.getProfile(organizationId);
+      res.json({ profile });
+    });
   } catch (err) {
     next(err);
   }
@@ -15,20 +46,25 @@ router.get("/", async (_req, res, next) => {
 
 router.put("/", async (req, res, next) => {
   try {
-    const profile = await companyIntelligence.saveProfile({
-      companyName: req.body?.companyName,
-      website: req.body?.website,
-      productSummary: req.body?.productSummary,
-      icp: req.body?.icp,
-      revenueModel: req.body?.revenueModel,
-      pricingSummary: req.body?.pricingSummary,
-      businessContext: req.body?.businessContext,
-      strategicGoals: req.body?.strategicGoals,
-      nonGoals: req.body?.nonGoals,
-      competitors: req.body?.competitors,
-      updatedBy: req.body?.updatedBy ?? "user",
+    await withOrganizationContext(req, async (organizationId) => {
+      const profile = await companyIntelligence.saveProfile(
+        {
+          companyName: req.body?.companyName,
+          website: req.body?.website,
+          productSummary: req.body?.productSummary,
+          icp: req.body?.icp,
+          revenueModel: req.body?.revenueModel,
+          pricingSummary: req.body?.pricingSummary,
+          businessContext: req.body?.businessContext,
+          strategicGoals: req.body?.strategicGoals,
+          nonGoals: req.body?.nonGoals,
+          competitors: req.body?.competitors,
+          updatedBy: req.body?.updatedBy ?? "user",
+        },
+        organizationId
+      );
+      res.json({ profile });
     });
-    res.json({ profile });
   } catch (err) {
     next(err);
   }

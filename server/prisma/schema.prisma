@@ -207,19 +207,71 @@ model OrgIntelligenceRecord {
 }
 
 model CompanyProfile {
-  id              String   @id @default("default")
-  companyName     String   @default("")
-  website         String   @default("")
-  productSummary  String   @default("") @db.Text
-  icp             String   @default("") @db.Text
-  revenueModel    String   @default("") @db.Text
-  pricingSummary  String   @default("") @db.Text
-  businessContext String   @default("") @db.Text
-  strategicGoals  Json     @default("[]")
-  nonGoals        Json     @default("[]")
-  competitors     Json     @default("[]")
-  updatedAt       DateTime @updatedAt
+  id              String        @id @default(cuid())
+  organizationId  String?       @unique
+  organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  companyName     String        @default("")
+  website         String        @default("")
+  productSummary  String        @default("") @db.Text
+  icp             String        @default("") @db.Text
+  revenueModel    String        @default("") @db.Text
+  pricingSummary  String        @default("") @db.Text
+  businessContext String        @default("") @db.Text
+  strategicGoals  Json          @default("[]")
+  nonGoals        Json          @default("[]")
+  competitors     Json          @default("[]")
+  updatedAt       DateTime      @updatedAt
   updatedBy       String?
+}
+
+model User {
+  id          String               @id @default(cuid())
+  email       String               @unique
+  name        String
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  memberships OrganizationMember[]
+}
+
+model Organization {
+  id             String                  @id @default(cuid())
+  name           String
+  slug           String                  @unique
+  domain         String                  @unique
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  members        OrganizationMember[]
+  companyProfile CompanyProfile?
+  jiraConfig     OrganizationJiraConfig?
+  billing        WorkspaceBilling?
+}
+
+model OrganizationMember {
+  id             String       @id @default(cuid())
+  organizationId String
+  userId         String
+  role           OrgRole      @default(MEMBER)
+  joinedAt       DateTime     @default(now())
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([userId])
+}
+
+model OrganizationJiraConfig {
+  organizationId        String       @id
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  baseUrl               String       @default("")
+  email                 String       @default("")
+  apiToken              String       @default("")
+  webhookSecret         String       @default("")
+  projectKeysJson       Json         @default("[]")
+  boardId               String?
+  aiWorkerColumnName    String?
+  aiWorkerStatusesJson  Json?
+  completionSettingsJson Json?
+  updatedAt             DateTime     @updatedAt
 }
 
 model AgentChatThread {
@@ -392,13 +444,15 @@ model CodebaseIndexRun {
 }
 
 model WorkspaceBilling {
-  id            String   @id @default("default")
-  planId        String   @default("pilot")
-  runsUsed      Int      @default(0)
-  runsCap       Int      @default(20)
-  pilotEndsAt   DateTime?
-  billingCycle  String   @default("monthly")
-  updatedAt     DateTime @updatedAt
+  id             String        @id @default(cuid())
+  organizationId String?       @unique
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  planId         String        @default("pilot")
+  runsUsed       Int           @default(0)
+  runsCap        Int           @default(20)
+  pilotEndsAt    DateTime?
+  billingCycle   String        @default("monthly")
+  updatedAt      DateTime      @updatedAt
 }
 
 model GithubInstallation {
@@ -436,6 +490,12 @@ model GithubRepository {
   @@unique([installationId, githubRepoId])
   @@index([fullName])
   @@index([installationId, selected])
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
 }
 
 enum TicketStatus {

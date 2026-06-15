@@ -31,6 +31,9 @@ export class JiraClient {
   }
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    if (!this.baseUrl) {
+      throw new Error("Jira baseUrl not configured");
+    }
     return retry(async () => {
       const res = await fetch(`${this.baseUrl}${path}`, {
         ...init,

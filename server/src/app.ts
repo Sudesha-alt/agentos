@@ -6,6 +6,7 @@ import express, {
 } from "express";
 import helmet from "helmet";
 import authRouter from "./api/routes/auth";
+import organizationRouter from "./api/routes/organization";
 import onboardingRouter from "./api/routes/onboarding";
 import codebaseRouter from "./api/routes/codebase";
 import gitIntegrationRouter from "./api/routes/gitIntegration";
@@ -75,6 +76,7 @@ export function createApp(): express.Express {
   app.use("/", healthRouter);
   app.use("/api", healthRouter);
   app.use("/api/auth", authRouter);
+  app.use("/api/organization", organizationRouter);
   app.use("/api/onboarding", onboardingRouter);
   app.use("/api/codebase", codebaseRouter);
   app.use("/codebase", codebaseRouter);

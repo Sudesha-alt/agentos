@@ -146,6 +146,18 @@ export const AuthUserSchema = z.object({
   id: z.string(),
   email: z.string().email(),
   name: z.string(),
+  organizationId: z.string().optional(),
+  organizationName: z.string().optional(),
+  organizationDomain: z.string().optional(),
+  organizationRole: z.enum(["OWNER", "ADMIN", "MEMBER"]).optional(),
+});
+
+export const OrganizationSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  domain: z.string(),
+  slug: z.string().optional(),
+  role: z.enum(["OWNER", "ADMIN", "MEMBER"]),
 });
 
 export const OnboardingProfileSchema = z.object({
@@ -168,6 +180,7 @@ export const AuthSessionSchema = z.object({
   token: z.string(),
   issuedAt: z.string(),
   user: AuthUserSchema,
+  organization: OrganizationSchema.optional(),
   onboardingCompleted: z.boolean().optional(),
 });
 
