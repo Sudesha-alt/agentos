@@ -1,5 +1,6 @@
 import { runFullIndex } from "./indexer";
 import { getRepoContext } from "../git-integration/gitCredentialsStore";
+import { requireActiveOrganizationId } from "../organization/orgScope";
 import { prisma } from "../db/client";
 import { logger } from "../utils/logger";
 
@@ -14,10 +15,12 @@ export async function enqueueFullIndex(
   branchName: string,
   triggerType: "manual" | "webhook" = "manual"
 ): Promise<EnqueueFullIndexResult> {
+  const organizationId = requireActiveOrganizationId();
   const { workspace: repoOwner, repoSlug: repoName } = getRepoContext();
 
   const run = await prismaAny.codebaseIndexRun.create({
     data: {
+      organizationId,
       repoOwner,
       repoName,
       branchName,
@@ -52,7 +55,8 @@ export async function getLatestIndexRun(input?: {
     }
   }
 
-  const where: Record<string, string> = { repoOwner, repoName };
+  const organizationId = requireActiveOrganizationId();
+  const where: Record<string, string> = { organizationId, repoOwner, repoName };
   if (input?.branchName) where.branchName = input.branchName;
 
   return prismaAny.codebaseIndexRun.findFirst({

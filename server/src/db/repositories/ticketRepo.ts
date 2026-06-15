@@ -1,5 +1,6 @@
 import type { Prisma, Ticket, TicketStatus } from "../prisma";
 import { prisma } from "../client";
+import { activeOrganizationFilter, requireActiveOrganizationId } from "../../organization/orgScope";
 
 export const ticketRepo = {
   async create(input: {
@@ -8,27 +9,44 @@ export const ticketRepo = {
     rawPayload: Prisma.InputJsonValue;
     normalizedData: Prisma.InputJsonValue;
     status: TicketStatus;
+    organizationId?: string;
   }): Promise<Ticket> {
+    const organizationId = input.organizationId ?? requireActiveOrganizationId();
     return prisma.ticket.upsert({
-      where: { jiraTicketId: input.jiraTicketId },
+      where: {
+        organizationId_jiraTicketId: {
+          organizationId,
+          jiraTicketId: input.jiraTicketId,
+        },
+      },
       update: {
         rawPayload: input.rawPayload,
         normalizedData: input.normalizedData,
         status: input.status,
       },
-      create: input,
+      create: {
+        organizationId,
+        jiraTicketId: input.jiraTicketId,
+        jiraKey: input.jiraKey,
+        rawPayload: input.rawPayload,
+        normalizedData: input.normalizedData,
+        status: input.status,
+      },
     });
   },
 
   async findById(id: string): Promise<Ticket | null> {
-    return prisma.ticket.findUnique({ where: { id } });
+    const org = activeOrganizationFilter();
+    return prisma.ticket.findFirst({ where: { id, ...org } });
   },
 
   async findByJiraKey(jiraKey: string): Promise<Ticket | null> {
-    return prisma.ticket.findFirst({ where: { jiraKey } });
+    const org = activeOrganizationFilter();
+    return prisma.ticket.findFirst({ where: { jiraKey, ...org } });
   },
 
   async setStatus(id: string, status: TicketStatus): Promise<void> {
-    await prisma.ticket.update({ where: { id }, data: { status } });
+    const org = activeOrganizationFilter();
+    await prisma.ticket.updateMany({ where: { id, ...org }, data: { status } });
   },
 };

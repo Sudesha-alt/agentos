@@ -1,39 +1,49 @@
 import crypto from "node:crypto";
 import type { Request, Response } from "express";
+import { prisma } from "../../db/client";
+import { withOrganizationContext } from "../../api/orgRequestContext";
 import { logger } from "../../utils/logger";
-import { getPipelineWebhookSecret } from "./credentialsStore";
+import { resolveOrganizationByJiraWebhookSecret } from "../../organization/webhookResolver";
 import { isPipelineIntakeStatus } from "./intakeConfig";
 import { type PipelineJiraWebhookPayload } from "./ticketNormalizer";
 import { upsertJiraIssueFromWebhook, handleJiraIssueDeleted } from "../../jira-sync/webhookBridge";
 import { enqueueIntakeFromWebhook } from "./intakeEnqueueService";
 
-/** Jira Cloud signs with X-Hub-Signature; legacy manual tests may use x-agentos-secret. */
-function verifyPipelineWebhook(req: Request): boolean {
-  const expected = getPipelineWebhookSecret();
-  if (!expected) return true;
-
-  const agentosSecret = req.header("x-agentos-secret");
-  if (agentosSecret === expected) return true;
+async function resolveWebhookOrganization(req: Request): Promise<string | null> {
+  const agentosSecret = req.header("x-agentos-secret")?.trim();
+  if (agentosSecret) {
+    return resolveOrganizationByJiraWebhookSecret(agentosSecret);
+  }
 
   const rawBody = (req as Request & { rawBody?: string }).rawBody ?? "";
   const hubSignature =
     req.header("x-hub-signature") ?? req.header("X-Hub-Signature");
-  if (hubSignature && rawBody) {
-    const provided = hubSignature.startsWith("sha256=")
-      ? hubSignature
-      : `sha256=${hubSignature}`;
+  if (!hubSignature || !rawBody) return null;
+
+  const provided = hubSignature.startsWith("sha256=")
+    ? hubSignature
+    : `sha256=${hubSignature}`;
+
+  const configs = await prisma.organizationJiraConfig.findMany({
+    where: { webhookSecret: { not: "" } },
+    select: { organizationId: true, webhookSecret: true },
+  });
+
+  for (const config of configs) {
     const computed = `sha256=${crypto
-      .createHmac("sha256", expected)
+      .createHmac("sha256", config.webhookSecret)
       .update(rawBody)
       .digest("hex")}`;
     try {
-      return crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(computed));
+      if (crypto.timingSafeEqual(Buffer.from(provided), Buffer.from(computed))) {
+        return config.organizationId;
+      }
     } catch {
-      return false;
+      continue;
     }
   }
 
-  return false;
+  return null;
 }
 
 function enteredIntakeStatus(payload: PipelineJiraWebhookPayload): boolean {
@@ -61,8 +71,9 @@ export async function handlePipelineJiraWebhook(
   req: Request,
   res: Response
 ): Promise<void> {
-  if (!verifyPipelineWebhook(req)) {
-    logger.warn({ ip: req.ip }, "rejected pipeline jira webhook — bad secret");
+  const organizationId = await resolveWebhookOrganization(req);
+  if (!organizationId) {
+    logger.warn({ ip: req.ip }, "rejected pipeline jira webhook — unknown org or bad secret");
     res.status(401).json({ error: "unauthorized" });
     return;
   }
@@ -77,20 +88,15 @@ export async function handlePipelineJiraWebhook(
 
   res.status(200).json({ ok: true, event });
 
-  if (
-    event === "jira:issue_updated" ||
-    event === "jira:issue_created"
-  ) {
-    void handleIssueUpsert(payload).catch((err) =>
-      logger.error({ err, event }, "pipeline jira issue upsert failed")
-    );
-  }
+  void withOrganizationContext(organizationId, async () => {
+    if (event === "jira:issue_updated" || event === "jira:issue_created") {
+      await handleIssueUpsert(payload);
+    }
 
-  if (event === "jira:issue_deleted") {
-    void handleJiraIssueDeleted(payload.issue.key).catch((err) =>
-      logger.error({ err }, "pipeline jira issue delete failed")
-    );
-  }
+    if (event === "jira:issue_deleted") {
+      await handleJiraIssueDeleted(payload.issue.key);
+    }
+  }).catch((err) => logger.error({ err, event, organizationId }, "pipeline jira webhook failed"));
 }
 
 async function handleIssueUpsert(
@@ -121,5 +127,4 @@ async function handleIssueUpsert(
       );
     }
   }
-
 }

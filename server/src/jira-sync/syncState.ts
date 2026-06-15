@@ -1,19 +1,29 @@
 import { prisma } from "../db/client";
+import { requireActiveOrganizationId } from "../organization/orgScope";
 import type { JiraSyncMode, JiraSyncStatus } from "../db/prisma";
 
 let syncRunning = false;
+const orgSyncRunning = new Set<string>();
 
-export function isJiraSyncRunning(): boolean {
-  return syncRunning;
+export function isJiraSyncRunning(organizationId?: string): boolean {
+  if (organizationId) return orgSyncRunning.has(organizationId);
+  return syncRunning || orgSyncRunning.size > 0;
 }
 
-export function setJiraSyncRunning(running: boolean): void {
+export function setJiraSyncRunning(running: boolean, organizationId?: string): void {
+  if (organizationId) {
+    if (running) orgSyncRunning.add(organizationId);
+    else orgSyncRunning.delete(organizationId);
+    return;
+  }
   syncRunning = running;
 }
 
-export async function createSyncRun(mode: JiraSyncMode) {
+export async function createSyncRun(mode: JiraSyncMode, organizationId?: string) {
+  const orgId = organizationId ?? requireActiveOrganizationId();
   return prisma.jiraSyncRun.create({
     data: {
+      organizationId: orgId,
       mode,
       status: "RUNNING",
     },
@@ -45,15 +55,18 @@ export async function completeSyncRun(
   });
 }
 
-export async function getLatestSyncRun() {
+export async function getLatestSyncRun(organizationId?: string) {
+  const orgId = organizationId ?? requireActiveOrganizationId();
   return prisma.jiraSyncRun.findFirst({
+    where: { organizationId: orgId },
     orderBy: { startedAt: "desc" },
   });
 }
 
-export async function getLastSuccessfulWatermark(): Promise<Date | null> {
+export async function getLastSuccessfulWatermark(organizationId?: string): Promise<Date | null> {
+  const orgId = organizationId ?? requireActiveOrganizationId();
   const run = await prisma.jiraSyncRun.findFirst({
-    where: { status: "COMPLETED" },
+    where: { organizationId: orgId, status: "COMPLETED" },
     orderBy: { completedAt: "desc" },
   });
   return run?.watermark ?? run?.completedAt ?? null;

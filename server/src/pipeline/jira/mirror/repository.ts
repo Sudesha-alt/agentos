@@ -2,6 +2,7 @@ import { prisma } from "../../../db/client";
 import { embedder } from "../../../rag/embedder";
 import { vectorStore } from "../../../rag/vectorStore";
 import { logger } from "../../../utils/logger";
+import { requireActiveOrganizationId } from "../../../organization/orgScope";
 import type { FetchedMirrorIssue } from "./issueFetcher";
 
 export function buildMirrorEmbeddingText(
@@ -88,9 +89,13 @@ export async function upsertMirrorRecord(
   const git = gitContext ?? (await fetchGitContext(issue.jiraKey));
   const now = new Date();
 
+  const organizationId = requireActiveOrganizationId();
   await prisma.jiraMirror.upsert({
-    where: { jiraKey: issue.jiraKey },
+    where: {
+      organizationId_jiraKey: { organizationId, jiraKey: issue.jiraKey },
+    },
     create: {
+      organizationId,
       jiraTicketId: issue.jiraTicketId,
       jiraKey: issue.jiraKey,
       projectKey: issue.projectKey,
@@ -128,21 +133,25 @@ export async function upsertMirrorRecord(
   await embedMirroredIssue(issue, git || undefined);
 
   await prisma.jiraMirror.update({
-    where: { jiraKey: issue.jiraKey },
+    where: {
+      organizationId_jiraKey: { organizationId, jiraKey: issue.jiraKey },
+    },
     data: { embeddedAt: now },
   });
 }
 
-export async function getMirrorStats(): Promise<{
+export async function getMirrorStats(organizationId?: string): Promise<{
   total: number;
   embedded: number;
   byStatus: Record<string, number>;
 }> {
+  const org = organizationId ?? requireActiveOrganizationId();
   const [total, embedded, rows] = await Promise.all([
-    prisma.jiraMirror.count(),
-    prisma.jiraMirror.count({ where: { embeddedAt: { not: null } } }),
+    prisma.jiraMirror.count({ where: { organizationId: org } }),
+    prisma.jiraMirror.count({ where: { organizationId: org, embeddedAt: { not: null } } }),
     prisma.jiraMirror.groupBy({
       by: ["status"],
+      where: { organizationId: org },
       _count: { status: true },
     }),
   ]);

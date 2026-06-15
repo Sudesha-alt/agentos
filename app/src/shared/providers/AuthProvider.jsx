@@ -67,8 +67,10 @@ export function AuthProvider({ children }) {
     () => ({
       session,
       user: session?.user ?? null,
+      organization: session?.organization ?? null,
       loading,
       isAuthenticated: Boolean(session),
+      hasOrganization: Boolean(session?.user?.organizationId),
       login,
       signup,
       logout,
@@ -82,7 +84,7 @@ export function AuthProvider({ children }) {
 }
 
 export function RequireOnboardingComplete({ children }) {
-  const { loading, isAuthenticated, onboardingCompleted } = useAuth();
+  const { loading, isAuthenticated, onboardingCompleted, hasOrganization } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -95,7 +97,7 @@ export function RequireOnboardingComplete({ children }) {
     );
   }
 
-  if (isAuthenticated && !onboardingCompleted) {
+  if (isAuthenticated && (!onboardingCompleted || !hasOrganization)) {
     return <Navigate to="/onboarding" replace state={{ from: location.pathname }} />;
   }
 

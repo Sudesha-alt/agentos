@@ -103,6 +103,30 @@ function authHeaders(session) {
   return { Authorization: `Bearer ${session.token}` };
 }
 
+function authJsonFetch(path, init = {}) {
+  return fetch(path, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(init.headers ?? {}),
+    },
+    ...init,
+  }).then(async (res) => {
+    const text = await res.text().catch(() => "");
+    let body = {};
+    if (text) {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = { message: text };
+      }
+    }
+    if (!res.ok) {
+      throw new Error(body.message || `Request failed (${res.status})`);
+    }
+    return body;
+  });
+}
+
 const mockAuthAdapter = {
   async getSession() {
     return readStoredSession();
@@ -111,7 +135,16 @@ const mockAuthAdapter = {
     const parsed = LoginRequestSchema.parse(payload);
     const registered = readRegisteredEmails();
     if (!registered.has(parsed.email) && parsed.email !== DEMO_CREDENTIAL_HINT.email) {
-      throw new Error("No account found for this email. Create an account first.");
+      throw new Error("Incorrect email or password.");
+    }
+    if (parsed.email !== DEMO_CREDENTIAL_HINT.email && registered.has(parsed.email)) {
+      const stored =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem(`agentos.auth.password.${parsed.email}`)
+          : null;
+      if (stored && stored !== parsed.password) {
+        throw new Error("Incorrect email or password.");
+      }
     }
     const session = buildMockSession(parsed.email);
     persistSession(session);
@@ -126,6 +159,9 @@ const mockAuthAdapter = {
     registered.add(parsed.email);
     writeRegisteredEmails(registered);
     const session = buildMockSession(parsed.email, { isNewUser: true });
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(`agentos.auth.password.${parsed.email}`, parsed.password);
+    }
     const initialOnboarding = {
       userId: session.user.id,
       email: session.user.email,
@@ -149,6 +185,22 @@ const mockAuthAdapter = {
   async logout() {
     clearStoredSession();
   },
+  async requestPasswordReset({ email }) {
+    return {
+      ok: true,
+      message:
+        "If an account exists for that email, we sent password reset instructions.",
+    };
+  },
+  async resetPassword({ token, password }) {
+    if (!token?.trim()) {
+      throw new Error("This reset link is invalid or has expired. Request a new one.");
+    }
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("agentos.auth.mockResetPassword", password);
+    }
+    return { ok: true, message: "Password updated. You can sign in now." };
+  },
 };
 
 const restAuthAdapter = {
@@ -169,7 +221,7 @@ const restAuthAdapter = {
   async login(payload) {
     const parsed = LoginRequestSchema.parse(payload);
     const session = LoginResponseSchema.parse(
-      await fetchJson(apiPath("/api", "/auth/login"), {
+      await authJsonFetch(apiPath("/api", "/auth/login"), {
         method: "POST",
         body: JSON.stringify(parsed),
       })
@@ -180,13 +232,25 @@ const restAuthAdapter = {
   async signup(payload) {
     const parsed = SignupRequestSchema.parse(payload);
     const session = LoginResponseSchema.parse(
-      await fetchJson(apiPath("/api", "/auth/signup"), {
+      await authJsonFetch(apiPath("/api", "/auth/signup"), {
         method: "POST",
         body: JSON.stringify(parsed),
       })
     );
     persistSession(session);
     return session;
+  },
+  async requestPasswordReset(payload) {
+    return authJsonFetch(apiPath("/api", "/auth/forgot-password"), {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+  },
+  async resetPassword(payload) {
+    return authJsonFetch(apiPath("/api", "/auth/reset-password"), {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
   },
   async logout() {
     const stored = readStoredSession();
@@ -204,3 +268,11 @@ const restAuthAdapter = {
 
 export const authAdapter =
   DATA_MODE === "rest" ? restAuthAdapter : mockAuthAdapter;
+
+export function requestPasswordReset(payload) {
+  return authAdapter.requestPasswordReset(payload);
+}
+
+export function resetPassword(payload) {
+  return authAdapter.resetPassword(payload);
+}

@@ -1,16 +1,22 @@
 import { apiPath } from "../../shared/config/apiBase";
+import { authHeaders } from "../../shared/lib/authHeaders";
 import { fetchJson } from "../../shared/lib/fetchJson";
 import { useResource } from "../../shared/lib/useResource";
 
 const root = (path) => apiPath("/pipeline-jira", path);
 
+function requestHeaders(extra = {}) {
+  return { ...authHeaders(), ...extra };
+}
+
 export async function getPipelineJiraSetup() {
-  return fetchJson(root("/setup"));
+  return fetchJson(root("/setup"), { headers: requestHeaders() });
 }
 
 export async function connectPipelineJira(body) {
   return fetchJson(root("/connect"), {
     method: "POST",
+    headers: requestHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
 }
@@ -18,29 +24,31 @@ export async function connectPipelineJira(body) {
 export async function registerPipelineJiraWebhook(body = {}) {
   return fetchJson(root("/webhook/register"), {
     method: "POST",
+    headers: requestHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
 }
 
 export async function getPipelineJiraBoardColumns() {
-  return fetchJson(root("/boards/columns"));
+  return fetchJson(root("/boards/columns"), { headers: requestHeaders() });
 }
 
 export async function savePipelineIntakeColumn(body) {
   return fetchJson(root("/intake-column"), {
     method: "PUT",
+    headers: requestHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
   });
 }
 
 export async function listPipelineIntakeTickets() {
-  return fetchJson(root("/intake/tickets"));
+  return fetchJson(root("/intake/tickets"), { headers: requestHeaders() });
 }
 
 export async function scanPipelineIntake() {
   return fetchJson(root("/intake/scan"), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: requestHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({}),
   });
 }

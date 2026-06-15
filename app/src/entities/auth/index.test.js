@@ -11,6 +11,12 @@ describe("auth adapter", () => {
   });
 
   it("persists a mock session after login", async () => {
+    await authAdapter.signup({
+      email: "customer@agentos.ai",
+      password: "password123",
+    });
+    await authAdapter.logout();
+
     const session = await authAdapter.login({
       email: "customer@agentos.ai",
       password: "password123",

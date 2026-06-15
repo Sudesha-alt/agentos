@@ -6,7 +6,6 @@ import {
   pipelineJiraWebhookUrl,
 } from "../../pipeline/jira/connectPipelineJira";
 import {
-  getPublicPipelineJiraCredentials,
   validatePipelineJiraConfig,
 } from "../../pipeline/jira/credentialsStore";
 import { getPipelineJiraMirrorConfig } from "../../pipeline/jira/config";
@@ -39,48 +38,57 @@ import {
   activateOrganizationJiraContext,
   warmOrganizationJiraCredentials,
 } from "../../pipeline/jira/credentialsStore";
-import { setActiveOrganizationId } from "../../organization/context";
 import { getPublicOrganizationJiraConfig } from "../../organization/jiraConfigStore";
+import {
+  requireOrganizationUser,
+  withOrganizationContext,
+} from "../orgRequestContext";
 
 const router = Router();
 
 router.get("/setup", async (req, res) => {
-  const jira = getPublicPipelineJiraCredentials();
-  const intake = getPipelineIntakeMapping();
-  let connected = false;
-  try {
-    validatePipelineJiraConfig();
-    connected = true;
-  } catch {
-    connected = false;
-  }
+  const user = requireOrganizationUser(req, res);
+  if (!user?.organizationId) return;
 
-  res.json({
-    publicApiBase: pipelineJiraPublicBase(req),
-    webhookUrl: pipelineJiraWebhookUrl(req),
-    webhookEvents: ["jira:issue_created", "jira:issue_updated", "jira:issue_deleted"],
-    webhookHint:
-      "All project tickets sync automatically. Move a ticket into the AI Worker column/status to start the agent pipeline.",
-    intake,
-    queue: getPipelineQueueState(),
-    mirror: getPipelineJiraMirrorConfig(),
-    mirrorJql: connected
-      ? buildMirrorBackfillJql(jira.projectKeys)
-      : null,
-    sync: {
-      config: getJiraSyncConfig(),
-      running: isJiraSyncRunning(),
-      latestRun: connected ? await getLatestSyncRun() : null,
-      stats: connected ? await getJiraIssueStats() : null,
-    },
-    jira,
-    connected,
+  await withOrganizationContext(user.organizationId, async () => {
+    const jira = await getPublicOrganizationJiraConfig(user.organizationId!);
+    const intake = getPipelineIntakeMapping();
+    let connected = false;
+    try {
+      validatePipelineJiraConfig();
+      connected = true;
+    } catch {
+      connected = jira.configured;
+    }
+
+    res.json({
+      publicApiBase: pipelineJiraPublicBase(req),
+      webhookUrl: pipelineJiraWebhookUrl(req),
+      webhookEvents: ["jira:issue_created", "jira:issue_updated", "jira:issue_deleted"],
+      webhookHint:
+        "All project tickets sync automatically. Move a ticket into the AI Worker column/status to start the agent pipeline.",
+      intake,
+      queue: getPipelineQueueState(user.organizationId!),
+      mirror: getPipelineJiraMirrorConfig(),
+      mirrorJql: connected
+        ? buildMirrorBackfillJql(jira.projectKeys)
+        : null,
+      sync: {
+        config: getJiraSyncConfig(),
+        running: isJiraSyncRunning(user.organizationId),
+        latestRun: connected ? await getLatestSyncRun(user.organizationId) : null,
+        stats: connected ? await getJiraIssueStats(user.organizationId) : null,
+      },
+      jira,
+      connected,
+    });
   });
 });
 
 router.post("/connect", async (req, res) => {
-  const user = resolveUserFromAuthHeader(req);
-  const organizationId = user?.organizationId;
+  const user = requireOrganizationUser(req, res);
+  if (!user?.organizationId) return;
+  const organizationId = user.organizationId;
 
   const baseUrl = String(req.body?.baseUrl ?? "").trim();
   const email = String(req.body?.email ?? "").trim();
@@ -105,65 +113,61 @@ router.post("/connect", async (req, res) => {
     return;
   }
 
-  const prior = organizationId
-    ? await getPublicOrganizationJiraConfig(organizationId)
-    : getPublicPipelineJiraCredentials();
+  const prior = await getPublicOrganizationJiraConfig(organizationId);
   if (!apiToken && !prior.hasApiToken) {
     res.status(400).json({ error: "apiToken is required on first connect" });
     return;
   }
 
   try {
-    if (organizationId) {
-      setActiveOrganizationId(organizationId);
-      await warmOrganizationJiraCredentials(organizationId);
-      activateOrganizationJiraContext(organizationId);
-    }
-
-    const webhookUrl = pipelineJiraWebhookUrl(req);
-    const result = await connectPipelineJira({
-      baseUrl,
-      email: email || undefined,
-      apiToken,
-      webhookSecret,
-      projectKeys,
-      boardId,
-      webhookUrl,
-      autoRegisterWebhook: req.body?.autoRegisterWebhook !== false,
-      organizationId,
-    });
-    res.json({
-      ...result,
-      publicApiBase: pipelineJiraPublicBase(req),
-      webhookUrl,
+    await withOrganizationContext(organizationId, async () => {
+      const webhookUrl = pipelineJiraWebhookUrl(req);
+      const result = await connectPipelineJira({
+        baseUrl,
+        email: email || undefined,
+        apiToken,
+        webhookSecret,
+        projectKeys,
+        boardId,
+        webhookUrl,
+        autoRegisterWebhook: req.body?.autoRegisterWebhook !== false,
+        organizationId,
+      });
+      res.json({
+        ...result,
+        publicApiBase: pipelineJiraPublicBase(req),
+        webhookUrl,
+      });
     });
   } catch (err) {
     const e = err as Error;
     res.status(502).json({ error: e.message });
-  } finally {
-    setActiveOrganizationId(null);
-    activateOrganizationJiraContext(null);
   }
 });
 
 router.post("/webhook/register", async (req, res) => {
-  const jira = getPublicPipelineJiraCredentials();
-  if (!jira.webhookSecret) {
-    res.status(400).json({ error: "Connect pipeline Jira first" });
-    return;
-  }
-  try {
-    const webhookUrl = pipelineJiraWebhookUrl(req);
-    const result = await ensurePipelineJiraWebhook({
-      webhookUrl,
-      secret: jira.webhookSecret,
-      projectKey: jira.projectKeys[0] ?? null,
-    });
-    res.json({ webhookUrl, ...result });
-  } catch (err) {
-    const e = err as Error;
-    res.status(502).json({ error: e.message });
-  }
+  const user = requireOrganizationUser(req, res);
+  if (!user?.organizationId) return;
+
+  await withOrganizationContext(user.organizationId, async () => {
+    const jira = await getPublicOrganizationJiraConfig(user.organizationId!);
+    if (!jira.webhookSecret) {
+      res.status(400).json({ error: "Connect pipeline Jira first" });
+      return;
+    }
+    try {
+      const webhookUrl = pipelineJiraWebhookUrl(req);
+      const result = await ensurePipelineJiraWebhook({
+        webhookUrl,
+        secret: jira.webhookSecret,
+        projectKey: jira.projectKeys[0] ?? null,
+      });
+      res.json({ webhookUrl, ...result });
+    } catch (err) {
+      const e = err as Error;
+      res.status(502).json({ error: e.message });
+    }
+  });
 });
 
 router.get("/boards/columns", async (_req, res, next) => {
@@ -224,13 +228,18 @@ router.put("/completion-settings", (req, res) => {
   res.json(settings);
 });
 
-router.post("/intake/scan", async (_req, res, next) => {
+router.post("/intake/scan", async (req, res, next) => {
   try {
-    validatePipelineJiraConfig();
-    const result = await scanIntakeFromSyncedIssues("manual");
-    res.json({
-      ...result,
-      queue: getPipelineQueueState(),
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
+
+    await withOrganizationContext(user.organizationId, async () => {
+      validatePipelineJiraConfig();
+      const result = await scanIntakeFromSyncedIssues("manual");
+      res.json({
+        ...result,
+        queue: getPipelineQueueState(user.organizationId!),
+      });
     });
   } catch (err) {
     next(err);
@@ -248,30 +257,36 @@ router.get("/mirror/stats", async (_req, res, next) => {
 
 router.post("/mirror/backfill", async (req, res, next) => {
   try {
-    validatePipelineJiraConfig();
-    const projectKeys = Array.isArray(req.body?.projectKeys)
-      ? req.body.projectKeys.map(String)
-      : undefined;
-    const maxIssues = req.body?.maxIssues
-      ? Number(req.body.maxIssues)
-      : undefined;
-    const async = req.body?.async !== false;
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
 
-    if (async) {
-      const { started } = runJiraSyncInBackground({
-        mode: "full",
-        projectKeys,
-      });
-      res.status(202).json({
-        status: started ? "started" : "already_running",
-        deprecated: true,
-        use: "POST /jira-sync/run",
-      });
-      return;
-    }
+    await withOrganizationContext(user.organizationId, async () => {
+      validatePipelineJiraConfig();
+      const projectKeys = Array.isArray(req.body?.projectKeys)
+        ? req.body.projectKeys.map(String)
+        : undefined;
+      const maxIssues = req.body?.maxIssues
+        ? Number(req.body.maxIssues)
+        : undefined;
+      const async = req.body?.async !== false;
 
-    const result = await runMirrorBackfill({ projectKeys, maxIssues });
-    res.json(result);
+      if (async) {
+        const { started } = runJiraSyncInBackground({
+          mode: "full",
+          projectKeys,
+          organizationId: user.organizationId!,
+        });
+        res.status(202).json({
+          status: started ? "started" : "already_running",
+          deprecated: true,
+          use: "POST /jira-sync/run",
+        });
+        return;
+      }
+
+      const result = await runMirrorBackfill({ projectKeys, maxIssues });
+      res.json(result);
+    });
   } catch (err) {
     next(err);
   }

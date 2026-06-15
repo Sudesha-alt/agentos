@@ -1,31 +1,41 @@
 import { DATA_MODE } from "../../shared/config/app";
 import { apiPath } from "../../shared/config/apiBase";
+import { authHeaders } from "../../shared/lib/authHeaders";
 import { fetchJson } from "../../shared/lib/fetchJson";
 import { useResource } from "../../shared/lib/useResource";
 import { mockApi } from "../../app/api/mock";
 
 const intake = (path) => apiPath("/git-integration", path);
 
+function requestHeaders(extra = {}) {
+  return { ...authHeaders(), ...extra };
+}
+
 const restGitIntegrationAdapter = {
-  getSetup: () => fetchJson(intake("/integration/setup")),
+  getSetup: () =>
+    fetchJson(intake("/integration/setup"), { headers: requestHeaders() }),
   connect: (body) =>
     fetchJson(intake("/integration/connect"), {
       method: "POST",
+      headers: requestHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(body),
     }),
   completeInstall: (installationId) =>
     fetchJson(intake("/github/complete-install"), {
       method: "POST",
+      headers: requestHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ installationId }),
     }),
   selectRepo: (body) =>
     fetchJson(intake("/github/select-repo"), {
       method: "POST",
+      headers: requestHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(body),
     }),
   disconnect: () =>
     fetchJson(intake("/integration/disconnect"), {
       method: "POST",
+      headers: requestHeaders(),
     }),
 };
 

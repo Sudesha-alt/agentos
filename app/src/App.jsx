@@ -4,7 +4,7 @@ import Marketing from "./pages/Marketing";
 import ContactPage from "./marketing/agent-team/ContactPage";
 import RoiCalculatorPage from "./pages/RoiCalculatorPage";
 import Login from "./pages/Login";
-import Onboarding from "./pages/Onboarding";
+import ForgotPassword, { ResetPassword } from "./pages/ForgotPassword";
 import AppShell from "./app/layout/AppShell";
 import Dashboard from "./app/pages/Dashboard";
 import Pipelines from "./app/pages/Pipelines";
@@ -25,7 +25,7 @@ const AuditTrail = lazy(() => import("./app/pages/AuditTrail"));
 const PrdViewer = lazy(() => import("./app/pages/PrdViewer"));
 const JiraSearch = lazy(() => import("./app/pages/JiraSearch"));
 const PmAgents = lazy(() => import("./app/pages/PmAgents"));
-const OrgIntelligence = lazy(() => import("./app/pages/OrgIntelligence"));
+const Roadmap = lazy(() => import("./app/pages/Roadmap"));
 const EngineeringAgent = lazy(() => import("./app/pages/EngineeringAgent"));
 
 function App() {
@@ -41,6 +41,22 @@ function App() {
             element={
               <PublicOnlyRoute>
                 <Login />
+              </PublicOnlyRoute>
+            }
+          />
+          <Route
+            path="/forgot-password"
+            element={
+              <PublicOnlyRoute>
+                <ForgotPassword />
+              </PublicOnlyRoute>
+            }
+          />
+          <Route
+            path="/reset-password"
+            element={
+              <PublicOnlyRoute>
+                <ResetPassword />
               </PublicOnlyRoute>
             }
           />
@@ -72,7 +88,8 @@ function App() {
             <Route path="pipelines/:id/override" element={<Override />} />
             <Route path="codebase" element={<CodebaseIntelligence />} />
             <Route path="qa" element={<QaCenter />} />
-            <Route path="org-intelligence" element={<OrgIntelligence />} />
+            <Route path="roadmap" element={<Roadmap />} />
+            <Route path="org-intelligence" element={<Navigate to="/app/roadmap" replace />} />
             <Route path="company-intelligence" element={<Navigate to="/app/settings/company" replace />} />
             <Route path="costs" element={<CostIntelligence />} />
             <Route path="audit" element={<AuditTrail />} />

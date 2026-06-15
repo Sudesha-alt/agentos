@@ -16,6 +16,8 @@ import { prepareTechAgentHandoff } from "../../agents/tech/orchestrator";
 import { pmAnalysisStore } from "../../agents/pm/store";
 import type { PmStageId, PmTicketInput, RetrospectiveInput } from "../../agents/pm/types";
 import { getPipelineQueueState } from "../../queue/inProcessRunner";
+import { resolveUserFromAuthHeader } from "./authSession";
+import { withOrganizationContext } from "../orgRequestContext";
 import { NotFoundError, ValidationError } from "../../utils/errors";
 
 const router = Router();
@@ -246,48 +248,56 @@ router.post("/handoff/:ticketId", async (req, res, next) => {
 
 router.post("/handoff/:ticketId/start-pipeline", async (req, res, next) => {
   try {
-    const jiraKey = req.params.ticketId.trim().toUpperCase();
-    if (!jiraKey) throw new ValidationError("ticketId is required");
-
-    const record = pmAnalysisStore.get(jiraKey);
-    if (record && record.status !== "COMPLETED") {
-      throw new ValidationError(
-        "PM analysis must be completed before starting the coding pipeline"
-      );
+    const user = resolveUserFromAuthHeader(req);
+    if (!user?.organizationId) {
+      res.status(403).json({ error: "organization_required" });
+      return;
     }
 
-    const handoff =
-      record?.status === "COMPLETED"
-        ? await prepareTechAgentHandoff(jiraKey)
-        : null;
+    await withOrganizationContext(user.organizationId, async () => {
+      const jiraKey = req.params.ticketId.trim().toUpperCase();
+      if (!jiraKey) throw new ValidationError("ticketId is required");
 
-    const pmContext =
-      record?.generatedPrd && record.status === "COMPLETED"
-        ? buildPmPipelineContext(record)
-        : undefined;
+      const record = pmAnalysisStore.get(jiraKey);
+      if (record && record.status !== "COMPLETED") {
+        throw new ValidationError(
+          "PM analysis must be completed before starting the coding pipeline"
+        );
+      }
 
-    const intake = await enqueueIntakeFromJiraKey(jiraKey, undefined, pmContext);
+      const handoff =
+        record?.status === "COMPLETED"
+          ? await prepareTechAgentHandoff(jiraKey)
+          : null;
 
-    res.status(202).json({
-      jiraKey,
-      status: "started",
-      message:
-        intake.enqueued > 0
-          ? pmContext
-            ? "Coding pipeline enqueued with PM PRD (discovery skipped)"
-            : handoff
-              ? "Coding pipeline enqueued from PM handoff"
-              : "Coding pipeline enqueued from Jira ticket (PM handoff unavailable — re-run analysis to attach PM context)"
-          : "Ticket already active or queued — check pipeline queue",
-      pmContextAttached: Boolean(pmContext),
-      handoff: handoff
-        ? {
-            recommendation: handoff.handoff.recommendation,
-            suggestedFirstFile: handoff.handoff.suggestedFirstFile,
-          }
-        : null,
-      intake,
-      queue: getPipelineQueueState(),
+      const pmContext =
+        record?.generatedPrd && record.status === "COMPLETED"
+          ? buildPmPipelineContext(record)
+          : undefined;
+
+      const intake = await enqueueIntakeFromJiraKey(jiraKey, undefined, pmContext);
+
+      res.status(202).json({
+        jiraKey,
+        status: "started",
+        message:
+          intake.enqueued > 0
+            ? pmContext
+              ? "Coding pipeline enqueued with PM PRD (discovery skipped)"
+              : handoff
+                ? "Coding pipeline enqueued from PM handoff"
+                : "Coding pipeline enqueued from Jira ticket (PM handoff unavailable — re-run analysis to attach PM context)"
+            : "Ticket already active or queued — check pipeline queue",
+        pmContextAttached: Boolean(pmContext),
+        handoff: handoff
+          ? {
+              recommendation: handoff.handoff.recommendation,
+              suggestedFirstFile: handoff.handoff.suggestedFirstFile,
+            }
+          : null,
+        intake,
+        queue: getPipelineQueueState(user.organizationId!),
+      });
     });
   } catch (err) {
     next(err);

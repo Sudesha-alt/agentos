@@ -92,7 +92,14 @@ export async function connectPipelineJira(input: {
 
   validatePipelineJiraConfig();
 
-  const jira = getPublicPipelineJiraCredentials();
+  const jira = input.organizationId
+    ? await (async () => {
+        const { getPublicOrganizationJiraConfig } = await import(
+          "../../organization/jiraConfigStore"
+        );
+        return getPublicOrganizationJiraConfig(input.organizationId!);
+      })()
+    : getPublicPipelineJiraCredentials();
   const projectKey = input.projectKeys?.[0] ?? jira.projectKeys[0] ?? null;
 
   let webhookRegistration: {
@@ -129,10 +136,11 @@ export async function connectPipelineJira(input: {
 
   const syncConfig = getJiraSyncConfig();
   let syncStarted = false;
-  if (syncConfig.fullSyncOnConnect) {
+  if (syncConfig.fullSyncOnConnect && input.organizationId) {
     const result = runJiraSyncInBackground({
       mode: "full",
       projectKeys: input.projectKeys ?? jira.projectKeys,
+      organizationId: input.organizationId,
     });
     syncStarted = result.started;
   }

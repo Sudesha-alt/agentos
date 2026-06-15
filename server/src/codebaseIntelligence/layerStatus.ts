@@ -6,7 +6,7 @@ import {
   getLatestIndexRun,
   indexRunProgress,
 } from "./indexQueue";
-import { resolveRepoScope } from "./repoScope";
+import { codebaseOrgWhere, resolveRepoScope } from "./repoScope";
 
 const prismaAny = prisma as any;
 
@@ -84,12 +84,11 @@ async function countIndexedFiles(
   repoName: string,
   branchName: string
 ): Promise<{ count: number; lastIndexedAt: string | null }> {
+  const orgWhere = codebaseOrgWhere({ repoOwner, repoName, branchName, isDeleted: false });
   const [count, latest] = await Promise.all([
-    prismaAny.codebaseFile.count({
-      where: { repoOwner, repoName, branchName, isDeleted: false },
-    }),
+    prismaAny.codebaseFile.count({ where: orgWhere }),
     prismaAny.codebaseFile.findFirst({
-      where: { repoOwner, repoName, branchName, isDeleted: false },
+      where: orgWhere,
       orderBy: { indexedAt: "desc" },
       select: { indexedAt: true },
     }),

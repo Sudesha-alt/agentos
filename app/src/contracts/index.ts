@@ -157,7 +157,7 @@ export const OrganizationSchema = z.object({
   name: z.string(),
   domain: z.string(),
   slug: z.string().optional(),
-  role: z.enum(["OWNER", "ADMIN", "MEMBER"]),
+  role: z.enum(["OWNER", "ADMIN", "MEMBER"]).optional(),
 });
 
 export const OnboardingProfileSchema = z.object({

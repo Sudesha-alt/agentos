@@ -16,9 +16,10 @@ export type GitIntegrationSetupState = {
 
 /** Merge SQLite/runtime creds with Postgres install (source of truth on Render). */
 export async function resolveGitIntegrationSetupState(
-  git: PublicGitCredentials
+  git: PublicGitCredentials,
+  options?: { orgScoped?: boolean }
 ): Promise<GitIntegrationSetupState> {
-  const pg = await getLatestGithubInstallState();
+  const pg = options?.orgScoped ? null : await getLatestGithubInstallState();
 
   const merged: PublicGitCredentials = { ...git };
   if (pg?.installationId) {

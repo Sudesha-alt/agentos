@@ -17,7 +17,7 @@ const NAV_ICONS = {
   "/app/pm-agents": IconProduct,
   "/app/engineering": IconEngineering,
   "/app/codebase": IconCodebase,
-  "/app/org-intelligence": IconRoadmap,
+  "/app/roadmap": IconRoadmap,
   "/app/qa": IconQa,
   "/app/costs": IconCosts,
   "/app/audit": IconAudit,

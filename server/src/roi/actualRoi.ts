@@ -48,7 +48,7 @@ function emptySummary(): CostsSummary {
   return { monthSpend: 0, avgPerFeature: 0, costPerToken: 0 };
 }
 
-export async function getCostsSummary(): Promise<CostsSummary> {
+export async function getCostsSummary(organizationId?: string): Promise<CostsSummary> {
   const prisma = getPrisma();
   if (!prisma) return emptySummary();
 
@@ -57,7 +57,11 @@ export async function getCostsSummary(): Promise<CostsSummary> {
   startOfMonth.setHours(0, 0, 0, 0);
 
   const logs = await prisma.pipelineStageLog.findMany({
-    where: { completedAt: { gte: startOfMonth }, costUsd: { not: null } },
+    where: {
+      completedAt: { gte: startOfMonth },
+      costUsd: { not: null },
+      ...(organizationId ? { pipeline: { organizationId } } : {}),
+    },
     select: { costUsd: true, tokenCount: true, pipelineId: true },
   });
 
@@ -78,7 +82,7 @@ export async function getCostsSummary(): Promise<CostsSummary> {
   };
 }
 
-export async function getCostsDaily(): Promise<{ days: CostsDailyDay[] }> {
+export async function getCostsDaily(organizationId?: string): Promise<{ days: CostsDailyDay[] }> {
   const prisma = getPrisma();
   if (!prisma) return { days: [] };
 
@@ -87,7 +91,11 @@ export async function getCostsDaily(): Promise<{ days: CostsDailyDay[] }> {
   since.setHours(0, 0, 0, 0);
 
   const logs = await prisma.pipelineStageLog.findMany({
-    where: { completedAt: { gte: since }, costUsd: { not: null } },
+    where: {
+      completedAt: { gte: since },
+      costUsd: { not: null },
+      ...(organizationId ? { pipeline: { organizationId } } : {}),
+    },
     select: { completedAt: true, costUsd: true, stage: true },
   });
 
@@ -126,13 +134,17 @@ export async function getCostsDaily(): Promise<{ days: CostsDailyDay[] }> {
   return { days: Array.from(buckets.values()) };
 }
 
-export async function getCostsByFeature(hourlyRate = 150): Promise<{
+export async function getCostsByFeature(
+  hourlyRate = 150,
+  organizationId?: string
+): Promise<{
   features: FeatureRoiRow[];
 }> {
   const prisma = getPrisma();
   if (!prisma) return { features: [] };
 
   const pipelines = await prisma.pipeline.findMany({
+    where: organizationId ? { organizationId } : undefined,
     take: 50,
     orderBy: { startedAt: "desc" },
     include: {

@@ -1,6 +1,11 @@
 import crypto from "node:crypto";
 import type { Request, Response } from "express";
-import { getGitWebhookSecret } from "../git-integration/gitCredentialsStore";
+import { prisma } from "../db/client";
+import { withOrganizationContext } from "../api/orgRequestContext";
+import {
+  resolveOrganizationByGithubInstallation,
+  resolveOrganizationByGitWebhookSecret,
+} from "../organization/webhookResolver";
 import { enqueueCodebaseIndexFromPush } from "./pushWebhookHandler";
 import { logger } from "../utils/logger";
 
@@ -21,21 +26,57 @@ type PushWebhookPayload = {
   }>;
 };
 
-function verifySignature(req: Request): boolean {
-  const secret = getGitWebhookSecret("github");
-  if (!secret) return true;
-  const sig = req.header("x-hub-signature-256");
-  if (!sig) return false;
-  const body = (req as Request & { rawBody?: string }).rawBody ?? "";
-  const digest = `sha256=${crypto
-    .createHmac("sha256", secret)
-    .update(body)
-    .digest("hex")}`;
-  try {
-    return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(digest));
-  } catch {
-    return false;
+async function resolveGithubWebhookOrganization(req: Request): Promise<string | null> {
+  const body = req.body as { installation?: { id?: number } };
+  if (body.installation?.id) {
+    const orgId = await resolveOrganizationByGithubInstallation(String(body.installation.id));
+    if (orgId) return orgId;
   }
+
+  const sig = req.header("x-hub-signature-256");
+  const rawBody = (req as Request & { rawBody?: string }).rawBody ?? "";
+  if (!sig || !rawBody) return null;
+
+  const configs = await prisma.organizationGitConfig.findMany({
+    where: { webhookSecret: { not: "" }, provider: "github" },
+    select: { organizationId: true, webhookSecret: true },
+  });
+
+  for (const config of configs) {
+    const digest = `sha256=${crypto
+      .createHmac("sha256", config.webhookSecret)
+      .update(rawBody)
+      .digest("hex")}`;
+    try {
+      if (crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(digest))) {
+        return config.organizationId;
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  const legacySecret = process.env.GITHUB_WEBHOOK_SECRET?.trim();
+  if (legacySecret) {
+    const digest = `sha256=${crypto
+      .createHmac("sha256", legacySecret)
+      .update(rawBody)
+      .digest("hex")}`;
+    try {
+      if (crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(digest))) {
+        return resolveOrganizationByGitWebhookSecret("github", legacySecret);
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return null;
+}
+
+function verifySignature(req: Request, organizationId: string | null): boolean {
+  if (!organizationId) return false;
+  return true;
 }
 
 function parseBranch(ref?: string): string {
@@ -81,7 +122,8 @@ async function processGithubPush(req: Request): Promise<void> {
 }
 
 export async function handleGithubWebhook(req: Request, res: Response): Promise<void> {
-  if (!verifySignature(req)) {
+  const organizationId = await resolveGithubWebhookOrganization(req);
+  if (!verifySignature(req, organizationId)) {
     res.status(401).json({ error: "invalid_signature" });
     return;
   }
@@ -92,10 +134,9 @@ export async function handleGithubWebhook(req: Request, res: Response): Promise<
     return;
   }
 
-  // Fast ack — queue processing runs after response (two-layer webhook pattern).
   res.status(202).json({ ok: true, queued: true });
 
-  void processGithubPush(req).catch((err) => {
-    logger.error({ err }, "github webhook async processing failed");
+  void withOrganizationContext(organizationId!, () => processGithubPush(req)).catch((err) => {
+    logger.error({ err, organizationId }, "github webhook async processing failed");
   });
 }

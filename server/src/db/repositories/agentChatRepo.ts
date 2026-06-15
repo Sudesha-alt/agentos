@@ -1,5 +1,6 @@
 import type { Prisma } from "../prisma";
 import { prisma } from "../client";
+import { requireActiveOrganizationId } from "../../organization/orgScope";
 import type {
   AgentChatDomain,
   AgentChatMessageDto,
@@ -56,8 +57,11 @@ export const agentChatRepo = {
     agentDomain: AgentChatDomain,
     contextKey: string
   ): Promise<AgentChatThreadDto | null> {
+    const organizationId = requireActiveOrganizationId();
     const row = await prisma.agentChatThread.findUnique({
-      where: { agentDomain_contextKey: { agentDomain, contextKey } },
+      where: {
+        organizationId_agentDomain_contextKey: { organizationId, agentDomain, contextKey },
+      },
       include: {
         messages: { orderBy: { createdAt: "asc" } },
       },
@@ -71,14 +75,22 @@ export const agentChatRepo = {
     title?: string;
   }): Promise<AgentChatThreadDto> {
     const contextKey = input.contextKey ?? "";
+    const organizationId = requireActiveOrganizationId();
     const existing = await prisma.agentChatThread.findUnique({
-      where: { agentDomain_contextKey: { agentDomain: input.agentDomain, contextKey } },
+      where: {
+        organizationId_agentDomain_contextKey: {
+          organizationId,
+          agentDomain: input.agentDomain,
+          contextKey,
+        },
+      },
       include: { messages: { orderBy: { createdAt: "asc" } } },
     });
     if (existing) return toThreadDto(existing);
 
     const created = await prisma.agentChatThread.create({
       data: {
+        organizationId,
         agentDomain: input.agentDomain,
         contextKey,
         title: input.title ?? null,

@@ -76,6 +76,17 @@ export default function Login() {
               required
             />
 
+            {!isSignup ? (
+              <div className="flex justify-end">
+                <Link
+                  to="/forgot-password"
+                  className="text-[12px] font-medium text-[#6B6B6B] hover:text-[#2B2D33] hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            ) : null}
+
             {error ? (
               <p className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
                 {error}

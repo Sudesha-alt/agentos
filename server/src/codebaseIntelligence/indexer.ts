@@ -8,6 +8,7 @@ import {
 } from "../llm/openaiClient";
 import { gitClient } from "../integrations/gitProvider";
 import { getRepoContext } from "../git-integration/gitCredentialsStore";
+import { requireActiveOrganizationId } from "../organization/orgScope";
 import { logger } from "../utils/logger";
 import { withRetry } from "../utils/retry";
 import { codebaseVectorStore } from "./vectorStore";
@@ -18,7 +19,8 @@ import type { LayoutFileInput } from "./layoutComputer";
 
 function repoIds() {
   const ctx = getRepoContext();
-  return { repoOwner: ctx.workspace, repoName: ctx.repoSlug };
+  const organizationId = requireActiveOrganizationId();
+  return { organizationId, repoOwner: ctx.workspace, repoName: ctx.repoSlug };
 }
 
 const SKIP_PATTERNS = [
@@ -288,15 +290,16 @@ async function indexFile(
   filePath: string,
   branchName: string
 ): Promise<"indexed" | "updated" | "unchanged"> {
-  const { repoOwner, repoName } = repoIds();
+  const { organizationId, repoOwner, repoName } = repoIds();
   const file = await gitClient.getFileContent(filePath, branchName);
   const contentHash = sha256(file.content);
 
   const existing = await prismaAny.codebaseFile.findUnique({
     where: {
-      repoOwner_repoName_filePath_branchName: {
-        repoOwner: repoOwner,
-        repoName: repoName,
+      organizationId_repoOwner_repoName_filePath_branchName: {
+        organizationId,
+        repoOwner,
+        repoName,
         filePath,
         branchName,
       },
@@ -311,16 +314,18 @@ async function indexFile(
 
   await prismaAny.codebaseFile.upsert({
     where: {
-      repoOwner_repoName_filePath_branchName: {
-        repoOwner: repoOwner,
-        repoName: repoName,
+      organizationId_repoOwner_repoName_filePath_branchName: {
+        organizationId,
+        repoOwner,
+        repoName,
         filePath,
         branchName,
       },
     },
     create: {
-      repoOwner: repoOwner,
-      repoName: repoName,
+      organizationId,
+      repoOwner,
+      repoName,
       filePath,
       branchName,
       content: file.content,

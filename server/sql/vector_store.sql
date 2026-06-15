@@ -8,7 +8,15 @@ CREATE TABLE IF NOT EXISTS vector_store (
   jira_ticket_id TEXT NOT NULL,
   jira_key TEXT NOT NULL,
   content_type TEXT NOT NULL CHECK (
-    content_type IN ('ticket', 'prd', 'qa_report', 'implementation', 'canary_finding')
+    content_type IN (
+      'ticket',
+      'prd',
+      'qa_report',
+      'implementation',
+      'canary_finding',
+      'org_intelligence',
+      'company_intelligence'
+    )
   ),
   content TEXT NOT NULL,
   embedding vector(1536) NOT NULL,
@@ -103,3 +111,16 @@ BEGIN
   LIMIT top_k;
 END;
 $$ LANGUAGE plpgsql;
+
+-- Patch existing deployments: expand content_type check (CREATE TABLE IF NOT EXISTS skips constraint updates).
+ALTER TABLE vector_store DROP CONSTRAINT IF EXISTS vector_store_content_type_check;
+ALTER TABLE vector_store ADD CONSTRAINT vector_store_content_type_check
+  CHECK (content_type IN (
+    'ticket',
+    'prd',
+    'qa_report',
+    'implementation',
+    'canary_finding',
+    'org_intelligence',
+    'company_intelligence'
+  ));

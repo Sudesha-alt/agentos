@@ -1,4 +1,6 @@
 import { prisma } from "../db/client";
+import { getActiveOrganizationId } from "../organization/context";
+import { requireActiveOrganizationId } from "../organization/orgScope";
 
 export type WorkspacePlanId = "pilot" | "starter" | "growth" | "enterprise";
 
@@ -34,18 +36,27 @@ function toDto(row: {
   };
 }
 
+function resolveOrganizationId(organizationId?: string): string {
+  return organizationId ?? requireActiveOrganizationId();
+}
+
 export const workspaceBillingStore = {
-  async get(): Promise<WorkspaceBillingDto> {
-    const row = await prisma.workspaceBilling.findUnique({ where: { id: "default" } });
+  async get(organizationId?: string): Promise<WorkspaceBillingDto> {
+    const orgId = resolveOrganizationId(organizationId);
+    const row = await prisma.workspaceBilling.findUnique({ where: { organizationId: orgId } });
     if (!row) return { ...DEFAULT };
     return toDto(row);
   },
 
-  async save(patch: Partial<WorkspaceBillingDto>): Promise<WorkspaceBillingDto> {
+  async save(
+    patch: Partial<WorkspaceBillingDto>,
+    organizationId?: string
+  ): Promise<WorkspaceBillingDto> {
+    const orgId = resolveOrganizationId(organizationId);
     const row = await prisma.workspaceBilling.upsert({
-      where: { id: "default" },
+      where: { organizationId: orgId },
       create: {
-        id: "default",
+        organizationId: orgId,
         planId: patch.planId ?? DEFAULT.planId,
         runsUsed: patch.runsUsed ?? DEFAULT.runsUsed,
         runsCap: patch.runsCap ?? DEFAULT.runsCap,
@@ -63,5 +74,21 @@ export const workspaceBillingStore = {
       },
     });
     return toDto(row);
+  },
+
+  async incrementRunsUsed(organizationId?: string): Promise<void> {
+    const orgId = organizationId ?? getActiveOrganizationId();
+    if (!orgId) return;
+    await prisma.workspaceBilling.upsert({
+      where: { organizationId: orgId },
+      create: {
+        organizationId: orgId,
+        planId: DEFAULT.planId,
+        runsUsed: 1,
+        runsCap: DEFAULT.runsCap,
+        billingCycle: DEFAULT.billingCycle,
+      },
+      update: { runsUsed: { increment: 1 } },
+    });
   },
 };

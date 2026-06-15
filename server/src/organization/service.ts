@@ -29,6 +29,16 @@ function domainToOrgName(domain: string): string {
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
+async function uniqueSlug(base: string): Promise<string> {
+  let slug = base;
+  let suffix = 1;
+  while (await prisma.organization.findUnique({ where: { slug } })) {
+    slug = `${base}-${suffix}`;
+    suffix += 1;
+  }
+  return slug;
+}
+
 export interface ProvisionedUserOrg {
   user: { id: string; email: string; name: string };
   organization: { id: string; name: string; domain: string; slug: string };
@@ -36,25 +46,143 @@ export interface ProvisionedUserOrg {
   createdOrg: boolean;
 }
 
-/** First user from an email domain creates the org; later users auto-join the same team. */
-export async function provisionUserAndOrganization(
-  email: string
-): Promise<ProvisionedUserOrg> {
+/** Upsert user record without assigning an organization. */
+export async function ensureUser(email: string) {
   const normalizedEmail = email.trim().toLowerCase();
-  const domain = extractEmailDomain(normalizedEmail);
   const name = displayNameFromEmail(normalizedEmail);
-
-  const user = await prisma.user.upsert({
+  return prisma.user.upsert({
     where: { email: normalizedEmail },
     create: { email: normalizedEmail, name },
     update: { name },
   });
+}
 
-  const existingOrg = await prisma.organization.findUnique({
+export async function findOrganizationsByDomain(domain: string) {
+  const normalizedDomain = domain.trim().toLowerCase();
+  const organizations = await prisma.organization.findMany({
+    where: { domain: normalizedDomain },
+    include: {
+      companyProfile: { select: { companyName: true } },
+      _count: { select: { members: true } },
+    },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return organizations.map((org) => ({
+    id: org.id,
+    name: org.name,
+    slug: org.slug,
+    domain: org.domain,
+    memberCount: org._count.members,
+    companyName: org.companyProfile?.companyName || org.name,
+  }));
+}
+
+export async function createOrganizationForUser(
+  userId: string,
+  email: string,
+  orgName?: string
+): Promise<ProvisionedUserOrg> {
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  const domain = extractEmailDomain(email);
+  const name = orgName?.trim() || domainToOrgName(domain);
+  const slug = await uniqueSlug(domainToSlug(domain));
+
+  const organization = await prisma.organization.create({
+    data: {
+      name,
+      slug,
+      domain,
+      members: {
+        create: {
+          userId: user.id,
+          role: "OWNER",
+        },
+      },
+      billing: {
+        create: {
+          planId: "pilot",
+          runsUsed: 0,
+          runsCap: 20,
+          billingCycle: "monthly",
+        },
+      },
+    },
+  });
+
+  return {
+    user,
+    organization: {
+      id: organization.id,
+      name: organization.name,
+      domain: organization.domain,
+      slug: organization.slug,
+    },
+    role: "OWNER",
+    createdOrg: true,
+  };
+}
+
+export async function joinOrganizationForUser(
+  userId: string,
+  email: string,
+  organizationId: string
+): Promise<ProvisionedUserOrg> {
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  const domain = extractEmailDomain(email);
+
+  const organization = await prisma.organization.findUnique({
+    where: { id: organizationId },
+  });
+  if (!organization) {
+    throw new Error("organization_not_found");
+  }
+  if (organization.domain !== domain) {
+    throw new Error("organization_domain_mismatch");
+  }
+
+  const existing = await prisma.organizationMember.findUnique({
+    where: {
+      organizationId_userId: { organizationId, userId },
+    },
+  });
+
+  const membership =
+    existing ??
+    (await prisma.organizationMember.create({
+      data: {
+        organizationId,
+        userId,
+        role: "MEMBER",
+      },
+    }));
+
+  return {
+    user,
+    organization: {
+      id: organization.id,
+      name: organization.name,
+      domain: organization.domain,
+      slug: organization.slug,
+    },
+    role: membership.role,
+    createdOrg: false,
+  };
+}
+
+/** @deprecated Auto-joins by domain — use ensureUser + create/join instead. */
+export async function provisionUserAndOrganization(
+  email: string
+): Promise<ProvisionedUserOrg> {
+  const user = await ensureUser(email);
+  const domain = extractEmailDomain(email);
+
+  const existingOrg = await prisma.organization.findFirst({
     where: { domain },
     include: {
       members: { where: { userId: user.id }, take: 1 },
     },
+    orderBy: { createdAt: "asc" },
   });
 
   if (existingOrg) {
@@ -81,39 +209,7 @@ export async function provisionUserAndOrganization(
     };
   }
 
-  const slugBase = domainToSlug(domain);
-  let slug = slugBase;
-  let suffix = 1;
-  while (await prisma.organization.findUnique({ where: { slug } })) {
-    slug = `${slugBase}-${suffix}`;
-    suffix += 1;
-  }
-
-  const organization = await prisma.organization.create({
-    data: {
-      name: domainToOrgName(domain),
-      slug,
-      domain,
-      members: {
-        create: {
-          userId: user.id,
-          role: "OWNER",
-        },
-      },
-    },
-  });
-
-  return {
-    user,
-    organization: {
-      id: organization.id,
-      name: organization.name,
-      domain: organization.domain,
-      slug: organization.slug,
-    },
-    role: "OWNER",
-    createdOrg: true,
-  };
+  return createOrganizationForUser(user.id, email);
 }
 
 export async function getOrganizationForUser(userId: string) {

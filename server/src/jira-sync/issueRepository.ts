@@ -1,5 +1,6 @@
 import { prisma } from "../db/client";
 import type { Prisma } from "../db/prisma";
+import { activeOrganizationFilter, requireActiveOrganizationId } from "../organization/orgScope";
 import type { FetchedJiraIssue } from "./issueFetcher";
 
 export interface ListJiraIssuesOptions {
@@ -9,16 +10,25 @@ export interface ListJiraIssuesOptions {
   limit?: number;
   offset?: number;
   includeDeleted?: boolean;
+  organizationId?: string;
+}
+
+function orgWhere(organizationId?: string) {
+  return { organizationId: organizationId ?? requireActiveOrganizationId() };
 }
 
 export async function upsertJiraIssueRecord(
   issue: FetchedJiraIssue,
-  options?: { embeddedAt?: Date; isDeleted?: boolean }
+  options?: { embeddedAt?: Date; isDeleted?: boolean; organizationId?: string }
 ): Promise<void> {
+  const organizationId = options?.organizationId ?? requireActiveOrganizationId();
   const now = new Date();
   await prisma.jiraIssue.upsert({
-    where: { jiraKey: issue.jiraKey },
+    where: {
+      organizationId_jiraKey: { organizationId, jiraKey: issue.jiraKey },
+    },
     create: {
+      organizationId,
       jiraTicketId: issue.jiraTicketId,
       jiraKey: issue.jiraKey,
       projectKey: issue.projectKey,
@@ -62,23 +72,28 @@ export async function upsertJiraIssueRecord(
   });
 }
 
-export async function markJiraIssueDeleted(jiraKey: string): Promise<void> {
+export async function markJiraIssueDeleted(
+  jiraKey: string,
+  organizationId?: string
+): Promise<void> {
+  const org = orgWhere(organizationId);
   await prisma.jiraIssue.updateMany({
-    where: { jiraKey },
+    where: { jiraKey, ...org },
     data: { isDeleted: true, updatedAt: new Date() },
   });
 }
 
-export async function getJiraIssueByKey(jiraKey: string) {
+export async function getJiraIssueByKey(jiraKey: string, organizationId?: string) {
+  const org = orgWhere(organizationId);
   return prisma.jiraIssue.findFirst({
-    where: { jiraKey, isDeleted: false },
+    where: { jiraKey, isDeleted: false, ...org },
   });
 }
 
 export async function listJiraIssues(options: ListJiraIssuesOptions = {}) {
   const limit = Math.min(options.limit ?? 50, 200);
   const offset = options.offset ?? 0;
-  const where: Record<string, unknown> = {};
+  const where: Record<string, unknown> = { ...orgWhere(options.organizationId) };
 
   if (!options.includeDeleted) {
     where.isDeleted = false;
@@ -110,21 +125,22 @@ export async function listJiraIssues(options: ListJiraIssuesOptions = {}) {
   return { items, total, limit, offset };
 }
 
-export async function getJiraIssueStats(): Promise<{
+export async function getJiraIssueStats(organizationId?: string): Promise<{
   total: number;
   embedded: number;
   deleted: number;
   byStatus: Record<string, number>;
 }> {
+  const org = orgWhere(organizationId);
   const [total, embedded, deleted, rows] = await Promise.all([
-    prisma.jiraIssue.count({ where: { isDeleted: false } }),
+    prisma.jiraIssue.count({ where: { ...org, isDeleted: false } }),
     prisma.jiraIssue.count({
-      where: { isDeleted: false, embeddedAt: { not: null } },
+      where: { ...org, isDeleted: false, embeddedAt: { not: null } },
     }),
-    prisma.jiraIssue.count({ where: { isDeleted: true } }),
+    prisma.jiraIssue.count({ where: { ...org, isDeleted: true } }),
     prisma.jiraIssue.groupBy({
       by: ["status"],
-      where: { isDeleted: false },
+      where: { ...org, isDeleted: false },
       _count: { status: true },
     }),
   ]);
@@ -138,11 +154,14 @@ export async function getJiraIssueStats(): Promise<{
 }
 
 export async function listJiraIssuesByStatus(
-  statuses: string[]
+  statuses: string[],
+  organizationId?: string
 ): Promise<Array<{ jiraKey: string; status: string }>> {
   if (statuses.length === 0) return [];
+  const org = orgWhere(organizationId);
   return prisma.jiraIssue.findMany({
     where: {
+      ...org,
       isDeleted: false,
       status: { in: statuses },
     },

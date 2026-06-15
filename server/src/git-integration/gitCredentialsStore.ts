@@ -5,6 +5,12 @@ import {
 } from "../integrations/git/githubApp";
 import { removeGithubInstallation } from "./githubInstallationStore";
 import { getDb } from "../jira-intake/sqliteStore";
+import { getActiveOrganizationId } from "../organization/context";
+import {
+  loadOrganizationGitConfig,
+  saveOrganizationGitConfig,
+  type OrganizationGitCredentials,
+} from "../organization/gitConfigStore";
 import { logger } from "../utils/logger";
 import type { GitProviderId, GitRepoContext } from "../integrations/git/types";
 
@@ -160,20 +166,69 @@ export function loadGitCredentialsFromStore(): StoredGitCredentials | null {
 }
 
 let runtimeCreds: StoredGitCredentials | null = null;
+const orgRuntimeCreds = new Map<string, StoredGitCredentials>();
+
+function orgCredsToStored(creds: OrganizationGitCredentials): StoredGitCredentials {
+  return {
+    provider: creds.provider,
+    workspace: creds.workspace,
+    repoSlug: creds.repoSlug,
+    username: creds.username,
+    token: creds.token,
+    webhookSecret: creds.webhookSecret,
+    defaultBranch: creds.defaultBranch,
+    installationId: creds.installationId,
+    authMethod: creds.authMethod,
+    source: "database",
+  };
+}
+
+export async function warmOrganizationGitCredentials(
+  organizationId: string
+): Promise<void> {
+  const fromDb = await loadOrganizationGitConfig(organizationId);
+  if (!fromDb) return;
+  const stored = orgCredsToStored(fromDb);
+  orgRuntimeCreds.set(organizationId, stored);
+  if (getActiveOrganizationId() === organizationId) {
+    runtimeCreds = stored;
+    applyGitCredentialsToProcessEnv(stored);
+  }
+}
+
+export function activateOrganizationGitContext(organizationId: string | null): void {
+  if (organizationId && orgRuntimeCreds.has(organizationId)) {
+    runtimeCreds = orgRuntimeCreds.get(organizationId)!;
+    applyGitCredentialsToProcessEnv(runtimeCreds);
+    return;
+  }
+  if (!organizationId) {
+    runtimeCreds = null;
+  }
+}
+
+function getActiveGitCredentialsInternal(): StoredGitCredentials | null {
+  const orgId = getActiveOrganizationId();
+  if (orgId && orgRuntimeCreds.has(orgId)) {
+    return orgRuntimeCreds.get(orgId)!;
+  }
+  return runtimeCreds ?? loadGitCredentialsFromStore();
+}
 
 export function getGitCredentials(): StoredGitCredentials {
-  if (!runtimeCreds) {
+  const creds = getActiveGitCredentialsInternal();
+  if (!creds) {
     throw new Error(
       "Git provider not configured. Connect GitHub or Bitbucket under Admin → Git integration."
     );
   }
-  if (runtimeCreds.authMethod === "github_app" && runtimeCreds.installationId) {
-    return runtimeCreds;
+  if (creds.authMethod === "github_app" && creds.installationId) {
+    return creds;
   }
-  if (!runtimeCreds.token) {
+  if (!creds.token) {
     throw new Error("Git provider not configured.");
   }
-  return runtimeCreds;
+  return creds;
 }
 
 export async function resolveGithubAccessToken(
@@ -199,7 +254,7 @@ export function getRepoContext(): GitRepoContext {
 }
 
 export function getPublicGitCredentials(): PublicGitCredentials {
-  const creds = runtimeCreds ?? loadGitCredentialsFromStore();
+  const creds = getActiveGitCredentialsInternal();
   if (!creds || (!creds.token && !creds.installationId)) {
     return {
       provider: null,
@@ -238,7 +293,7 @@ export function getPublicGitCredentials(): PublicGitCredentials {
 }
 
 export function getGitWebhookSecret(provider: GitProviderId): string {
-  const creds = runtimeCreds ?? loadGitCredentialsFromStore();
+  const creds = getActiveGitCredentialsInternal();
   if (creds?.webhookSecret) return creds.webhookSecret;
   if (provider === "github") {
     return (
@@ -248,6 +303,28 @@ export function getGitWebhookSecret(provider: GitProviderId): string {
     );
   }
   return process.env.BITBUCKET_WEBHOOK_SECRET?.trim() ?? "";
+}
+
+export async function saveGitCredentialsForOrganization(
+  organizationId: string,
+  input: {
+    provider: GitProviderId;
+    workspace: string;
+    repoSlug: string;
+    username?: string | null;
+    token?: string;
+    webhookSecret?: string;
+    defaultBranch?: string;
+    installationId?: string | null;
+    authMethod?: GitAuthMethod;
+  }
+): Promise<StoredGitCredentials> {
+  const creds = await saveOrganizationGitConfig(organizationId, input);
+  const stored = orgCredsToStored(creds);
+  orgRuntimeCreds.set(organizationId, stored);
+  runtimeCreds = stored;
+  applyGitCredentialsToProcessEnv(stored);
+  return stored;
 }
 
 export function saveGithubAppInstallation(installationId: string): void {

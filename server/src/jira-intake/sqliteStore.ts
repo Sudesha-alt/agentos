@@ -39,6 +39,16 @@ function migratePipelineQueueTable(database: Database.Database): void {
       ON pipeline_queue_items(jira_key);
   `);
 
+  const queueColumns = database
+    .prepare("PRAGMA table_info(pipeline_queue_items)")
+    .all() as Array<{ name: string }>;
+  const queueNames = new Set(queueColumns.map((col) => col.name));
+  if (!queueNames.has("organization_id")) {
+    database.exec(
+      "ALTER TABLE pipeline_queue_items ADD COLUMN organization_id TEXT NOT NULL DEFAULT 'legacy'"
+    );
+  }
+
   const columns = database
     .prepare("PRAGMA table_info(pipeline_jira_credentials)")
     .all() as Array<{ name: string }>;

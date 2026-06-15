@@ -1,5 +1,6 @@
 import { prisma } from "../db/client";
 import { embedder } from "../rag/embedder";
+import { requireActiveOrganizationId } from "../organization/orgScope";
 import type { ImplementationOutput, PrdOutput, QaOutput } from "../types/agents";
 import type { ValidationResult } from "../types/pipeline";
 import { logger } from "../utils/logger";
@@ -23,8 +24,10 @@ export const orgIntelligence = {
     metadata?: Record<string, unknown>;
   }): Promise<void> {
     try {
+      const organizationId = requireActiveOrganizationId();
       const record = await prisma.orgIntelligenceRecord.create({
         data: {
+          organizationId,
           sourceType: input.sourceType,
           jiraKey: input.jiraKey,
           pipelineId: input.pipelineId,
@@ -47,6 +50,7 @@ export const orgIntelligence = {
       await embedder.embedOrgIntelligence(record.id, input.jiraKey, text, {
         sourceType: input.sourceType,
         component: input.component,
+        organizationId,
       });
 
       logger.info(
@@ -121,8 +125,10 @@ export const orgIntelligence = {
   },
 
   async listRecent(options: { limit?: number; jiraKey?: string; sourceType?: string } = {}) {
+    const organizationId = requireActiveOrganizationId();
     return prisma.orgIntelligenceRecord.findMany({
       where: {
+        organizationId,
         ...(options.jiraKey ? { jiraKey: options.jiraKey } : {}),
         ...(options.sourceType ? { sourceType: options.sourceType } : {}),
       },

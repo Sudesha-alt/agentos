@@ -55,7 +55,7 @@ export const APP_NAV = [
   { to: "/app", label: "Dashboard", breadcrumb: "Dashboard", end: true },
   { to: "/app/pipelines", label: "Pipelines", breadcrumb: "Pipelines" },
   ...AGENT_NAV.map(({ to, label, breadcrumb }) => ({ to, label, breadcrumb })),
-  { to: "/app/org-intelligence", label: "Roadmap", breadcrumb: "Roadmap" },
+  { to: "/app/roadmap", label: "Roadmap", breadcrumb: "Roadmap" },
   { to: "/app/costs", label: "Cost & ROI", breadcrumb: "Costs" },
   { to: "/app/settings", label: "Configuration", breadcrumb: "Settings" },
   { to: "/app/audit", label: "Audit Trail", breadcrumb: "Audit" },
@@ -96,7 +96,7 @@ export const APP_NAV_SECTIONS = [
   {
     id: "intelligence",
     label: "Intelligence",
-    items: [{ to: "/app/org-intelligence", label: "Roadmap", breadcrumb: "Roadmap" }],
+    items: [{ to: "/app/roadmap", label: "Roadmap", breadcrumb: "Roadmap" }],
   },
   {
     id: "analytics",

@@ -1,95 +1,113 @@
 import { DATA_MODE } from "../../shared/config/app";
 import { fetchJson } from "../../shared/lib/fetchJson";
+import { authHeaders } from "../../shared/lib/authHeaders";
 import { apiPath } from "../../shared/config/apiBase";
 import { useResource } from "../../shared/lib/useResource";
 import { mockApi } from "../../app/api/mock";
 
+function headers(extra = {}) {
+  return { ...authHeaders(), ...extra };
+}
+
 const restCodebaseAdapter = {
   status: (branch) => {
     const qs = branch ? `?branch=${encodeURIComponent(branch)}` : "";
-    return fetchJson(apiPath("/api", `/codebase/status${qs}`));
+    return fetchJson(apiPath("/api", `/codebase/status${qs}`), { headers: headers() });
   },
   insights: (branch = "main") =>
-    fetchJson(apiPath("/api", `/codebase/insights?branch=${encodeURIComponent(branch)}`)),
+    fetchJson(apiPath("/api", `/codebase/insights?branch=${encodeURIComponent(branch)}`), {
+      headers: headers(),
+    }),
   triggerFullIndex: (branch) =>
     fetchJson(apiPath("/git-integration", "/index/full"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: headers({ "Content-Type": "application/json" }),
       body: JSON.stringify(branch ? { branch } : {}),
     }),
-  structure: () => fetchJson(apiPath("/api", "/codebase/structure")),
-  branches: () => fetchJson(apiPath("/api", "/codebase/branches")),
-  commits: () => fetchJson(apiPath("/api", "/codebase/commits")),
+  structure: () => fetchJson(apiPath("/api", "/codebase/structure"), { headers: headers() }),
+  branches: () => fetchJson(apiPath("/api", "/codebase/branches"), { headers: headers() }),
+  commits: () => fetchJson(apiPath("/api", "/codebase/commits"), { headers: headers() }),
   search: (query, branch = "main") =>
     fetchJson(apiPath("/api/codebase/search"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: headers({ "Content-Type": "application/json" }),
       body: JSON.stringify({ query, branchName: branch }),
     }),
   visualization: (branch = "main", refresh = false) => {
     const qs = new URLSearchParams({ branch });
     if (refresh) qs.set("refresh", "true");
-    return fetchJson(apiPath("/api", `/codebase/visualization?${qs.toString()}`));
+    return fetchJson(apiPath("/api", `/codebase/visualization?${qs.toString()}`), {
+      headers: headers(),
+    });
   },
   fileInterior: (branch, filePath) =>
     fetchJson(
       apiPath(
         "/api",
         `/codebase/visualization/file?branch=${encodeURIComponent(branch)}&path=${encodeURIComponent(filePath)}`
-      )
+      ),
+      { headers: headers() }
     ),
   ask: (question, branch = "main") =>
     fetchJson(apiPath("/api/codebase/ask"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: headers({ "Content-Type": "application/json" }),
       body: JSON.stringify({ question, branchName: branch }),
     }),
   directory: (dirPath = "", branch = "main") => {
     const qs = new URLSearchParams({ branch });
     if (dirPath) qs.set("path", dirPath);
-    return fetchJson(apiPath("/api", `/codebase/directory?${qs.toString()}`));
+    return fetchJson(apiPath("/api", `/codebase/directory?${qs.toString()}`), { headers: headers() });
   },
   file: (filePath, branch = "main", includeContent = false) => {
     const qs = new URLSearchParams({ branch, path: filePath });
     if (includeContent) qs.set("includeContent", "true");
-    return fetchJson(apiPath("/api", `/codebase/file?${qs.toString()}`));
+    return fetchJson(apiPath("/api", `/codebase/file?${qs.toString()}`), { headers: headers() });
   },
   fileConnections: (filePath, branch = "main") =>
     fetchJson(
       apiPath(
         "/api",
         `/codebase/file/connections?branch=${encodeURIComponent(branch)}&path=${encodeURIComponent(filePath)}`
-      )
+      ),
+      { headers: headers() }
     ),
   tour: (branch = "main") =>
-    fetchJson(apiPath("/api", `/codebase/tour?branch=${encodeURIComponent(branch)}`)),
+    fetchJson(apiPath("/api", `/codebase/tour?branch=${encodeURIComponent(branch)}`), {
+      headers: headers(),
+    }),
   generateTour: (branch = "main") =>
     fetchJson(apiPath("/api/codebase/tour/generate"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: headers({ "Content-Type": "application/json" }),
       body: JSON.stringify({ branchName: branch }),
     }),
   health: (branch = "main") =>
-    fetchJson(apiPath("/api", `/codebase/health?branch=${encodeURIComponent(branch)}`)),
+    fetchJson(apiPath("/api", `/codebase/health?branch=${encodeURIComponent(branch)}`), {
+      headers: headers(),
+    }),
   healthTimeline: (branch = "main", days = 30) =>
     fetchJson(
       apiPath(
         "/api",
         `/codebase/health/timeline?branch=${encodeURIComponent(branch)}&days=${days}`
-      )
+      ),
+      { headers: headers() }
     ),
   impact: (payload) =>
     fetchJson(apiPath("/api/codebase/impact"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: headers({ "Content-Type": "application/json" }),
       body: JSON.stringify(payload),
     }),
   knowledge: (branch = "main") =>
-    fetchJson(apiPath("/api", `/codebase/knowledge?branch=${encodeURIComponent(branch)}`)),
+    fetchJson(apiPath("/api", `/codebase/knowledge?branch=${encodeURIComponent(branch)}`), {
+      headers: headers(),
+    }),
   generateKnowledge: (branch = "main") =>
     fetchJson(apiPath("/api/codebase/knowledge/generate"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: headers({ "Content-Type": "application/json" }),
       body: JSON.stringify({ branchName: branch }),
     }),
 };
