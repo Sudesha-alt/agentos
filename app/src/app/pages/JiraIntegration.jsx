@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   connectPipelineJira,
   getPipelineJiraBoardColumns,
@@ -8,14 +8,26 @@ import {
   usePipelineIntakeTickets,
   usePipelineJiraSetup,
 } from "../../entities/pipeline-jira";
+import {
+  disconnectJiraOAuth,
+  getJiraOAuthStatus,
+  startJiraOAuth,
+} from "../../entities/jira-oauth";
 import EmptyState from "../components/EmptyState";
 import LabelPill from "../components/LabelPill";
 import Spinner from "../components/Spinner";
 import PipelineQueuePanel from "../../widgets/pipeline-queue/PipelineQueuePanel";
 import JiraSyncStatusPanel from "../../widgets/jira-sync/JiraSyncStatusPanel";
 import JiraTicketBrowser from "../../widgets/jira-sync/JiraTicketBrowser";
-import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
+import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import { SettingsPageShell } from "../layout/SettingsPageShell";
+
+const OAUTH_ERROR_MESSAGES = {
+  invalid_state: "OAuth session expired or was invalid. Try Connect with Atlassian again.",
+  connect_failed: "Atlassian authorized the app, but the server could not save the connection.",
+  no_jira_site: "No Jira Cloud site was found for this Atlassian account.",
+  access_denied: "Atlassian authorization was cancelled.",
+};
 
 export default function JiraIntegration({ embedded = false }) {
   const {
@@ -46,8 +58,11 @@ export default function JiraIntegration({ embedded = false }) {
 }
 
 function JiraIntegrationContent({ setup, refetchSetup }) {
+  const [searchParams, setSearchParams] = useSearchParams();
   const connected = Boolean(setup?.connected);
   const intakeConfigured = Boolean(setup?.intake?.aiWorkerColumnName);
+  const connectedViaOAuth = Boolean(setup?.jira?.connectedViaOAuth);
+  const authMethod = setup?.jira?.authMethod ?? "api_token";
 
   const {
     data: intakeData,
@@ -70,16 +85,60 @@ function JiraIntegrationContent({ setup, refetchSetup }) {
     () => setup?.intake?.aiWorkerColumnName || ""
   );
   const [connectPending, setConnectPending] = useState(false);
+  const [oauthPending, setOauthPending] = useState(false);
+  const [disconnectPending, setDisconnectPending] = useState(false);
   const [mappingPending, setMappingPending] = useState(false);
   const [webhookPending, setWebhookPending] = useState(false);
-  const [statusMessage, setStatusMessage] = useState("");
-  const [connectError, setConnectError] = useState("");
+  const [showLegacyForm, setShowLegacyForm] = useState(
+    () => connected && !connectedViaOAuth
+  );
+  const [oauthAvailable, setOauthAvailable] = useState(false);
+  const [statusMessage, setStatusMessage] = useState(() => {
+    if (searchParams.get("connected") === "1") {
+      return "Jira connected via Atlassian OAuth.";
+    }
+    return "";
+  });
+  const [connectError, setConnectError] = useState(() => {
+    const code = searchParams.get("error");
+    if (code && OAUTH_ERROR_MESSAGES[code]) {
+      return OAUTH_ERROR_MESSAGES[code];
+    }
+    if (code) return `OAuth error: ${code}`;
+    return "";
+  });
+  const clearedOAuthParams = useRef(false);
 
-  const canConnect =
+  const canConnectLegacy =
     baseUrl &&
     boardId &&
     projectKeys.trim() &&
     (apiToken.trim() || setup?.jira?.hasApiToken);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const status = await getJiraOAuthStatus();
+        if (!cancelled) setOauthAvailable(Boolean(status?.oauthAvailable));
+      } catch {
+        /* optional */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (clearedOAuthParams.current) return;
+    if (!searchParams.get("connected") && !searchParams.get("error")) return;
+    clearedOAuthParams.current = true;
+    const next = new URLSearchParams(searchParams);
+    next.delete("connected");
+    next.delete("error");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!connected) return;
@@ -105,6 +164,33 @@ function JiraIntegrationContent({ setup, refetchSetup }) {
   const intakeStatuses = setup?.intake?.aiWorkerStatuses ?? [];
   const intakeItems = intakeData?.items ?? [];
 
+  async function handleOAuthConnect() {
+    setOauthPending(true);
+    setConnectError("");
+    setStatusMessage("");
+    try {
+      await startJiraOAuth();
+    } catch (err) {
+      setConnectError(err.message || "Could not start Atlassian OAuth");
+      setOauthPending(false);
+    }
+  }
+
+  async function handleDisconnect() {
+    setDisconnectPending(true);
+    setConnectError("");
+    setStatusMessage("");
+    try {
+      await disconnectJiraOAuth();
+      setStatusMessage("Jira disconnected.");
+      await refetchSetup();
+    } catch (err) {
+      setConnectError(err.message || "Disconnect failed");
+    } finally {
+      setDisconnectPending(false);
+    }
+  }
+
   async function handleConnect(e) {
     e.preventDefault();
     setConnectPending(true);
@@ -123,7 +209,7 @@ function JiraIntegrationContent({ setup, refetchSetup }) {
           .filter(Boolean),
       });
       setApiToken("");
-      setStatusMessage("Jira connected.");
+      setStatusMessage("Jira connected with API token.");
       await refetchSetup();
     } catch (err) {
       setConnectError(err.message || "Connect failed");
@@ -185,69 +271,44 @@ function JiraIntegrationContent({ setup, refetchSetup }) {
       ) : null}
 
       <Panel>
-        <PanelHeader title="Connect Jira" />
-        <form className="grid gap-4 p-4 md:grid-cols-2 sm:px-6" onSubmit={handleConnect}>
-          <label className="block text-sm">
-            <span className="type-kicker">Base URL</span>
-            <input
-              className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
-              value={baseUrl}
-              onChange={(e) => setBaseUrl(e.target.value)}
-              placeholder="https://your-domain.atlassian.net"
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="type-kicker">Email</span>
-            <input
-              className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="type-kicker">API token</span>
-            <input
-              type="password"
-              className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
-              value={apiToken}
-              onChange={(e) => setApiToken(e.target.value)}
-              placeholder={setup?.jira?.hasApiToken ? "Saved — leave blank to keep" : "Required"}
-            />
-          </label>
-          <label className="block text-sm">
-            <span className="type-kicker">Board ID</span>
-            <input
-              className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
-              value={boardId}
-              onChange={(e) => setBoardId(e.target.value)}
-            />
-          </label>
-          <label className="block text-sm md:col-span-2">
-            <span className="type-kicker">Project keys (comma-separated)</span>
-            <input
-              className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
-              value={projectKeys}
-              onChange={(e) => setProjectKeys(e.target.value)}
-              placeholder="SCRUM"
-            />
-          </label>
-          <label className="block text-sm md:col-span-2">
-            <span className="type-kicker">Webhook secret (optional)</span>
-            <input
-              className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
-              value={webhookSecret}
-              onChange={(e) => setWebhookSecret(e.target.value)}
-            />
-          </label>
-          <div className="flex flex-wrap gap-3 md:col-span-2">
-            <button
-              type="submit"
-              disabled={!canConnect || connectPending}
-              className="app-btn-primary disabled:opacity-50"
-            >
-              {connectPending ? "Connecting…" : connected ? "Update connection" : "Connect"}
-            </button>
-            {connected ? (
+        <PanelHeader
+          title="Connect Jira"
+          subtitle={
+            connected
+              ? `Connected via ${authMethod === "oauth" ? "Atlassian OAuth" : "API token"}`
+              : "OAuth is recommended for new connections."
+          }
+        />
+
+        {connected ? (
+          <div className="space-y-3 px-4 pb-4 sm:px-6">
+            <p className="text-sm text-app-ink">
+              Site:{" "}
+              <span className="font-medium text-indigo">
+                {setup?.jira?.siteName || setup?.jira?.baseUrl || "—"}
+              </span>
+            </p>
+            <p className="text-sm text-app-ink-dim">
+              Auth:{" "}
+              <LabelPill
+                label={authMethod === "oauth" ? "OAuth 3LO" : "API token"}
+                tone={authMethod === "oauth" ? "indigo" : "muted"}
+              />
+              {setup?.jira?.email ? (
+                <span className="ml-2">({setup.jira.email})</span>
+              ) : null}
+            </p>
+            <div className="flex flex-wrap gap-3">
+              {oauthAvailable ? (
+                <button
+                  type="button"
+                  disabled={oauthPending}
+                  onClick={handleOAuthConnect}
+                  className="app-btn-primary disabled:opacity-50"
+                >
+                  {oauthPending ? "Redirecting…" : "Reconnect with Atlassian"}
+                </button>
+              ) : null}
               <button
                 type="button"
                 disabled={webhookPending}
@@ -256,15 +317,176 @@ function JiraIntegrationContent({ setup, refetchSetup }) {
               >
                 {webhookPending ? "Registering…" : "Register webhook"}
               </button>
-            ) : null}
+              <button
+                type="button"
+                disabled={disconnectPending}
+                onClick={handleDisconnect}
+                className="rounded-app-sm border border-danger/40 px-4 py-2 text-sm text-danger hover:bg-danger/10"
+              >
+                {disconnectPending ? "Disconnecting…" : "Disconnect"}
+              </button>
+            </div>
+            <p className="text-xs text-app-ink-mute">
+              Webhook URL: <code className="text-indigo">{setup.webhookUrl}</code> — events: created, updated, deleted
+            </p>
           </div>
-        </form>
-        {connected ? (
-          <p className="px-5 pb-4 text-xs text-app-ink-mute sm:px-6">
-            Webhook URL: <code className="text-indigo">{setup.webhookUrl}</code> — events: created, updated, deleted
-          </p>
+        ) : (
+          <div className="space-y-4 px-4 pb-4 sm:px-6">
+            {oauthAvailable ? (
+              <button
+                type="button"
+                disabled={oauthPending}
+                onClick={handleOAuthConnect}
+                className="app-btn-primary disabled:opacity-50"
+              >
+                {oauthPending ? "Redirecting to Atlassian…" : "Connect with Atlassian"}
+              </button>
+            ) : (
+              <p className="text-sm text-app-ink-dim">
+                Atlassian OAuth is not configured on the server. Use the API token form below or set ATLASSIAN_CLIENT_ID on the API.
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setShowLegacyForm((v) => !v)}
+              className="text-sm text-app-ink-dim underline hover:text-app-ink"
+            >
+              {showLegacyForm ? "Hide API token connect" : "Use API token (legacy)"}
+            </button>
+          </div>
+        )}
+
+        {(!connected || showLegacyForm) && !connectedViaOAuth ? (
+          <form className="grid gap-4 border-t border-app-border p-4 md:grid-cols-2 sm:px-6" onSubmit={handleConnect}>
+            <label className="block text-sm md:col-span-2">
+              <span className="type-kicker text-app-ink-mute">Legacy — API token (Basic auth)</span>
+            </label>
+            <label className="block text-sm">
+              <span className="type-kicker">Base URL</span>
+              <input
+                className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
+                value={baseUrl}
+                onChange={(e) => setBaseUrl(e.target.value)}
+                placeholder="https://your-domain.atlassian.net"
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="type-kicker">Email</span>
+              <input
+                className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="type-kicker">API token</span>
+              <input
+                type="password"
+                className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
+                value={apiToken}
+                onChange={(e) => setApiToken(e.target.value)}
+                placeholder={setup?.jira?.hasApiToken ? "Saved — leave blank to keep" : "Required"}
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="type-kicker">Board ID</span>
+              <input
+                className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
+                value={boardId}
+                onChange={(e) => setBoardId(e.target.value)}
+              />
+            </label>
+            <label className="block text-sm md:col-span-2">
+              <span className="type-kicker">Project keys (comma-separated)</span>
+              <input
+                className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
+                value={projectKeys}
+                onChange={(e) => setProjectKeys(e.target.value)}
+                placeholder="SCRUM"
+              />
+            </label>
+            <label className="block text-sm md:col-span-2">
+              <span className="type-kicker">Webhook secret (optional)</span>
+              <input
+                className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
+                value={webhookSecret}
+                onChange={(e) => setWebhookSecret(e.target.value)}
+              />
+            </label>
+            <div className="flex flex-wrap gap-3 md:col-span-2">
+              <button
+                type="submit"
+                disabled={!canConnectLegacy || connectPending}
+                className="rounded-app-sm border border-app-border px-4 py-2 text-sm text-app-ink hover:bg-app-surface-elevated disabled:opacity-50"
+              >
+                {connectPending ? "Connecting…" : connected ? "Update API token connection" : "Connect with API token"}
+              </button>
+            </div>
+          </form>
         ) : null}
       </Panel>
+
+      {connected ? (
+        <Panel>
+          <PanelHeader
+            title="Pipeline settings"
+            subtitle="Board and project keys are required for sync and AI Worker column mapping."
+          />
+          <form
+            className="grid gap-4 p-4 md:grid-cols-2 sm:px-6"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setConnectPending(true);
+              setConnectError("");
+              try {
+                await connectPipelineJira({
+                  baseUrl: (setup?.jira?.baseUrl || baseUrl).trim(),
+                  email: setup?.jira?.email || email.trim() || undefined,
+                  boardId: boardId.trim(),
+                  projectKeys: projectKeys
+                    .split(",")
+                    .map((k) => k.trim())
+                    .filter(Boolean),
+                });
+                setStatusMessage("Pipeline settings saved.");
+                await refetchSetup();
+              } catch (err) {
+                setConnectError(err.message || "Could not save settings");
+              } finally {
+                setConnectPending(false);
+              }
+            }}
+          >
+            <label className="block text-sm">
+              <span className="type-kicker">Board ID</span>
+              <input
+                className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
+                value={boardId}
+                onChange={(e) => setBoardId(e.target.value)}
+              />
+            </label>
+            <label className="block text-sm">
+              <span className="type-kicker">Project keys</span>
+              <input
+                className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
+                value={projectKeys}
+                onChange={(e) => setProjectKeys(e.target.value)}
+                placeholder="SCRUM"
+              />
+            </label>
+            <div className="md:col-span-2">
+              <button
+                type="submit"
+                disabled={!boardId.trim() || !projectKeys.trim() || connectPending}
+                className="app-btn-primary disabled:opacity-50"
+              >
+                {connectPending ? "Saving…" : "Save pipeline settings"}
+              </button>
+            </div>
+          </form>
+        </Panel>
+      ) : null}
 
       {connected ? (
         <Panel>

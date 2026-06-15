@@ -398,6 +398,12 @@ model OrganizationJiraConfig {
   baseUrl               String       @default("")
   email                 String       @default("")
   apiToken              String       @default("")
+  authMethod            String       @default("api_token")
+  cloudId               String?
+  accessToken           String       @default("")
+  refreshToken          String       @default("")
+  tokenExpiresAt        DateTime?
+  scopes                String       @default("")
   webhookSecret         String       @default("")
   projectKeysJson       Json         @default("[]")
   boardId               String?

@@ -44,9 +44,18 @@ export async function resolveOrganizationByGitWebhookSecret(
 export async function listOrganizationIdsWithJiraConfig(): Promise<string[]> {
   const rows = await prisma.organizationJiraConfig.findMany({
     where: {
-      baseUrl: { not: "" },
-      email: { not: "" },
-      apiToken: { not: "" },
+      OR: [
+        {
+          baseUrl: { not: "" },
+          email: { not: "" },
+          apiToken: { not: "" },
+        },
+        {
+          authMethod: "oauth",
+          cloudId: { not: null },
+          accessToken: { not: "" },
+        },
+      ],
     },
     select: { organizationId: true },
   });

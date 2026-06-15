@@ -6,6 +6,7 @@ import AppPageFallback from "../../shared/ui/AppPageFallback";
 import AppPageTransition from "../../shared/ui/AppPageTransition";
 import { CodebaseCommandPaletteProvider } from "../../widgets/codebase-search/CodebaseCommandPalette";
 import GithubOAuthRedirect from "./GithubOAuthRedirect";
+import JiraOAuthRedirect from "./JiraOAuthRedirect";
 import MobileNav from "./MobileNav";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
@@ -49,6 +50,7 @@ export default function AppShell() {
       <SidebarProvider>
         <div className="app-shell app-shell-gradient min-h-screen text-app-ink">
           <GithubOAuthRedirect />
+          <JiraOAuthRedirect />
           <AppShellContent />
         </div>
       </SidebarProvider>

@@ -15,11 +15,28 @@ export interface JiraIssueSearchResult<TIssue = unknown> {
   issues: TIssue[];
 }
 
+type JiraClientOAuthOpts = {
+  cloudId: string;
+  getAccessToken: () => Promise<string>;
+};
+
 export class JiraClient {
   private readonly baseUrl: string;
-  private readonly authHeader: string;
+  private readonly authHeader: string | null;
+  private readonly oauth: JiraClientOAuthOpts | null;
 
-  constructor(opts?: { baseUrl?: string; email?: string; apiToken?: string }) {
+  constructor(
+    opts?:
+      | { baseUrl?: string; email?: string; apiToken?: string }
+      | { oauth: JiraClientOAuthOpts }
+  ) {
+    if (opts && "oauth" in opts) {
+      this.oauth = opts.oauth;
+      this.baseUrl = "";
+      this.authHeader = null;
+      return;
+    }
+
     const baseUrl = opts?.baseUrl ?? process.env.JIRA_BASE_URL ?? "";
     const email = opts?.email ?? process.env.JIRA_EMAIL ?? "";
     const apiToken = opts?.apiToken ?? process.env.JIRA_API_TOKEN ?? "";
@@ -28,19 +45,36 @@ export class JiraClient {
     }
     this.baseUrl = baseUrl.replace(/\/$/, "");
     this.authHeader = `Basic ${Buffer.from(`${email}:${apiToken}`).toString("base64")}`;
+    this.oauth = null;
+  }
+
+  static fromOAuth(oauth: JiraClientOAuthOpts): JiraClient {
+    return new JiraClient({ oauth });
+  }
+
+  private async resolveRequestAuth(): Promise<{ baseUrl: string; authHeader: string }> {
+    if (this.oauth) {
+      const token = await this.oauth.getAccessToken();
+      return {
+        baseUrl: `https://api.atlassian.com/ex/jira/${this.oauth.cloudId}`,
+        authHeader: `Bearer ${token}`,
+      };
+    }
+    if (!this.baseUrl || !this.authHeader) {
+      throw new Error("Jira baseUrl not configured");
+    }
+    return { baseUrl: this.baseUrl, authHeader: this.authHeader };
   }
 
   private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    if (!this.baseUrl) {
-      throw new Error("Jira baseUrl not configured");
-    }
+    const { baseUrl, authHeader } = await this.resolveRequestAuth();
     return retry(async () => {
-      const res = await fetch(`${this.baseUrl}${path}`, {
+      const res = await fetch(`${baseUrl}${path}`, {
         ...init,
         headers: {
           Accept: "application/json",
           "Content-Type": "application/json",
-          Authorization: this.authHeader,
+          Authorization: authHeader,
           ...(init.headers ?? {}),
         },
       });

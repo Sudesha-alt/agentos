@@ -6,12 +6,20 @@ import {
   saveOrganizationJiraConfig,
 } from "../../organization/jiraConfigStore";
 
+export type JiraAuthMethod = "api_token" | "oauth";
+
 export interface PipelineJiraCredentials {
   baseUrl: string;
   email: string;
   apiToken: string;
   webhookSecret: string;
   projectKeys: string[];
+  authMethod: JiraAuthMethod;
+  cloudId?: string;
+  accessToken?: string;
+  refreshToken?: string;
+  tokenExpiresAt?: Date | null;
+  scopes?: string;
 }
 
 export interface PipelineJiraCredentialsPublic {
@@ -23,6 +31,10 @@ export interface PipelineJiraCredentialsPublic {
   projectKeys: string[];
   configured: boolean;
   source: "database" | "environment" | "none";
+  authMethod?: JiraAuthMethod;
+  connectedViaOAuth?: boolean;
+  siteName?: string | null;
+  oauthConfigured?: boolean;
 }
 
 let runtimeCreds: PipelineJiraCredentials | null = null;
@@ -92,6 +104,7 @@ function credentialsFromEnv(): PipelineJiraCredentials {
       ""
     ),
     projectKeys,
+    authMethod: "api_token",
   };
 }
 
@@ -133,6 +146,7 @@ export function loadPipelineJiraCredentialsFromStore(): PipelineJiraCredentials 
     apiToken: row.api_token || env.apiToken,
     webhookSecret: row.webhook_secret || env.webhookSecret,
     projectKeys,
+    authMethod: "api_token",
   };
   runtimeCreds = merged;
   return merged;
@@ -151,20 +165,31 @@ export function getPipelineWebhookSecret(): string {
   return getActivePipelineJiraCredentials().webhookSecret;
 }
 
+export function isPipelineJiraConfigured(): boolean {
+  const creds = getActivePipelineJiraCredentials();
+  if (creds.authMethod === "oauth") {
+    return Boolean(creds.baseUrl && creds.cloudId && creds.accessToken);
+  }
+  return Boolean(creds.baseUrl && creds.email && creds.apiToken);
+}
+
 export function validatePipelineJiraConfig(): void {
   const creds = getActivePipelineJiraCredentials();
   const missing: string[] = [];
+
   if (!creds.baseUrl) missing.push("baseUrl");
-  if (!creds.email) missing.push("email");
-  if (!creds.apiToken) missing.push("apiToken");
+
+  if (creds.authMethod === "oauth") {
+    if (!creds.cloudId) missing.push("cloudId");
+    if (!creds.accessToken) missing.push("accessToken");
+  } else {
+    if (!creds.email) missing.push("email");
+    if (!creds.apiToken) missing.push("apiToken");
+  }
+
   if (missing.length) {
     throw new Error(`Pipeline Jira not configured: ${missing.join(", ")}`);
   }
-}
-
-export function isPipelineJiraConfigured(): boolean {
-  const creds = getActivePipelineJiraCredentials();
-  return Boolean(creds.baseUrl && creds.email && creds.apiToken);
 }
 
 export function getPublicPipelineJiraCredentials(): PipelineJiraCredentialsPublic {
@@ -201,6 +226,7 @@ export function getPublicPipelineJiraCredentials(): PipelineJiraCredentialsPubli
             return env.projectKeys;
           }
         })(),
+        authMethod: "api_token",
       }
     : env;
 
@@ -221,6 +247,7 @@ export function getPublicPipelineJiraCredentials(): PipelineJiraCredentialsPubli
         ? "database"
         : "environment"
       : "none",
+    authMethod: "api_token",
   };
 }
 
@@ -233,9 +260,22 @@ export async function savePipelineJiraCredentialsForOrganization(
     webhookSecret?: string;
     projectKeys?: string[];
     boardId?: string;
+    authMethod?: JiraAuthMethod;
   }
 ): Promise<PipelineJiraCredentials> {
-  const creds = await saveOrganizationJiraConfig(organizationId, input);
+  const creds = await saveOrganizationJiraConfig(organizationId, {
+    ...input,
+    authMethod: input.authMethod ?? "api_token",
+  });
+  orgRuntimeCreds.set(organizationId, creds);
+  runtimeCreds = creds;
+  return creds;
+}
+
+export async function savePipelineJiraOAuthCredentialsForOrganization(
+  organizationId: string,
+  creds: PipelineJiraCredentials
+): Promise<PipelineJiraCredentials> {
   orgRuntimeCreds.set(organizationId, creds);
   runtimeCreds = creds;
   return creds;
@@ -298,6 +338,7 @@ export function savePipelineJiraCredentials(input: {
     apiToken,
     webhookSecret,
     projectKeys,
+    authMethod: "api_token",
   };
 
   const now = new Date().toISOString();

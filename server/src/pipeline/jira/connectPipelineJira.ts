@@ -36,6 +36,7 @@ export async function connectPipelineJira(input: {
   webhookUrl?: string;
   autoRegisterWebhook?: boolean;
   organizationId?: string;
+  authMethod?: "api_token" | "oauth";
 }) {
   let email = input.email?.trim() || "";
 
@@ -46,14 +47,27 @@ export async function connectPipelineJira(input: {
     webhookSecret?: string;
     projectKeys?: string[];
     boardId?: string;
+    authMethod?: "api_token" | "oauth";
   }) => {
     if (input.organizationId) {
-      return savePipelineJiraCredentialsForOrganization(input.organizationId, payload);
+      return savePipelineJiraCredentialsForOrganization(input.organizationId, {
+        ...payload,
+        authMethod: payload.authMethod ?? input.authMethod ?? "api_token",
+      });
     }
     return savePipelineJiraCredentials(payload);
   };
 
-  if (input.apiToken?.trim()) {
+  if (input.authMethod === "oauth") {
+    await persist({
+      baseUrl: input.baseUrl,
+      email: input.email?.trim() || "oauth@atlassian",
+      webhookSecret: input.webhookSecret,
+      projectKeys: input.projectKeys,
+      boardId: input.boardId,
+      authMethod: "oauth",
+    });
+  } else if (input.apiToken?.trim()) {
     await persist({
       baseUrl: input.baseUrl,
       email: email || "pending@connect",

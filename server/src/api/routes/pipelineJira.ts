@@ -114,7 +114,7 @@ router.post("/connect", async (req, res) => {
   }
 
   const prior = await getPublicOrganizationJiraConfig(organizationId);
-  if (!apiToken && !prior.hasApiToken) {
+  if (!apiToken && !prior.hasApiToken && !prior.connectedViaOAuth) {
     res.status(400).json({ error: "apiToken is required on first connect" });
     return;
   }
@@ -132,6 +132,7 @@ router.post("/connect", async (req, res) => {
         webhookUrl,
         autoRegisterWebhook: req.body?.autoRegisterWebhook !== false,
         organizationId,
+        authMethod: "api_token",
       });
       res.json({
         ...result,

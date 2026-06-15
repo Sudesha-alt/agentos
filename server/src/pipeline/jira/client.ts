@@ -1,12 +1,52 @@
 import { JiraClient } from "../../integrations/jiraClient";
+import { ensureFreshJiraOAuthToken } from "../../jira-oauth/tokenRefresh";
 import {
   getActivePipelineJiraCredentials,
   validatePipelineJiraConfig,
 } from "./credentialsStore";
 
-/** Lane 2 Jira REST client — always uses pipeline credentials (not intake). */
+export async function resolveJiraApiBaseAndAuth(): Promise<{
+  apiBase: string;
+  authorization: string;
+}> {
+  validatePipelineJiraConfig();
+  const creds = getActivePipelineJiraCredentials();
+
+  if (creds.authMethod === "oauth") {
+    await ensureFreshJiraOAuthToken();
+    const fresh = getActivePipelineJiraCredentials();
+    if (!fresh.cloudId || !fresh.accessToken) {
+      throw new Error("Jira OAuth tokens are missing");
+    }
+    return {
+      apiBase: `https://api.atlassian.com/ex/jira/${fresh.cloudId}`,
+      authorization: `Bearer ${fresh.accessToken}`,
+    };
+  }
+
+  const auth = Buffer.from(`${creds.email}:${creds.apiToken}`).toString("base64");
+  return {
+    apiBase: creds.baseUrl,
+    authorization: `Basic ${auth}`,
+  };
+}
+
+/** Lane 2 Jira REST client — uses org pipeline credentials (OAuth or API token). */
 export function getPipelineJiraClient(): JiraClient {
   const creds = getActivePipelineJiraCredentials();
+  if (creds.authMethod === "oauth" && creds.cloudId) {
+    return JiraClient.fromOAuth({
+      cloudId: creds.cloudId,
+      getAccessToken: async () => {
+        await ensureFreshJiraOAuthToken();
+        const fresh = getActivePipelineJiraCredentials();
+        if (!fresh.accessToken) {
+          throw new Error("Jira OAuth access token is missing");
+        }
+        return fresh.accessToken;
+      },
+    });
+  }
   return new JiraClient({
     baseUrl: creds.baseUrl,
     email: creds.email,
@@ -18,19 +58,15 @@ export async function pipelineJiraFetch(
   path: string,
   options: RequestInit = {}
 ): Promise<unknown> {
-  validatePipelineJiraConfig();
-  const creds = getActivePipelineJiraCredentials();
-  const url = `${creds.baseUrl}${path}`;
-  const auth = Buffer.from(`${creds.email}:${creds.apiToken}`).toString(
-    "base64"
-  );
+  const { apiBase, authorization } = await resolveJiraApiBaseAndAuth();
+  const url = `${apiBase}${path}`;
 
   const res = await fetch(url, {
     ...options,
     headers: {
       Accept: "application/json",
       "Content-Type": "application/json",
-      Authorization: `Basic ${auth}`,
+      Authorization: authorization,
       ...(options.headers as Record<string, string> | undefined),
     },
   });
@@ -60,12 +96,19 @@ export async function fetchPipelineJiraCurrentUser(): Promise<{
   const me = (await pipelineJiraFetch("/rest/api/3/myself")) as {
     emailAddress?: string;
     displayName?: string;
+    accountId?: string;
   };
-  if (!me.emailAddress) {
-    throw new Error("Could not read email from Jira — enter it manually");
+
+  const email =
+    me.emailAddress?.trim() ||
+    (me.accountId ? `${me.accountId}@atlassian.oauth` : "");
+
+  if (!email) {
+    throw new Error("Could not read profile from Jira — enter email manually");
   }
+
   return {
-    email: me.emailAddress,
-    displayName: me.displayName || me.emailAddress,
+    email,
+    displayName: me.displayName || email,
   };
 }

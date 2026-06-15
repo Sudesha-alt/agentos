@@ -11,6 +11,7 @@ import onboardingRouter from "./api/routes/onboarding";
 import codebaseRouter from "./api/routes/codebase";
 import gitIntegrationRouter from "./api/routes/gitIntegration";
 import healthRouter from "./api/routes/health";
+import jiraOAuthRouter from "./api/routes/jiraOAuth";
 import jiraIntakeRouter from "./api/routes/jiraIntake";
 import jiraSyncRouter from "./api/routes/jiraSync";
 import pipelineJiraRouter from "./api/routes/pipelineJira";
@@ -93,6 +94,8 @@ export function createApp(): express.Express {
   app.use("/jira-intake", jiraIntakeRouter);
   app.use("/jira-sync", jiraSyncRouter);
   app.use("/api/jira-sync", jiraSyncRouter);
+  app.use("/api/jira/oauth", jiraOAuthRouter);
+  app.use("/jira/oauth", jiraOAuthRouter);
   app.use("/git-integration", gitIntegrationRouter);
   app.use("/pipeline-jira", pipelineJiraRouter);
   app.use("/webhooks", webhooksRouter);
