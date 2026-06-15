@@ -32,8 +32,21 @@ router.get("/board", async (req, res, next) => {
     if (!user?.organizationId) return;
 
     await withOrganizationContext(user.organizationId, async () => {
-      const board = await roadmapService.getOrCreateBoard();
-      res.json(board);
+      try {
+        const board = await roadmapService.getOrCreateBoard();
+        res.json(board);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("does not exist") || msg.includes("Roadmap")) {
+          res.status(503).json({
+            error: "roadmap_unavailable",
+            message:
+              "Roadmap tables are not ready. Run prisma migrate deploy on the server.",
+          });
+          return;
+        }
+        throw err;
+      }
     });
   } catch (err) {
     next(err);

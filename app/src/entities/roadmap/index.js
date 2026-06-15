@@ -88,9 +88,32 @@ const MOCK_BOARD = {
   ],
 };
 
+function formatFetchError(err) {
+  if (!(err instanceof Error)) return "Could not load roadmap.";
+  const raw = err.message;
+  if (raw.startsWith("API ")) {
+    try {
+      const json = raw.slice(raw.indexOf("{"));
+      const body = JSON.parse(json);
+      if (body.message) return body.message;
+      if (body.error === "organization_required") {
+        return "Complete workspace setup in onboarding before using the roadmap.";
+      }
+    } catch {
+      /* use generic message */
+    }
+  }
+  return "Could not load roadmap. Check that the server is running and migrations are applied.";
+}
+
 const restAdapter = {
-  getBoard: () =>
-    fetchJson(apiPath("/api/roadmap/board"), { headers: authHeaders() }),
+  getBoard: async () => {
+    try {
+      return await fetchJson(apiPath("/api/roadmap/board"), { headers: authHeaders() });
+    } catch (err) {
+      throw new Error(formatFetchError(err));
+    }
+  },
   createItem: (body) =>
     fetchJson(apiPath("/api/roadmap/items"), {
       method: "POST",
@@ -120,9 +143,10 @@ const mockAdapter = {
 export const roadmapAdapter = DATA_MODE === "rest" ? restAdapter : mockAdapter;
 
 export function useRoadmapBoard(options = {}) {
-  return useResource(() => roadmapAdapter.getBoard(), [], {
+  const result = useResource(() => roadmapAdapter.getBoard(), [], {
     pollMs: options.pollMs,
   });
+  return { ...result, refresh: result.refetch };
 }
 
 export async function createRoadmapItem(body) {

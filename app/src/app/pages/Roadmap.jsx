@@ -33,8 +33,9 @@ export default function Roadmap() {
   const [newRouteType, setNewRouteType] = useState("USER_INPUT");
   const [error, setError] = useState("");
 
-  const { data, loading, refresh } = useRoadmapBoard();
+  const { data, loading, error: fetchError, refresh } = useRoadmapBoard();
   const displayBoard = board ?? data;
+  const stageCount = displayBoard?.stages?.length ?? 0;
 
   const allItems = useMemo(
     () => displayBoard?.stages?.flatMap((s) => s.items) ?? [],
@@ -106,51 +107,78 @@ export default function Roadmap() {
   };
 
   return (
-    <AnimatedAppPage wide className="!max-w-none">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <p className="type-kicker text-app-ink-mute">Structure</p>
-          <h1 className="text-2xl font-bold text-app-ink">
-            {displayBoard?.title ?? "Roadmap"}
-          </h1>
-          <p className="mt-1 max-w-2xl text-[13px] text-app-ink-dim">
-            Stage-based playbook with dependency routing — tickets unlock as prerequisites complete.
-          </p>
-        </div>
-        <div className="flex rounded-full border border-app-border p-1">
-          <TabButton active={tab === "board"} onClick={() => setTab("board")}>
-            Board
-          </TabButton>
-          <TabButton active={tab === "learnings"} onClick={() => setTab("learnings")}>
-            Learnings
-          </TabButton>
-        </div>
-      </div>
-
-      {error ? (
-        <p className="mb-4 rounded-lg border border-danger/30 bg-danger/5 px-4 py-2 text-[13px] text-danger">
-          {error}
-        </p>
-      ) : null}
-
-      {tab === "learnings" ? <LearningsTab /> : null}
-
-      {tab === "board" ? (
-        loading && !displayBoard ? (
-          <div className="flex h-64 items-center justify-center">
-            <Spinner label="Loading roadmap" />
+    <AnimatedAppPage wide>
+      <div className="min-w-0 space-y-5">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="type-kicker text-app-ink-mute">Structure</p>
+            <h1 className="text-2xl font-bold text-app-ink">
+              {displayBoard?.title ?? "Roadmap"}
+            </h1>
+            <p className="mt-1 max-w-2xl text-[13px] text-app-ink-dim">
+              Stage-based playbook with dependency routing — tickets unlock as prerequisites complete.
+            </p>
           </div>
-        ) : (
-          <div
-            className="relative overflow-x-auto rounded-2xl border border-app-border bg-[#f7f6f3] p-6"
-            style={{
-              backgroundImage:
-                "radial-gradient(circle, #d4d4d4 1px, transparent 1px)",
-              backgroundSize: "18px 18px",
-            }}
-          >
-            <div className="flex min-w-max gap-8 pb-4">
-              {displayBoard?.stages?.map((stage) => (
+          <div className="flex rounded-full border border-app-border p-1">
+            <TabButton active={tab === "board"} onClick={() => setTab("board")}>
+              Board
+            </TabButton>
+            <TabButton active={tab === "learnings"} onClick={() => setTab("learnings")}>
+              Learnings
+            </TabButton>
+          </div>
+        </div>
+
+        {fetchError ? (
+          <div className="rounded-xl border border-danger/30 bg-danger/5 px-5 py-4">
+            <p className="text-[13px] text-danger">
+              {fetchError instanceof Error ? fetchError.message : "Could not load roadmap."}
+            </p>
+            <button
+              type="button"
+              onClick={() => refresh()}
+              className="mt-3 rounded-lg bg-app-surface px-3 py-1.5 text-[12px] font-medium text-app-ink hover:bg-white"
+            >
+              Retry
+            </button>
+          </div>
+        ) : null}
+
+        {error ? (
+          <p className="rounded-lg border border-danger/30 bg-danger/5 px-4 py-2 text-[13px] text-danger">
+            {error}
+          </p>
+        ) : null}
+
+        {tab === "learnings" ? <LearningsTab /> : null}
+
+        {tab === "board" ? (
+          loading && !displayBoard ? (
+            <div className="flex h-64 items-center justify-center">
+              <Spinner label="Loading roadmap" />
+            </div>
+          ) : !stageCount && !fetchError ? (
+            <div className="rounded-xl border border-app-border bg-app-surface px-5 py-10 text-center">
+              <p className="text-[13px] text-app-ink-dim">No roadmap stages yet.</p>
+              <button
+                type="button"
+                onClick={() => refresh()}
+                className="mt-3 text-[13px] font-medium text-indigo hover:underline"
+              >
+                Reload board
+              </button>
+            </div>
+          ) : stageCount > 0 ? (
+            <div
+              className="relative overflow-x-auto rounded-2xl border border-app-border bg-[#f7f6f3] p-6"
+              style={{
+                backgroundImage:
+                  "radial-gradient(circle, #d4d4d4 1px, transparent 1px)",
+                backgroundSize: "18px 18px",
+              }}
+            >
+              <div className="flex min-w-max gap-8 pb-4">
+                {displayBoard.stages.map((stage) => (
                 <section key={stage.id} className="w-[240px] shrink-0">
                   <header className="mb-4">
                     <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.18em] text-[#9a9a9a]">
@@ -192,12 +220,12 @@ export default function Roadmap() {
               ))}
             </div>
 
-            <DependencyLines stages={displayBoard?.stages ?? []} slugIndex={slugIndex} />
+            <DependencyLines stages={displayBoard.stages} slugIndex={slugIndex} />
           </div>
-        )
-      ) : null}
+          ) : null
+        ) : null}
 
-      {addStageKey ? (
+        {addStageKey ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
           <form
             onSubmit={onAddItem}
@@ -250,6 +278,7 @@ export default function Roadmap() {
           </form>
         </div>
       ) : null}
+      </div>
     </AnimatedAppPage>
   );
 }
