@@ -4,6 +4,7 @@ import Marketing from "./pages/Marketing";
 import ContactPage from "./marketing/agent-team/ContactPage";
 import RoiCalculatorPage from "./pages/RoiCalculatorPage";
 import Login from "./pages/Login";
+import Onboarding from "./pages/Onboarding";
 import ForgotPassword, { ResetPassword } from "./pages/ForgotPassword";
 import AppShell from "./app/layout/AppShell";
 import Dashboard from "./app/pages/Dashboard";
