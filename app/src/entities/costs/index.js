@@ -1,5 +1,6 @@
 import { DATA_MODE } from "../../shared/config/app";
 import { fetchJson } from "../../shared/lib/fetchJson";
+import { authHeaders } from "../../shared/lib/authHeaders";
 import { apiPath } from "../../shared/config/apiBase";
 import { useResource } from "../../shared/lib/useResource";
 import { mockApi } from "../../app/api/mock";
@@ -18,11 +19,14 @@ function buildRoiQuery(params) {
 }
 
 const restCostsAdapter = {
-  summary: () => fetchJson(apiPath("/api/costs/summary")),
-  daily: () => fetchJson(apiPath("/api/costs/daily")),
+  summary: () => fetchJson(apiPath("/api/costs/summary"), { headers: authHeaders() }),
+  daily: () => fetchJson(apiPath("/api/costs/daily"), { headers: authHeaders() }),
   byFeature: (hourlyRate) =>
-    fetchJson(apiPath(`/api/costs/by-feature?hourlyRate=${hourlyRate ?? 150}`)),
-  roi: (params) => fetchJson(apiPath(`/api/costs/roi?${buildRoiQuery(params)}`)),
+    fetchJson(apiPath(`/api/costs/by-feature?hourlyRate=${hourlyRate ?? 150}`), {
+      headers: authHeaders(),
+    }),
+  roi: (params) =>
+    fetchJson(apiPath(`/api/costs/roi?${buildRoiQuery(params)}`), { headers: authHeaders() }),
 };
 
 const mockCostsAdapter = {

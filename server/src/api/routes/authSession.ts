@@ -5,10 +5,10 @@ export type SessionUser = {
   id: string;
   email: string;
   name: string;
-  organizationId: string;
-  organizationName: string;
-  organizationDomain: string;
-  organizationRole: OrgRole;
+  organizationId?: string;
+  organizationName?: string;
+  organizationDomain?: string;
+  organizationRole?: OrgRole;
 };
 
 type AuthTokenPayload = SessionUser & {
@@ -120,58 +120,108 @@ export function displayNameFromEmail(email: string): string {
   );
 }
 
-export async function createAuthSession(email: string) {
-  const { provisionUserAndOrganization } = await import("../../organization/service");
-  const { user, organization, role } = await provisionUserAndOrganization(email);
+function sessionUserFromMembership(
+  user: { id: string; email: string; name: string },
+  membership: {
+    organization: { id: string; name: string; domain: string; slug: string };
+    role: OrgRole;
+  } | null
+): SessionUser {
+  if (!membership) {
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+    };
+  }
 
-  const sessionUser: SessionUser = {
+  return {
     id: user.id,
     email: user.email,
     name: user.name,
-    organizationId: organization.id,
-    organizationName: organization.name,
-    organizationDomain: organization.domain,
-    organizationRole: role,
+    organizationId: membership.organization.id,
+    organizationName: membership.organization.name,
+    organizationDomain: membership.organization.domain,
+    organizationRole: membership.role,
   };
+}
+
+export async function issueSessionForUserId(userId: string) {
+  const { prisma } = await import("../../db/client");
+  const { getOrganizationForUser } = await import("../../organization/service");
+
+  const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+  const membership = await getOrganizationForUser(user.id);
+  const sessionUser = sessionUserFromMembership(user, membership);
 
   const issuedAt = new Date().toISOString();
   const token = signAuthToken({ ...sessionUser, issuedAt });
 
-  const { ensureOnboarding, seedDemoOnboarding } = await import("../../onboarding/store");
-
-  if (email === "demo@agentos.ai") {
-    await seedDemoOnboarding(sessionUser.id, sessionUser.email, sessionUser.name);
-  } else {
-    await ensureOnboarding({
-      userId: sessionUser.id,
-      email: sessionUser.email,
-      name: sessionUser.name,
-      completed: false,
-    });
-  }
-
   const { getOnboarding } = await import("../../onboarding/store");
   const onboarding = await getOnboarding(sessionUser.id);
-  const { warmOrganizationJiraCredentials, activateOrganizationJiraContext } =
-    await import("../../pipeline/jira/credentialsStore");
-  const { setActiveOrganizationId } = await import("../../organization/context");
-  setActiveOrganizationId(organization.id);
-  await warmOrganizationJiraCredentials(organization.id);
-  activateOrganizationJiraContext(organization.id);
+
+  if (membership) {
+    const { warmOrganizationJiraCredentials, activateOrganizationJiraContext } =
+      await import("../../pipeline/jira/credentialsStore");
+    const { setActiveOrganizationId } = await import("../../organization/context");
+    setActiveOrganizationId(membership.organization.id);
+    await warmOrganizationJiraCredentials(membership.organization.id);
+    activateOrganizationJiraContext(membership.organization.id);
+  }
 
   return {
     token,
     issuedAt,
     user: sessionUser,
-    organization: {
-      id: organization.id,
-      name: organization.name,
-      domain: organization.domain,
-      slug: organization.slug,
-      role,
-    },
+    organization: membership
+      ? {
+          id: membership.organization.id,
+          name: membership.organization.name,
+          domain: membership.organization.domain,
+          slug: membership.organization.slug,
+          role: membership.role,
+        }
+      : undefined,
     onboardingCompleted: onboarding?.completed ?? false,
   };
+}
+
+export async function createAuthSession(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const { ensureUser, provisionUserAndOrganization } = await import(
+    "../../organization/service"
+  );
+
+  if (normalizedEmail === "demo@agentos.ai") {
+    await provisionUserAndOrganization(normalizedEmail);
+  } else {
+    await ensureUser(normalizedEmail);
+  }
+
+  const { prisma } = await import("../../db/client");
+  const user = await prisma.user.findUniqueOrThrow({
+    where: { email: normalizedEmail },
+  });
+
+  const { ensureOnboarding, seedDemoOnboarding } = await import("../../onboarding/store");
+
+  if (normalizedEmail === "demo@agentos.ai") {
+    const session = await issueSessionForUserId(user.id);
+    await seedDemoOnboarding(session.user.id, session.user.email, session.user.name);
+    return {
+      ...session,
+      onboardingCompleted: true,
+    };
+  }
+
+  await ensureOnboarding({
+    userId: user.id,
+    email: user.email,
+    name: user.name,
+    completed: false,
+  });
+
+  return issueSessionForUserId(user.id);
 }
 
 export function registerEmail(email: string) {

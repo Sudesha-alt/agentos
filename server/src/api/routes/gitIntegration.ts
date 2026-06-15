@@ -1,6 +1,5 @@
 import { Router, type Request } from "express";
 import { connectGit } from "../../git-integration/connectGit";
-import { disconnectGitIntegration } from "../../git-integration/disconnectGit";
 import {
   completeGithubInstallation,
   selectGithubRepository,
@@ -12,7 +11,6 @@ import {
   indexRunProgress,
 } from "../../codebaseIntelligence/indexQueue";
 import { getRepoContext } from "../../git-integration/gitCredentialsStore";
-import { getPublicGitCredentials } from "../../git-integration/gitCredentialsStore";
 import {
   githubAppInstallUrl,
   githubAppPublicConfig,
@@ -20,10 +18,14 @@ import {
   listAppInstallations,
   probeGithubAppCredentials,
 } from "../../integrations/git/githubApp";
-import { restoreGitCredentialsFromPostgres } from "../../git-integration/gitCredentialsStore";
 import { resolveGitIntegrationSetupState } from "../../git-integration/gitSetupState";
 import { getLatestGithubInstallState } from "../../git-integration/githubInstallationStore";
 import { validateOAuthState } from "../../git-integration/oauthState";
+import { getPublicOrganizationGitConfig } from "../../organization/gitConfigStore";
+import {
+  requireOrganizationUser,
+  withOrganizationContext,
+} from "../orgRequestContext";
 import { logger } from "../../utils/logger";
 import type { GitProviderId } from "../../integrations/git/types";
 
@@ -53,65 +55,69 @@ function frontendGitUrl(): string {
 
 router.get("/integration/setup", async (req, res, next) => {
   try {
-  await restoreGitCredentialsFromPostgres().catch(() => {});
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
 
-  const base = publicApiBase(req);
-  const setupState = await resolveGitIntegrationSetupState(getPublicGitCredentials());
-  const { git, connected, needsRepoSelection, availableRepositories } = setupState;
+    await withOrganizationContext(user.organizationId, async () => {
+      const git = await getPublicOrganizationGitConfig(user.organizationId!);
+      const setupState = await resolveGitIntegrationSetupState(git, { orgScoped: true });
+      const { connected, needsRepoSelection, availableRepositories } = setupState;
 
-  const githubApp = githubAppPublicConfig();
-  const installUrl = githubAppInstallUrl();
-  const callbackUrl = `${base}/git-integration/oauth/github/callback`;
+      const base = publicApiBase(req);
+      const githubApp = githubAppPublicConfig();
+      const installUrl = githubAppInstallUrl();
+      const callbackUrl = `${base}/git-integration/oauth/github/callback`;
 
-  res.json({
-    publicApiBase: base,
-    git,
-    connected,
-    needsRepoSelection,
-    installationDetected: setupState.installationDetected,
-    databaseConfigured: Boolean(process.env.DATABASE_URL?.trim()),
-    availableRepositories,
-    githubApp: {
-      ...githubApp,
-      installUrl,
-      callbackUrl,
-      setupUrl: frontendGitUrl() || undefined,
-      webhookUrl: `${base}/webhooks/github`,
-    },
-    webhooks: {
-      github: {
-        url: `${base}/webhooks/github`,
-        events: ["push", "pull_request"],
-        secretEnv: "GITHUB_APP_WEBHOOK_SECRET",
-        managedByApp: isGithubAppConfigured(),
-      },
-      bitbucket: {
-        url: `${base}/webhooks/bitbucket`,
-        events: ["repo:push"],
-        secretEnv: "BITBUCKET_WEBHOOK_SECRET",
-      },
-    },
-    providers: [
-      {
-        id: "github",
-        label: "GitHub",
-        connectMode: isGithubAppConfigured() ? "github_app" : "pat",
-        workspaceLabel: "Owner (org or user)",
-        repoLabel: "Repository name",
-        tokenLabel: "Personal access token (repo scope)",
-        needsUsername: false,
-      },
-      {
-        id: "bitbucket",
-        label: "Bitbucket",
-        connectMode: "pat",
-        workspaceLabel: "Workspace slug",
-        repoLabel: "Repository slug",
-        tokenLabel: "App password (repository read)",
-        needsUsername: true,
-      },
-    ],
-  });
+      res.json({
+        publicApiBase: base,
+        git: setupState.git,
+        connected,
+        needsRepoSelection,
+        installationDetected: setupState.installationDetected,
+        databaseConfigured: Boolean(process.env.DATABASE_URL?.trim()),
+        availableRepositories,
+        githubApp: {
+          ...githubApp,
+          installUrl,
+          callbackUrl,
+          setupUrl: frontendGitUrl() || undefined,
+          webhookUrl: `${base}/webhooks/github`,
+        },
+        webhooks: {
+          github: {
+            url: `${base}/webhooks/github`,
+            events: ["push", "pull_request"],
+            secretEnv: "GITHUB_APP_WEBHOOK_SECRET",
+            managedByApp: isGithubAppConfigured(),
+          },
+          bitbucket: {
+            url: `${base}/webhooks/bitbucket`,
+            events: ["repo:push"],
+            secretEnv: "BITBUCKET_WEBHOOK_SECRET",
+          },
+        },
+        providers: [
+          {
+            id: "github",
+            label: "GitHub",
+            connectMode: isGithubAppConfigured() ? "github_app" : "pat",
+            workspaceLabel: "Owner (org or user)",
+            repoLabel: "Repository name",
+            tokenLabel: "Personal access token (repo scope)",
+            needsUsername: false,
+          },
+          {
+            id: "bitbucket",
+            label: "Bitbucket",
+            connectMode: "pat",
+            workspaceLabel: "Workspace slug",
+            repoLabel: "Repository slug",
+            tokenLabel: "App password (repository read)",
+            needsUsername: true,
+          },
+        ],
+      });
+    });
   } catch (err) {
     next(err);
   }
@@ -283,6 +289,9 @@ router.post("/github/sync-install", async (req, res) => {
 });
 
 router.post("/github/complete-install", async (req, res) => {
+  const user = requireOrganizationUser(req, res);
+  if (!user?.organizationId) return;
+
   const installationId = String(req.body?.installationId ?? "");
   if (!installationId.trim()) {
     res.status(400).json({
@@ -292,7 +301,7 @@ router.post("/github/complete-install", async (req, res) => {
     return;
   }
   try {
-    const result = await completeGithubInstallation(installationId);
+    const result = await completeGithubInstallation(installationId, user.organizationId);
     res.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "complete_install_failed";
@@ -304,14 +313,19 @@ router.post("/github/complete-install", async (req, res) => {
   }
 });
 
-router.post("/integration/disconnect", async (_req, res, next) => {
+router.post("/integration/disconnect", async (req, res, next) => {
   try {
-    const result = await disconnectGitIntegration();
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
+
+    const { clearOrganizationGitConfig } = await import(
+      "../../organization/gitConfigStore"
+    );
+    await clearOrganizationGitConfig(user.organizationId);
     res.json({
       ok: true,
-      ...result,
       message:
-        "Git integration disconnected in AgentOS. Indexed codebase data is kept; uninstall the GitHub App on GitHub if you want to revoke access entirely.",
+        "Git integration disconnected for your workspace. Indexed codebase data is kept; uninstall the GitHub App on GitHub if you want to revoke access entirely.",
     });
   } catch (err) {
     next(err);
@@ -320,6 +334,9 @@ router.post("/integration/disconnect", async (_req, res, next) => {
 
 router.post("/github/select-repo", async (req, res, next) => {
   try {
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
+
     const result = await selectGithubRepository({
       installationId: String(req.body?.installationId ?? ""),
       owner: String(req.body?.owner ?? ""),
@@ -327,6 +344,7 @@ router.post("/github/select-repo", async (req, res, next) => {
       defaultBranch: req.body?.defaultBranch
         ? String(req.body.defaultBranch)
         : undefined,
+      organizationId: user.organizationId,
     });
     res.json(result);
   } catch (err) {
@@ -434,6 +452,9 @@ router.get("/index/progress", async (req, res) => {
 });
 
 router.post("/integration/connect", async (req, res, next) => {
+  const user = requireOrganizationUser(req, res);
+  if (!user?.organizationId) return;
+
   const provider = String(req.body?.provider ?? "").trim() as GitProviderId;
   const workspace = String(req.body?.workspace ?? "").trim();
   const repoSlug = String(req.body?.repoSlug ?? "").trim();
@@ -464,6 +485,7 @@ router.post("/integration/connect", async (req, res, next) => {
       token,
       webhookSecret,
       defaultBranch,
+      organizationId: user.organizationId,
     });
     res.json(result);
   } catch (err) {

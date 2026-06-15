@@ -1,5 +1,6 @@
 import { prisma } from "../db/client";
 import { resolveRepoScope } from "../codebaseIntelligence/repoScope";
+import { requireActiveOrganizationId } from "../organization/orgScope";
 import { logger } from "../utils/logger";
 import type { RetrospectiveOutput } from "../agents/pm/types";
 
@@ -81,9 +82,11 @@ export async function applyFilePatternBoostsFromRetrospective(
 
   for (const filePath of affectedFilePaths.slice(0, 10)) {
     try {
+      const organizationId = requireActiveOrganizationId();
       const row = await prisma.codebaseFile.findUnique({
         where: {
-          repoOwner_repoName_filePath_branchName: {
+          organizationId_repoOwner_repoName_filePath_branchName: {
+            organizationId,
             repoOwner: scope.repoOwner,
             repoName: scope.repoName,
             filePath,

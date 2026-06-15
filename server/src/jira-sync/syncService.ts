@@ -9,6 +9,7 @@ import {
   type FetchedJiraIssue,
 } from "./issueFetcher";
 import { upsertJiraIssueRecord } from "./issueRepository";
+import { requireActiveOrganizationId } from "../organization/orgScope";
 import { buildFullSyncJql, buildIncrementalSyncJql } from "./jql";
 import {
   completeSyncRun,
@@ -100,12 +101,13 @@ export async function runJiraFullSync(options?: {
   issuesSkipped: number;
   errors: number;
 }> {
-  if (isJiraSyncRunning()) {
+  const organizationId = requireActiveOrganizationId();
+  if (isJiraSyncRunning(organizationId)) {
     throw new Error("Jira sync already running");
   }
 
-  setJiraSyncRunning(true);
-  const run = await createSyncRun("FULL");
+  setJiraSyncRunning(true, organizationId);
+  const run = await createSyncRun("FULL", organizationId);
   const jql = buildFullSyncJql(options?.projectKeys);
 
   try {
@@ -135,7 +137,7 @@ export async function runJiraFullSync(options?: {
     });
     throw err;
   } finally {
-    setJiraSyncRunning(false);
+    setJiraSyncRunning(false, organizationId);
   }
 }
 
@@ -147,14 +149,15 @@ export async function runJiraIncrementalSync(options?: {
   issuesSkipped: number;
   errors: number;
 }> {
-  if (isJiraSyncRunning()) {
+  const organizationId = requireActiveOrganizationId();
+  if (isJiraSyncRunning(organizationId)) {
     throw new Error("Jira sync already running");
   }
 
-  setJiraSyncRunning(true);
-  const run = await createSyncRun("INCREMENTAL");
+  setJiraSyncRunning(true, organizationId);
+  const run = await createSyncRun("INCREMENTAL", organizationId);
   const watermark =
-    (await getLastSuccessfulWatermark()) ??
+    (await getLastSuccessfulWatermark(organizationId)) ??
     new Date(Date.now() - 24 * 60 * 60 * 1000);
   const jql = buildIncrementalSyncJql(watermark, options?.projectKeys);
 
@@ -185,7 +188,7 @@ export async function runJiraIncrementalSync(options?: {
     });
     throw err;
   } finally {
-    setJiraSyncRunning(false);
+    setJiraSyncRunning(false, organizationId);
   }
 }
 

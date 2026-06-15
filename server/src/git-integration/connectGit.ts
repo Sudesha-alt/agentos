@@ -1,6 +1,7 @@
 import { createBitbucketProvider } from "../integrations/git/bitbucketProvider";
 import { createGithubProvider } from "../integrations/git/githubProvider";
 import type { GitProviderId } from "../integrations/git/types";
+import { getPublicOrganizationGitConfig, saveOrganizationGitConfig } from "../organization/gitConfigStore";
 import {
   getPublicGitCredentials,
   loadGitCredentialsFromStore,
@@ -16,8 +17,11 @@ export async function connectGit(input: {
   token?: string;
   webhookSecret?: string;
   defaultBranch?: string;
+  organizationId?: string;
 }) {
-  const prior = getPublicGitCredentials();
+  const prior = input.organizationId
+    ? await getPublicOrganizationGitConfig(input.organizationId)
+    : getPublicGitCredentials();
   const stored = loadGitCredentialsFromStore();
   const token = input.token?.trim() || stored?.token || "";
   if (!token) {
@@ -56,21 +60,34 @@ export async function connectGit(input: {
   const meta = await client.testConnection(ctx);
   const defaultBranch = input.defaultBranch?.trim() || meta.defaultBranch || draft.defaultBranch;
 
+  if (input.organizationId) {
+    await saveOrganizationGitConfig(input.organizationId, {
+      provider: input.provider,
+      workspace: draft.workspace,
+      repoSlug: draft.repoSlug,
+      username: draft.username,
+      token: draft.token,
+      webhookSecret: draft.webhookSecret,
+      defaultBranch,
+      authMethod: "pat",
+    });
+    const git = await getPublicOrganizationGitConfig(input.organizationId);
+    return { connected: true, git };
+  }
+
   saveGitCredentials({
     provider: input.provider,
-    workspace: input.workspace,
-    repoSlug: input.repoSlug,
-    username: input.username,
-    token: input.token?.trim() || undefined,
-    webhookSecret: input.webhookSecret,
+    workspace: draft.workspace,
+    repoSlug: draft.repoSlug,
+    username: draft.username,
+    token: draft.token,
+    webhookSecret: draft.webhookSecret,
     defaultBranch,
     authMethod: "pat",
   });
 
   return {
     connected: true,
-    fullName: meta.fullName,
-    defaultBranch,
     git: getPublicGitCredentials(),
   };
 }

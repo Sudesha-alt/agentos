@@ -21,8 +21,11 @@ import {
   startJiraSyncScheduler,
 } from "./queue/inProcessRunner";
 import { logger } from "./utils/logger";
+import { runMigrationsOnStartup } from "./db/migrateOnStartup";
+import { disconnectPrisma } from "./db/client";
 
 async function bootstrap(): Promise<void> {
+  runMigrationsOnStartup();
   initIntakeDb();
   loadPipelineJiraCredentialsFromStore();
   loadCanarySettingsFromStore();
@@ -72,10 +75,12 @@ async function bootstrap(): Promise<void> {
 
   function shutdown(signal: string): void {
     logger.info({ signal }, "shutting down");
-    server.close(() => {
-      process.exit(0);
+    void disconnectPrisma().finally(() => {
+      server.close(() => {
+        process.exit(0);
+      });
+      setTimeout(() => process.exit(1), 10_000).unref();
     });
-    setTimeout(() => process.exit(1), 10_000).unref();
   }
 
   process.on("SIGINT", () => shutdown("SIGINT"));

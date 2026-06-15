@@ -115,12 +115,14 @@ router.get("/session", async (req, res) => {
     token,
     issuedAt: new Date().toISOString(),
     user,
-    organization: {
-      id: user.organizationId,
-      name: user.organizationName,
-      domain: user.organizationDomain,
-      role: user.organizationRole,
-    },
+    organization: user.organizationId
+      ? {
+          id: user.organizationId,
+          name: user.organizationName!,
+          domain: user.organizationDomain!,
+          role: user.organizationRole!,
+        }
+      : undefined,
     onboardingCompleted: onboarding?.completed ?? false,
   });
 });

@@ -4,6 +4,7 @@ import { hashContent, chunkTextByParagraphs } from "../rag/contentHash";
 import { shouldSkipTicketEmbed } from "../rag/ticketEmbedCache";
 import { vectorStore } from "../rag/vectorStore";
 import { logger } from "../utils/logger";
+import { requireActiveOrganizationId } from "../organization/orgScope";
 import { shouldEmbedStatus } from "./config";
 import type { FetchedJiraIssue } from "./issueFetcher";
 
@@ -106,8 +107,11 @@ export async function embedSyncedIssue(
     },
   });
 
+  const organizationId = requireActiveOrganizationId();
   await prisma.jiraIssue.update({
-    where: { jiraKey: issue.jiraKey },
+    where: {
+      organizationId_jiraKey: { organizationId, jiraKey: issue.jiraKey },
+    },
     data: {
       embeddedAt: new Date(),
       gitContext: git || null,

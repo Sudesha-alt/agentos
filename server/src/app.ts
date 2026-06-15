@@ -19,6 +19,7 @@ import pipelineRouter from "./api/routes/pipeline";
 import pmAgentsRouter from "./api/routes/pmAgents";
 import canaryRouter from "./api/routes/canary";
 import orgIntelligenceRouter from "./api/routes/orgIntelligence";
+import roadmapRouter from "./api/routes/roadmap";
 import companyIntelligenceRouter from "./api/routes/companyIntelligence";
 import qaRouter from "./api/routes/qa";
 import settingsRouter from "./api/routes/settings";
@@ -34,8 +35,17 @@ export function createApp(): express.Express {
 
   app.use(helmet());
   app.use((req, res, next) => {
+    const configured =
+      process.env.CORS_ORIGIN?.split(",").map((o) => o.trim()).filter(Boolean) ??
+      [];
+    const devOrigins =
+      process.env.NODE_ENV !== "production"
+        ? ["http://localhost:5173", "http://127.0.0.1:5173"]
+        : [];
     const allowed =
-      process.env.CORS_ORIGIN?.split(",").map((o) => o.trim()) ?? ["*"];
+      configured.length || devOrigins.length
+        ? [...new Set([...configured, ...devOrigins])]
+        : ["*"];
     const origin = req.header("origin");
     if (origin && (allowed.includes("*") || allowed.includes(origin))) {
       res.setHeader("Access-Control-Allow-Origin", origin);
@@ -95,6 +105,7 @@ export function createApp(): express.Express {
   app.use("/api/canary", canaryRouter);
   app.use("/api/qa", qaRouter);
   app.use("/api/org-intelligence", orgIntelligenceRouter);
+  app.use("/api/roadmap", roadmapRouter);
   app.use("/api/company-intelligence", companyIntelligenceRouter);
   app.use("/api/settings", settingsRouter);
   app.use("/api/agent-chat", agentChatRouter);

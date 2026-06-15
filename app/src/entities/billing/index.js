@@ -1,6 +1,7 @@
 import { DATA_MODE, DATA_MODES } from "../../shared/config/app";
 import { apiPath } from "../../shared/config/apiBase";
 import { fetchJson } from "../../shared/lib/fetchJson";
+import { authHeaders } from "../../shared/lib/authHeaders";
 import { useResource } from "../../shared/lib/useResource";
 import { PILOT_PLAN } from "../../shared/config/billingPlans";
 
@@ -25,11 +26,11 @@ function readLocal() {
 }
 
 const restAdapter = {
-  get: () => fetchJson(apiPath("/api", "/settings/billing")),
+  get: () => fetchJson(apiPath("/api", "/settings/billing"), { headers: authHeaders() }),
   save: (body) =>
     fetchJson(apiPath("/api", "/settings/billing"), {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify(body),
     }),
 };

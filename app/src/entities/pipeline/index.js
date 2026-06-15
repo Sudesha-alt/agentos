@@ -6,30 +6,36 @@ import {
 import { apiPath } from "../../shared/config/apiBase";
 import { DATA_MODE } from "../../shared/config/app";
 import { fetchJson } from "../../shared/lib/fetchJson";
+import { authHeaders } from "../../shared/lib/authHeaders";
 import { useResource } from "../../shared/lib/useResource";
 import { mockApi } from "../../app/api/mock";
 
 const pipelines = (path) => apiPath("/api", path);
+
+function headers(extra = {}) {
+  return { ...authHeaders(), ...extra };
+}
 
 const restPipelineAdapter = {
   async list(status) {
     const path = pipelines(
       `/pipelines${status ? `?status=${encodeURIComponent(status)}` : ""}`
     );
-    return PipelineListResponseSchema.parse(await fetchJson(path));
+    return PipelineListResponseSchema.parse(await fetchJson(path, { headers: headers() }));
   },
   async detail(id) {
     return PipelineDetailSchema.parse(
-      await fetchJson(pipelines(`/pipelines/${id}`))
+      await fetchJson(pipelines(`/pipelines/${id}`), { headers: headers() })
     );
   },
   async listArtifacts(id) {
-    return fetchJson(pipelines(`/pipelines/${id}/artifacts`));
+    return fetchJson(pipelines(`/pipelines/${id}/artifacts`), { headers: headers() });
   },
   async run(ticketId) {
     return RunPipelineResponseSchema.parse(
       await fetchJson(pipelines(`/pipelines/${ticketId}/run`), {
         method: "POST",
+        headers: headers(),
       })
     );
   },

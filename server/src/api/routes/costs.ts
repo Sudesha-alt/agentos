@@ -6,22 +6,36 @@ import {
   getCostsSummary,
 } from "../../roi/actualRoi";
 import { normalizePlanId } from "../../roi/assumptions";
+import {
+  requireOrganizationUser,
+  withOrganizationContext,
+} from "../orgRequestContext";
 
 const router = Router();
 
-router.get("/summary", async (_req, res, next) => {
+router.get("/summary", async (req, res, next) => {
   try {
-    const summary = await getCostsSummary();
-    res.json(summary);
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
+
+    await withOrganizationContext(user.organizationId, async () => {
+      const summary = await getCostsSummary(user.organizationId);
+      res.json(summary);
+    });
   } catch (err) {
     next(err);
   }
 });
 
-router.get("/daily", async (_req, res, next) => {
+router.get("/daily", async (req, res, next) => {
   try {
-    const daily = await getCostsDaily();
-    res.json(daily);
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
+
+    await withOrganizationContext(user.organizationId, async () => {
+      const daily = await getCostsDaily(user.organizationId);
+      res.json(daily);
+    });
   } catch (err) {
     next(err);
   }
@@ -29,9 +43,14 @@ router.get("/daily", async (_req, res, next) => {
 
 router.get("/by-feature", async (req, res, next) => {
   try {
-    const hourlyRate = Number(req.query.hourlyRate) || 150;
-    const data = await getCostsByFeature(hourlyRate);
-    res.json(data);
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
+
+    await withOrganizationContext(user.organizationId, async () => {
+      const hourlyRate = Number(req.query.hourlyRate) || 150;
+      const data = await getCostsByFeature(hourlyRate, user.organizationId);
+      res.json(data);
+    });
   } catch (err) {
     next(err);
   }

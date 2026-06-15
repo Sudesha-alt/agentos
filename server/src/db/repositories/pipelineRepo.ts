@@ -7,17 +7,25 @@ import type {
   StageStatus,
 } from "../prisma";
 import { prisma } from "../client";
+import { activeOrganizationFilter, requireActiveOrganizationId } from "../../organization/orgScope";
 
 export const pipelineRepo = {
   async create(input: {
     ticketId: string;
     currentStage: PipelineStage;
     status: PipelineStatus;
+    organizationId?: string;
   }): Promise<Pipeline> {
+    const organizationId = input.organizationId ?? requireActiveOrganizationId();
     return prisma.pipeline.upsert({
       where: { ticketId: input.ticketId },
       update: { currentStage: input.currentStage, status: input.status },
-      create: input,
+      create: {
+        organizationId,
+        ticketId: input.ticketId,
+        currentStage: input.currentStage,
+        status: input.status,
+      },
     });
   },
 
@@ -26,22 +34,25 @@ export const pipelineRepo = {
     stage: PipelineStage,
     status: PipelineStatus
   ): Promise<void> {
-    await prisma.pipeline.update({
-      where: { id: pipelineId },
+    const org = activeOrganizationFilter();
+    await prisma.pipeline.updateMany({
+      where: { id: pipelineId, ...org },
       data: { currentStage: stage, status },
     });
   },
 
   async complete(pipelineId: string, status: PipelineStatus): Promise<void> {
-    await prisma.pipeline.update({
-      where: { id: pipelineId },
+    const org = activeOrganizationFilter();
+    await prisma.pipeline.updateMany({
+      where: { id: pipelineId, ...org },
       data: { status, completedAt: new Date() },
     });
   },
 
   async findWithLatestStages(pipelineId: string) {
-    return prisma.pipeline.findUnique({
-      where: { id: pipelineId },
+    const org = activeOrganizationFilter();
+    return prisma.pipeline.findFirst({
+      where: { id: pipelineId, ...org },
       include: {
         ticket: true,
         stages: { orderBy: { startedAt: "desc" } },
@@ -112,8 +123,9 @@ export const pipelineRepo = {
   },
 
   async findById(pipelineId: string) {
-    return prisma.pipeline.findUnique({
-      where: { id: pipelineId },
+    const org = activeOrganizationFilter();
+    return prisma.pipeline.findFirst({
+      where: { id: pipelineId, ...org },
       include: { ticket: true },
     });
   },

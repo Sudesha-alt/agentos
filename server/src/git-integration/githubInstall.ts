@@ -5,10 +5,13 @@ import {
   listInstallationRepositories,
   type InstallationRepo,
 } from "../integrations/git/githubApp";
+import {
+  getPublicOrganizationGitConfig,
+  saveOrganizationGitConfig,
+} from "../organization/gitConfigStore";
 import { logger } from "../utils/logger";
 import {
   getPublicGitCredentials,
-  saveGitCredentials,
   saveGithubAppInstallation,
 } from "./gitCredentialsStore";
 import {
@@ -17,7 +20,10 @@ import {
   persistInstallationFlow,
 } from "./githubInstallationStore";
 
-export async function completeGithubInstallation(installationId: string) {
+export async function completeGithubInstallation(
+  installationId: string,
+  organizationId?: string
+) {
   const id = installationId.trim();
   if (!id) throw new Error("installationId is required");
 
@@ -28,7 +34,16 @@ export async function completeGithubInstallation(installationId: string) {
 
   const canonicalId = String(meta.id ?? id);
 
-  saveGithubAppInstallation(canonicalId);
+  if (organizationId) {
+    await saveOrganizationGitConfig(organizationId, {
+      provider: "github",
+      authMethod: "github_app",
+      installationId: canonicalId,
+      workspace: meta.account.login,
+    });
+  } else {
+    saveGithubAppInstallation(canonicalId);
+  }
 
   await persistInstallationFlow({
     installationId: canonicalId,
@@ -49,7 +64,9 @@ export async function completeGithubInstallation(installationId: string) {
     // Postgres optional during transition
   }
 
-  const git = getPublicGitCredentials();
+  const git = organizationId
+    ? await getPublicOrganizationGitConfig(organizationId)
+    : getPublicGitCredentials();
   let autoSelected: Awaited<ReturnType<typeof selectGithubRepository>> | null = null;
   if (storedRepos.length === 1 && (!git.workspace || !git.repoSlug)) {
     const only = storedRepos[0]!;
@@ -59,6 +76,7 @@ export async function completeGithubInstallation(installationId: string) {
         owner: only.owner,
         repo: only.name,
         defaultBranch: only.defaultBranch,
+        organizationId,
       });
     } catch (err) {
       logger.warn(
@@ -68,12 +86,16 @@ export async function completeGithubInstallation(installationId: string) {
     }
   }
 
+  const resolvedGit = organizationId
+    ? await getPublicOrganizationGitConfig(organizationId)
+    : autoSelected?.git ?? getPublicGitCredentials();
+
   return {
     installationId: canonicalId,
     accountLogin: meta.account.login,
     accountType: meta.account.type,
     repositories: storedRepos,
-    git: autoSelected?.git ?? getPublicGitCredentials(),
+    git: resolvedGit,
     autoSelected: autoSelected
       ? {
           fullName: autoSelected.fullName,
@@ -88,6 +110,7 @@ export async function selectGithubRepository(input: {
   owner: string;
   repo: string;
   defaultBranch?: string;
+  organizationId?: string;
 }) {
   const installationId = input.installationId.trim();
   const owner = input.owner.trim();
@@ -118,15 +141,28 @@ export async function selectGithubRepository(input: {
   const defaultBranch =
     input.defaultBranch?.trim() || meta.default_branch || "main";
 
-  saveGitCredentials({
-    provider: "github",
-    workspace: owner,
-    repoSlug: repo,
-    token,
-    authMethod: "github_app",
-    installationId,
-    defaultBranch,
-  });
+  if (input.organizationId) {
+    await saveOrganizationGitConfig(input.organizationId, {
+      provider: "github",
+      workspace: owner,
+      repoSlug: repo,
+      token,
+      authMethod: "github_app",
+      installationId,
+      defaultBranch,
+    });
+  } else {
+    const { saveGitCredentials } = await import("./gitCredentialsStore");
+    saveGitCredentials({
+      provider: "github",
+      workspace: owner,
+      repoSlug: repo,
+      token,
+      authMethod: "github_app",
+      installationId,
+      defaultBranch,
+    });
+  }
 
   try {
     await markSelectedRepository({ installationId, owner, repo });
@@ -141,11 +177,15 @@ export async function selectGithubRepository(input: {
     logger.warn({ err, owner, repo, defaultBranch }, "initial codebase index enqueue failed");
   }
 
+  const git = input.organizationId
+    ? await getPublicOrganizationGitConfig(input.organizationId)
+    : getPublicGitCredentials();
+
   return {
     connected: true,
     fullName: meta.full_name,
     defaultBranch,
-    git: getPublicGitCredentials(),
+    git,
     indexQueued: Boolean(indexRun),
     indexRunId: indexRun?.runId ?? null,
   };

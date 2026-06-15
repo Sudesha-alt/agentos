@@ -1,5 +1,6 @@
 import { DATA_MODE, DATA_MODES } from "../../shared/config/app";
 import { apiPath } from "../../shared/config/apiBase";
+import { authHeaders } from "../../shared/lib/authHeaders";
 import { fetchJson } from "../../shared/lib/fetchJson";
 import { useResource } from "../../shared/lib/useResource";
 
@@ -40,13 +41,15 @@ function writeLocalProfile(profile) {
 
 const restAdapter = {
   async get() {
-    const data = await fetchJson(apiPath("/api/company-intelligence"));
+    const data = await fetchJson(apiPath("/api/company-intelligence"), {
+      headers: authHeaders(),
+    });
     return data?.profile ?? EMPTY_COMPANY_PROFILE;
   },
   async save(profile) {
     const data = await fetchJson(apiPath("/api/company-intelligence"), {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify(profile),
     });
     writeLocalProfile(data.profile);

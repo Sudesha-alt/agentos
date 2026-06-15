@@ -13,9 +13,14 @@ import {
   saveOnboardingStep,
 } from "../entities/onboarding";
 import { useAuth } from "../shared/providers/useAuth";
+import {
+  createOrganization,
+  fetchOrganizationsByDomain,
+  joinOrganization,
+} from "../entities/organization";
 import "../marketing/agent-team/agentTeam.css";
 
-const STEPS = ["welcome", "stage", "team", "role", "company"];
+const STEPS = ["welcome", "stage", "team", "role", "company", "organization"];
 
 export default function Onboarding() {
   const navigate = useNavigate();
@@ -33,15 +38,24 @@ export default function Onboarding() {
   const [website, setWebsite] = useState("");
   const [productSummary, setProductSummary] = useState("");
 
+  const [domainOrgs, setDomainOrgs] = useState([]);
+  const [emailDomain, setEmailDomain] = useState("");
+  const [newOrgName, setNewOrgName] = useState("");
+  const [orgChoice, setOrgChoice] = useState(null);
+  const [selectedOrgId, setSelectedOrgId] = useState(null);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const { onboarding } = await fetchOnboarding();
         if (cancelled) return;
-        if (onboarding?.completed) {
+        if (onboarding?.completed && user?.organizationId) {
           navigate("/app", { replace: true });
           return;
+        }
+        if (onboarding?.completed && !user?.organizationId) {
+          setStepIndex(STEPS.indexOf("organization"));
         }
         if (onboarding?.name) setName(onboarding.name);
         if (onboarding?.companyStage) setCompanyStage(onboarding.companyStage);
@@ -61,9 +75,36 @@ export default function Onboarding() {
     return () => {
       cancelled = true;
     };
-  }, [navigate]);
+  }, [navigate, user?.organizationId]);
 
   const step = STEPS[stepIndex];
+
+  useEffect(() => {
+    if (step !== "organization") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await fetchOrganizationsByDomain();
+        if (cancelled) return;
+        setEmailDomain(result.domain ?? "");
+        setDomainOrgs(result.organizations ?? []);
+        if (result.currentOrganizationId) {
+          setOrgChoice("existing");
+          setSelectedOrgId(result.currentOrganizationId);
+        } else if ((result.organizations ?? []).length === 0) {
+          setOrgChoice("create");
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Could not load workspaces");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [step]);
+
   const progress = ((stepIndex + 1) / STEPS.length) * 100;
 
   const canContinue = useMemo(() => {
@@ -72,8 +113,14 @@ export default function Onboarding() {
     if (step === "team") return Boolean(teamSize);
     if (step === "role") return Boolean(role);
     if (step === "company") return companyName.trim() && website.trim();
+    if (step === "organization") {
+      if (user?.organizationId) return true;
+      if (orgChoice === "create") return newOrgName.trim().length >= 2;
+      if (orgChoice === "join") return Boolean(selectedOrgId);
+      return false;
+    }
     return false;
-  }, [step, name, companyStage, teamSize, role, companyName, website]);
+  }, [step, name, companyStage, teamSize, role, companyName, website, orgChoice, selectedOrgId, newOrgName, user?.organizationId]);
 
   async function persistStep(patch) {
     await saveOnboardingStep(patch);
@@ -116,6 +163,21 @@ export default function Onboarding() {
         await persistStep({ role });
         setStepIndex(4);
       } else if (step === "company") {
+        await persistStep({ name: name.trim() });
+        setNewOrgName(companyName.trim());
+        setStepIndex(5);
+      } else if (step === "organization") {
+        if (!user?.organizationId) {
+          if (orgChoice === "join" && selectedOrgId) {
+            await joinOrganization(selectedOrgId);
+          } else if (orgChoice === "create") {
+            await createOrganization(newOrgName.trim());
+          } else {
+            throw new Error("Choose a workspace to continue");
+          }
+          await refresh();
+        }
+
         const stageLabel =
           COMPANY_STAGES.find((s) => s.id === companyStage)?.label ?? companyStage;
         const teamLabel = TEAM_SIZES.find((s) => s.id === teamSize)?.label ?? teamSize;
@@ -298,6 +360,90 @@ export default function Onboarding() {
             </>
           ) : null}
 
+          {step === "organization" ? (
+            <>
+              <h1 className="text-2xl font-bold text-[#2B2D33]">Choose your workspace</h1>
+              <p className="mt-2 text-[15px] text-[#6B6B6B]">
+                Integrations, billing, and repos are scoped to the workspace you select.
+                {emailDomain ? ` Others at @${emailDomain} may already have a team workspace.` : ""}
+              </p>
+
+              {user?.organizationId ? (
+                <div className="mt-6 rounded-2xl border border-[#E8E4DE] bg-white px-4 py-4">
+                  <p className="font-medium text-[#2B2D33]">
+                    {user.organizationName || "Your workspace"}
+                  </p>
+                  <p className="mt-1 text-sm text-[#6B6B6B]">
+                    You are already assigned to this workspace. Continue to finish setup.
+                  </p>
+                </div>
+              ) : (
+                <div className="mt-6 space-y-4">
+                  {domainOrgs.length > 0 ? (
+                    <div className="space-y-3">
+                      <p className="text-[12px] font-semibold uppercase tracking-wide text-[#6B6B6B]">
+                        Join an existing team
+                      </p>
+                      {domainOrgs.map((org) => {
+                        const selected = orgChoice === "join" && selectedOrgId === org.id;
+                        return (
+                          <button
+                            key={org.id}
+                            type="button"
+                            onClick={() => {
+                              setOrgChoice("join");
+                              setSelectedOrgId(org.id);
+                            }}
+                            className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
+                              selected
+                                ? "border-[#2B2D33] bg-[#2B2D33] text-white"
+                                : "border-[#E8E4DE] bg-white text-[#2B2D33] hover:border-[#2B2D33]/30"
+                            }`}
+                          >
+                            <p className="font-medium">{org.companyName || org.name}</p>
+                            <p className={`mt-1 text-sm ${selected ? "text-white/80" : "text-[#6B6B6B]"}`}>
+                              {org.memberCount} member{org.memberCount === 1 ? "" : "s"} · @{org.domain}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+
+                  <div className="space-y-3">
+                    <button
+                      type="button"
+                      onClick={() => setOrgChoice("create")}
+                      className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
+                        orgChoice === "create"
+                          ? "border-[#2B2D33] bg-[#2B2D33] text-white"
+                          : "border-[#E8E4DE] bg-white text-[#2B2D33] hover:border-[#2B2D33]/30"
+                      }`}
+                    >
+                      <p className="font-medium">Create a new workspace</p>
+                      <p className={`mt-1 text-sm ${orgChoice === "create" ? "text-white/80" : "text-[#6B6B6B]"}`}>
+                        Start fresh with your own org — integrations stay private to your team.
+                      </p>
+                    </button>
+                    {orgChoice === "create" ? (
+                      <label className="block">
+                        <span className="text-[12px] font-semibold uppercase tracking-wide text-[#6B6B6B]">
+                          Workspace name
+                        </span>
+                        <input
+                          value={newOrgName}
+                          onChange={(e) => setNewOrgName(e.target.value)}
+                          className="mt-2 w-full rounded-2xl border border-[#E8E4DE] bg-white px-4 py-3 text-[15px]"
+                          placeholder="Acme Product Team"
+                        />
+                      </label>
+                    ) : null}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : null}
+
           {error ? (
             <p className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] text-red-700">
               {error}
@@ -321,9 +467,11 @@ export default function Onboarding() {
             >
               {pending
                 ? "Please wait…"
-                : step === "company"
+                : step === "organization"
                   ? "Finish setup"
-                  : "Continue"}
+                  : step === "company"
+                    ? "Continue"
+                    : "Continue"}
             </button>
           </div>
         </div>

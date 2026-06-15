@@ -16,8 +16,15 @@ export type WebFetchBundle = {
 
 const SUPPLEMENTAL_PATHS = ["/about", "/pricing", "/company", "/product"];
 const FETCH_TIMEOUT_MS = 18_000;
+const JINA_TIMEOUT_MS = 28_000;
 const MAX_CHARS_PER_PAGE = 12_000;
 const MAX_COMBINED_CHARS = 36_000;
+const MIN_USEFUL_HTML_CHARS = 180;
+
+function isAbortError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  return err.name === "AbortError" || /aborted/i.test(err.message);
+}
 
 function normalizeWebsite(input: string): string {
   const trimmed = input.trim();
@@ -57,13 +64,17 @@ async function fetchJinaReader(url: string): Promise<string | null> {
         Accept: "text/plain",
         "User-Agent": "AgentOS-CompanyIntelligence/1.0",
       },
-      timeoutMs: 22_000,
+      timeoutMs: JINA_TIMEOUT_MS,
     });
     if (!res.ok) return null;
     const text = (await res.text()).trim();
     return text.length > 80 ? text.slice(0, MAX_CHARS_PER_PAGE) : null;
   } catch (err) {
-    logger.warn({ err, url }, "jina reader fetch failed");
+    if (isAbortError(err)) {
+      logger.debug({ url }, "jina reader timed out — trying html fallback");
+    } else {
+      logger.warn({ err, url }, "jina reader fetch failed");
+    }
     return null;
   }
 }
@@ -123,9 +134,34 @@ async function fetchHtmlMeta(url: string): Promise<string | null> {
     const meta = extractMetaFromHtml(html);
     return meta.length > 40 ? meta.slice(0, MAX_CHARS_PER_PAGE) : null;
   } catch (err) {
-    logger.warn({ err, url }, "html meta fetch failed");
+    if (isAbortError(err)) {
+      logger.debug({ url }, "html fetch timed out");
+    } else {
+      logger.warn({ err, url }, "html meta fetch failed");
+    }
     return null;
   }
+}
+
+/** Prefer fast direct HTML; use Jina only when the page is thin or JS-heavy. */
+async function fetchPageContent(
+  url: string
+): Promise<{ text: string | null; method: WebFetchSource["method"] }> {
+  const metaText = await fetchHtmlMeta(url);
+  if (metaText && metaText.length >= MIN_USEFUL_HTML_CHARS) {
+    return { text: metaText, method: "html_meta" };
+  }
+
+  const jinaText = await fetchJinaReader(url);
+  if (jinaText) {
+    return { text: jinaText, method: "jina_reader" };
+  }
+
+  if (metaText) {
+    return { text: metaText, method: "html_meta" };
+  }
+
+  return { text: null, method: "direct_html" };
 }
 
 export async function fetchCompanyWebContext(websiteInput: string): Promise<WebFetchBundle> {
@@ -134,20 +170,20 @@ export async function fetchCompanyWebContext(websiteInput: string): Promise<WebF
 
   const sources: WebFetchSource[] = [];
   const textBlocks: string[] = [];
-  const technologies = new Set<string>(["Jina Reader", "Open Graph / JSON-LD meta"]);
+  const technologies = new Set<string>(["Open Graph / JSON-LD meta", "Jina Reader (fallback)"]);
 
   for (const url of urls) {
-    const jinaText = await fetchJinaReader(url);
-    if (jinaText) {
-      textBlocks.push(`--- ${url} (Jina Reader) ---\n${jinaText}`);
-      sources.push({ url, method: "jina_reader", chars: jinaText.length, ok: true });
-      continue;
+    // Skip extra paths when the homepage already gave enough context.
+    if (url !== origin && textBlocks.join("\n").length >= 4_000) {
+      break;
     }
 
-    const metaText = await fetchHtmlMeta(url);
-    if (metaText) {
-      textBlocks.push(`--- ${url} (HTML meta) ---\n${metaText}`);
-      sources.push({ url, method: "html_meta", chars: metaText.length, ok: true });
+    const { text, method } = await fetchPageContent(url);
+    if (text) {
+      const label =
+        method === "jina_reader" ? "Jina Reader" : "HTML meta";
+      textBlocks.push(`--- ${url} (${label}) ---\n${text}`);
+      sources.push({ url, method, chars: text.length, ok: true });
     } else {
       sources.push({ url, method: "direct_html", chars: 0, ok: false });
     }

@@ -17,7 +17,9 @@ datasource db {
 
 model Ticket {
   id             String       @id @default(cuid())
-  jiraTicketId   String       @unique
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jiraTicketId   String
   jiraKey        String
   rawPayload     Json
   normalizedData Json
@@ -25,13 +27,19 @@ model Ticket {
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
   pipeline       Pipeline?
+
+  @@unique([organizationId, jiraTicketId])
+  @@unique([organizationId, jiraKey])
+  @@index([organizationId])
 }
 
 /// Canonical synced copy of Jira issues (all statuses in configured projects).
 model JiraIssue {
-  id            String    @id @default(cuid())
-  jiraTicketId  String    @unique
-  jiraKey       String    @unique
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jiraTicketId   String
+  jiraKey        String
   projectKey    String
   summary       String
   description   String    @db.Text
@@ -52,13 +60,18 @@ model JiraIssue {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  @@unique([organizationId, jiraTicketId])
+  @@unique([organizationId, jiraKey])
+  @@index([organizationId])
   @@index([projectKey, status])
   @@index([jiraUpdatedAt])
   @@index([isDeleted])
 }
 
 model JiraSyncRun {
-  id            String          @id @default(cuid())
+  id             String          @id @default(cuid())
+  organizationId String
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   mode          JiraSyncMode
   status        JiraSyncStatus
   startedAt     DateTime        @default(now())
@@ -69,15 +82,17 @@ model JiraSyncRun {
   errorMessage  String?         @db.Text
   watermark     DateTime?
 
-  @@index([status, startedAt])
+  @@index([organizationId, status, startedAt])
 }
 
 /// Selective mirror of closed/done Jira issues for pipeline RAG (Lane 2).
 /// @deprecated Prefer JiraIssue — kept for backward compatibility during migration.
 model JiraMirror {
-  id            String    @id @default(cuid())
-  jiraTicketId  String    @unique
-  jiraKey       String    @unique
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jiraTicketId   String
+  jiraKey        String
   projectKey    String
   summary       String
   description   String    @db.Text
@@ -94,13 +109,18 @@ model JiraMirror {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
+  @@unique([organizationId, jiraTicketId])
+  @@unique([organizationId, jiraKey])
+  @@index([organizationId])
   @@index([status])
   @@index([projectKey])
   @@index([jiraUpdatedAt])
 }
 
 model Pipeline {
-  id           String             @id @default(cuid())
+  id             String             @id @default(cuid())
+  organizationId String
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   ticketId     String             @unique
   ticket       Ticket             @relation(fields: [ticketId], references: [id])
   currentStage PipelineStage
@@ -111,6 +131,8 @@ model Pipeline {
   overrides    HumanOverride[]
   auditLogs    AuditLog[]
   canaryRuns   CanaryRun[]
+
+  @@index([organizationId])
 }
 
 model CanaryRun {
@@ -192,7 +214,9 @@ model HumanOverride {
 }
 
 model OrgIntelligenceRecord {
-  id         String   @id @default(cuid())
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   sourceType String
   jiraKey    String
   pipelineId String?
@@ -201,7 +225,8 @@ model OrgIntelligenceRecord {
   metadata   Json     @default("{}")
   createdAt  DateTime @default(now())
 
-  @@index([jiraKey, createdAt])
+  @@index([organizationId])
+  @@index([organizationId, jiraKey, createdAt])
   @@index([sourceType, createdAt])
   @@index([component])
 }
@@ -250,13 +275,79 @@ model Organization {
   id             String                  @id @default(cuid())
   name           String
   slug           String                  @unique
-  domain         String                  @unique
+  domain         String
   createdAt      DateTime                @default(now())
   updatedAt      DateTime                @updatedAt
   members        OrganizationMember[]
   companyProfile CompanyProfile?
   jiraConfig     OrganizationJiraConfig?
+  gitConfig      OrganizationGitConfig?
   billing        WorkspaceBilling?
+  tickets        Ticket[]
+  jiraIssues     JiraIssue[]
+  jiraSyncRuns   JiraSyncRun[]
+  jiraMirrors    JiraMirror[]
+  pipelines      Pipeline[]
+  orgIntelligence OrgIntelligenceRecord[]
+  codebaseFiles  CodebaseFile[]
+  codebaseIndexRuns CodebaseIndexRun[]
+  codebaseVisualizationCaches CodebaseVisualizationCache[]
+  codebaseTourCaches CodebaseTourCache[]
+  codebaseKnowledgeCaches CodebaseKnowledgeCache[]
+  branchStates   BranchState[]
+  commitHistories CommitHistory[]
+  githubInstallations GithubInstallation[]
+  agentChatThreads AgentChatThread[]
+  roadmap          Roadmap?
+
+  @@index([domain])
+}
+
+model Roadmap {
+  id             String         @id @default(cuid())
+  organizationId String         @unique
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  title          String         @default("Company roadmap")
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  stages         RoadmapStage[]
+  items          RoadmapItem[]
+}
+
+model RoadmapStage {
+  id        String        @id @default(cuid())
+  roadmapId String
+  roadmap   Roadmap       @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  key       String
+  label     String
+  sortOrder Int
+  items     RoadmapItem[]
+
+  @@unique([roadmapId, key])
+  @@index([roadmapId, sortOrder])
+}
+
+model RoadmapItem {
+  id             String             @id @default(cuid())
+  organizationId String
+  roadmapId      String
+  stageId        String
+  slug           String
+  title          String
+  description    String?            @db.Text
+  routeType      RoadmapRouteType   @default(USER_INPUT)
+  status         RoadmapItemStatus  @default(PENDING)
+  sortOrder      Int                @default(0)
+  dependsOnSlugs Json               @default("[]")
+  jiraKey        String?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  roadmap        Roadmap            @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  stage          RoadmapStage       @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  @@unique([roadmapId, slug])
+  @@index([organizationId])
+  @@index([roadmapId, stageId])
 }
 
 model OrganizationMember {
@@ -270,6 +361,21 @@ model OrganizationMember {
 
   @@unique([organizationId, userId])
   @@index([userId])
+}
+
+model OrganizationGitConfig {
+  organizationId String       @id
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  provider       String       @default("github")
+  workspace      String       @default("")
+  repoSlug       String       @default("")
+  username       String?
+  token          String       @default("")
+  webhookSecret  String       @default("")
+  defaultBranch  String       @default("main")
+  installationId String?
+  authMethod     String       @default("pat")
+  updatedAt      DateTime     @updatedAt
 }
 
 model OrganizationJiraConfig {
@@ -288,7 +394,9 @@ model OrganizationJiraConfig {
 }
 
 model AgentChatThread {
-  id          String   @id @default(cuid())
+  id             String        @id @default(cuid())
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   agentDomain String
   contextKey  String   @default("")
   title       String?
@@ -296,8 +404,8 @@ model AgentChatThread {
   updatedAt   DateTime @updatedAt
   messages    AgentChatMessage[]
 
-  @@unique([agentDomain, contextKey])
-  @@index([agentDomain])
+  @@unique([organizationId, agentDomain, contextKey])
+  @@index([organizationId, agentDomain])
 }
 
 model AgentChatMessage {
@@ -324,7 +432,9 @@ model AuditLog {
 }
 
 model CodebaseVisualizationCache {
-  id          String   @id @default(cuid())
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   repoOwner   String
   repoName    String
   branchName  String
@@ -332,12 +442,14 @@ model CodebaseVisualizationCache {
   computedAt  DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@unique([repoOwner, repoName, branchName])
-  @@index([computedAt])
+  @@unique([organizationId, repoOwner, repoName, branchName])
+  @@index([organizationId, computedAt])
 }
 
 model CodebaseTourCache {
-  id          String   @id @default(cuid())
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   repoOwner   String
   repoName    String
   branchName  String
@@ -345,11 +457,13 @@ model CodebaseTourCache {
   generatedAt DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@unique([repoOwner, repoName, branchName])
+  @@unique([organizationId, repoOwner, repoName, branchName])
 }
 
 model CodebaseKnowledgeCache {
-  id            String   @id @default(cuid())
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   repoOwner     String
   repoName      String
   branchName    String
@@ -357,11 +471,13 @@ model CodebaseKnowledgeCache {
   generatedAt   DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  @@unique([repoOwner, repoName, branchName])
+  @@unique([organizationId, repoOwner, repoName, branchName])
 }
 
 model CodebaseFile {
-  id            String   @id @default(cuid())
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   repoOwner     String
   repoName      String
   filePath      String
@@ -382,14 +498,16 @@ model CodebaseFile {
   updatedAt     DateTime @updatedAt
   isDeleted     Boolean  @default(false)
 
-  @@unique([repoOwner, repoName, filePath, branchName])
-  @@index([repoOwner, repoName, branchName])
+  @@unique([organizationId, repoOwner, repoName, filePath, branchName])
+  @@index([organizationId, repoOwner, repoName, branchName])
   @@index([language])
   @@index([contentHash])
 }
 
 model BranchState {
-  id           String   @id @default(cuid())
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   repoOwner    String
   repoName     String
   branchName   String
@@ -408,12 +526,14 @@ model BranchState {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  @@unique([repoOwner, repoName, branchName])
-  @@index([jiraKey])
+  @@unique([organizationId, repoOwner, repoName, branchName])
+  @@index([organizationId, jiraKey])
 }
 
 model CommitHistory {
-  id            String   @id @default(cuid())
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   repoOwner     String
   repoName      String
   branchName    String
@@ -429,13 +549,15 @@ model CommitHistory {
   jiraKey       String?
   createdAt     DateTime @default(now())
 
-  @@unique([repoOwner, repoName, sha])
-  @@index([branchName])
-  @@index([jiraKey])
+  @@unique([organizationId, repoOwner, repoName, sha])
+  @@index([organizationId, branchName])
+  @@index([organizationId, jiraKey])
 }
 
 model CodebaseIndexRun {
   id              String   @id @default(cuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   repoOwner       String
   repoName        String
   branchName      String
@@ -452,13 +574,13 @@ model CodebaseIndexRun {
   completedAt     DateTime?
   error           String?
 
-  @@index([repoOwner, repoName, status])
-  @@index([startedAt])
+  @@index([organizationId, repoOwner, repoName, status])
+  @@index([organizationId, startedAt])
 }
 
 model WorkspaceBilling {
   id             String        @id @default(cuid())
-  organizationId String?       @unique
+  organizationId String        @unique
   organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   planId         String        @default("pilot")
   runsUsed       Int           @default(0)
@@ -470,6 +592,8 @@ model WorkspaceBilling {
 
 model GithubInstallation {
   id                String             @id @default(cuid())
+  organizationId    String?
+  organization      Organization?      @relation(fields: [organizationId], references: [id], onDelete: SetNull)
   installationId    String             @unique
   accountLogin      String
   accountType       String
@@ -484,6 +608,7 @@ model GithubInstallation {
   repositories      GithubRepository[]
 
   @@index([accountLogin])
+  @@index([organizationId])
 }
 
 model GithubRepository {
@@ -561,4 +686,16 @@ enum CanaryRunStatus {
   RUNNING
   COMPLETED
   FAILED
+}
+
+enum RoadmapItemStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum RoadmapRouteType {
+  USER_INPUT
+  AGENT
+  APPROVAL
 }

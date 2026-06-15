@@ -30,9 +30,9 @@ async function enqueueIssueKeys(
   }
 
   if (!isPipelineJiraConfigured()) {
-    logger.warn(
+    logger.debug(
       { keyCount: keys.length, source },
-      "intake enqueue skipped — pipeline Jira not configured (baseUrl, email, apiToken)"
+      "intake enqueue skipped — pipeline Jira not configured yet"
     );
     return {
       scanned: keys.length,
@@ -103,10 +103,24 @@ async function enqueueIssueKeys(
 export async function scanIntakeFromSyncedIssues(
   source: IntakeScanSource = "startup"
 ): Promise<IntakeScanResult> {
+  const empty: IntakeScanResult = {
+    scanned: 0,
+    enqueued: 0,
+    skipped: 0,
+    source,
+    errors: [],
+    skipReasons: [],
+  };
+
+  if (!isPipelineJiraConfigured()) {
+    logger.debug({ source }, "intake scan skipped — pipeline Jira not configured yet");
+    return empty;
+  }
+
   const intake = getPipelineIntakeMapping();
   const statuses = intake.aiWorkerStatuses ?? [];
   if (statuses.length === 0) {
-    return { scanned: 0, enqueued: 0, skipped: 0, source, errors: [], skipReasons: [] };
+    return empty;
   }
 
   try {
