@@ -47,6 +47,13 @@ export default function Onboarding() {
         if (onboarding?.companyStage) setCompanyStage(onboarding.companyStage);
         if (onboarding?.teamSize) setTeamSize(onboarding.teamSize);
         if (onboarding?.role) setRole(onboarding.role);
+      } catch (err) {
+        if (!cancelled) {
+          const message = err instanceof Error ? err.message : "";
+          if (message.includes("401") || message.toLowerCase().includes("unauthorized")) {
+            navigate("/login", { replace: true, state: { from: "/onboarding" } });
+          }
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -138,7 +145,13 @@ export default function Onboarding() {
         navigate("/app", { replace: true });
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      const message = err instanceof Error ? err.message : "Something went wrong";
+      if (message.includes("401") || message.toLowerCase().includes("unauthorized")) {
+        setError("Your session expired. Please sign in again to continue setup.");
+        setTimeout(() => navigate("/login", { replace: true }), 1500);
+      } else {
+        setError(message);
+      }
     } finally {
       setPending(false);
     }
