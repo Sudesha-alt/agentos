@@ -54,10 +54,16 @@ export default function JiraIntegration({ embedded = false }) {
     );
   }
 
-  return <JiraIntegrationContent setup={setup} refetchSetup={refetchSetup} />;
+  return (
+    <JiraIntegrationContent
+      setup={setup}
+      refetchSetup={refetchSetup}
+      embedded={embedded}
+    />
+  );
 }
 
-function JiraIntegrationContent({ setup, refetchSetup }) {
+function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const connected = Boolean(setup?.connected);
   const intakeConfigured = Boolean(setup?.intake?.aiWorkerColumnName);

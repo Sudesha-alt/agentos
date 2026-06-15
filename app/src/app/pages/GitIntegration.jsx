@@ -46,10 +46,12 @@ export default function GitIntegration({ embedded = false }) {
     );
   }
 
-  return <GitIntegrationContent setup={setup} refetch={refetch} />;
+  return (
+    <GitIntegrationContent setup={setup} refetch={refetch} embedded={embedded} />
+  );
 }
 
-function GitIntegrationContent({ setup, refetch }) {
+function GitIntegrationContent({ setup, refetch, embedded = false }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState("github");
   const [repos, setRepos] = useState(() => setup?.availableRepositories ?? []);
