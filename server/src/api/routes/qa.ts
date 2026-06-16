@@ -18,16 +18,25 @@ router.get("/pipeline-reports", async (_req, res, next) => {
 
     res.json({
       reports: stages.map((s) => {
-        const out = s.output as { qa?: QaOutput } | null;
+        const out = s.output as {
+          qa?: QaOutput;
+          executionReport?: { testRun?: { passed?: number; failed?: number; totalTests?: number } };
+        } | null;
         const qa = out?.qa;
         const total = qa?.testCases?.length ?? 0;
-        const passed = total;
+        const testRun = out?.executionReport?.testRun;
+        let passRate = 0;
+        if (testRun && (testRun.totalTests ?? 0) > 0) {
+          passRate = Math.round(((testRun.passed ?? 0) / testRun.totalTests!) * 100);
+        } else if (total > 0) {
+          passRate = 100;
+        }
         return {
           pipelineId: s.pipelineId,
           jiraKey: s.pipeline.ticket.jiraKey,
           ticketId: s.pipeline.ticketId,
           testCount: total,
-          passRate: total > 0 ? Math.round((passed / total) * 100) : 0,
+          passRate,
           completedAt: s.completedAt?.toISOString(),
           testSummary: qa?.testSummary,
         };

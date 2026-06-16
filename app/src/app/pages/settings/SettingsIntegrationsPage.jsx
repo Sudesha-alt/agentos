@@ -6,6 +6,7 @@ import { Panel, PanelHeader } from "../../../shared/ui/Panel";
 
 const STATUS_META = {
   connected: { label: "Connected", tone: "success", cta: "Configure" },
+  setup_incomplete: { label: "Select repository", tone: "warning", cta: "Finish setup" },
   not_connected: { label: "Not connected", tone: "muted", cta: "Connect" },
   coming_soon: { label: "Coming soon", tone: "indigo", cta: "Learn more" },
 };

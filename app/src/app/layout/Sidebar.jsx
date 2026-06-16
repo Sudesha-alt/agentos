@@ -1,21 +1,18 @@
 import { NavLink, useLocation, useSearchParams } from "react-router-dom";
 import Logo from "../../components/Logo";
-import {
-  APP_NAV_SECTIONS,
-  PIPELINE_SUB_NAV,
-  TECH_AGENT_SUB_NAV,
-} from "../../shared/config/app";
+import { APP_NAV_SECTIONS, AGENT_NAV, PIPELINE_SUB_NAV } from "../../shared/config/app";
 import { usePipelineList } from "../../entities/pipeline";
-import {
-  derivePipelineCounts,
-} from "../../shared/lib/pipelineCounts";
+import { derivePipelineCounts } from "../../shared/lib/pipelineCounts";
 import { useSidebarCollapsed } from "../../shared/hooks/useSidebarCollapsed";
+import { useNavExpanded } from "../../shared/hooks/useNavExpanded";
 
 const NAV_ICONS = {
   "/app": IconDashboard,
   "/app/pipelines": IconPipeline,
   "/app/pm-agents": IconProduct,
-  "/app/engineering": IconEngineering,
+  virin: IconProduct,
+  ananta: IconCodebase,
+  neel: IconQa,
   "/app/codebase": IconCodebase,
   "/app/roadmap": IconRoadmap,
   "/app/qa": IconQa,
@@ -34,8 +31,47 @@ export default function Sidebar() {
     ? (searchParams.get("tab") ?? "explorer")
     : "explorer";
   const { collapsed, toggleCollapsed } = useSidebarCollapsed();
+  const { isExpanded, toggle } = useNavExpanded(location.pathname);
   const { items: pipelines } = usePipelineList(undefined, { pollMs: 12_000 });
   const counts = derivePipelineCounts(pipelines);
+
+  function agentIsActive(agent) {
+    if (agent.id === "virin") {
+      return (
+        location.pathname.startsWith("/app/pm-agents") ||
+        location.pathname.startsWith("/app/roadmap")
+      );
+    }
+    if (agent.id === "ananta") {
+      return location.pathname.startsWith("/app/codebase");
+    }
+    if (agent.id === "neel") {
+      return location.pathname.startsWith("/app/qa");
+    }
+    return false;
+  }
+
+  function subIsActive(sub, agentId) {
+    if (sub.to.includes("?tab=")) {
+      const tab = new URL(sub.to, "http://local").searchParams.get("tab");
+      if (agentId === "ananta") {
+        return location.pathname === "/app/codebase" && codebaseTab === tab;
+      }
+    }
+    if (sub.to === "/app/roadmap") {
+      return location.pathname === "/app/roadmap";
+    }
+    if (sub.to === "/app/pm-agents") {
+      return location.pathname === "/app/pm-agents";
+    }
+    if (sub.to === "/app/codebase") {
+      return location.pathname === "/app/codebase" && codebaseTab !== "map";
+    }
+    if (sub.to === "/app/qa") {
+      return location.pathname === "/app/qa";
+    }
+    return location.pathname + location.search === sub.to;
+  }
 
   return (
     <aside
@@ -72,96 +108,70 @@ export default function Sidebar() {
               <div className="my-3 border-t border-app-border/60" aria-hidden />
             ) : null}
             <ul className="space-y-0.5">
-              {section.items.flatMap((item) => {
-                const Icon = NAV_ICONS[item.to] ?? IconDashboard;
-                const isTechAgent = item.to === "/app/codebase";
-                const rows = [
-                  <li key={item.to}>
-                    <NavLink
-                      to={item.to}
-                      end={item.end}
-                      title={collapsed ? item.label : undefined}
-                      className={({ isActive }) => {
-                        const onCodebase = location.pathname.startsWith("/app/codebase");
-                        const active = isActive || (isTechAgent && onCodebase);
-                        return `group flex items-center rounded-full py-2 type-nav transition-all duration-200 ease-out ${
-                          collapsed ? "justify-center px-2" : "gap-2.5 px-3"
-                        } ${
-                          active
-                            ? "bg-app-surface text-app-ink shadow-app-nav-active"
-                            : "text-app-ink-dim hover:bg-white/50 hover:text-app-ink"
-                        }`;
-                      }}
-                    >
-                      {({ isActive }) => {
-                        const onCodebase = location.pathname.startsWith("/app/codebase");
-                        const active = isActive || (isTechAgent && onCodebase);
-                        return (
-                          <>
-                            <span
-                              className={`relative flex size-7 shrink-0 items-center justify-center rounded-full transition-colors ${
-                                active
-                                  ? "bg-app-lavender/60 text-app-accent"
-                                  : "bg-transparent text-app-ink-mute group-hover:text-app-ink-dim"
-                              }`}
-                            >
-                              <Icon />
-                            </span>
-                            {!collapsed ? (
-                              <span className="min-w-0 truncate">{item.label}</span>
-                            ) : null}
-                          </>
-                        );
-                      }}
-                    </NavLink>
-                  </li>,
-                ];
-                if (
-                  "techAgentGroup" in section &&
-                  section.techAgentGroup &&
-                  isTechAgent &&
-                  !collapsed
-                ) {
-                  for (const sub of TECH_AGENT_SUB_NAV) {
-                    const active =
-                      location.pathname === "/app/codebase" && codebaseTab === sub.tab;
-                    rows.push(
-                      <li key={`tech-${sub.tab}`}>
-                        <NavLink
-                          to={sub.to}
-                          className={`ml-6 flex items-center gap-2 rounded-full py-1.5 pl-3 pr-3 text-[13px] transition ${
-                            active
-                              ? "bg-app-lavender/40 font-medium text-app-ink"
+              {section.items.map((item) => {
+                if ("end" in item && item.end) {
+                  const Icon = NAV_ICONS[item.to] ?? IconDashboard;
+                  return (
+                    <li key={item.to}>
+                      <NavLink
+                        to={item.to}
+                        end
+                        title={collapsed ? item.label : undefined}
+                        className={({ isActive }) =>
+                          `group flex items-center rounded-full py-2 type-nav transition-all duration-200 ease-out ${
+                            collapsed ? "justify-center px-2" : "gap-2.5 px-3"
+                          } ${
+                            isActive
+                              ? "bg-app-surface text-app-ink shadow-app-nav-active"
                               : "text-app-ink-dim hover:bg-white/50 hover:text-app-ink"
-                          }`}
-                        >
-                          <span className="text-app-ink-mute">└</span>
-                          <span className="flex-1 truncate">{sub.label}</span>
-                        </NavLink>
-                      </li>
-                    );
-                  }
+                          }`
+                        }
+                      >
+                        <span className="relative flex size-7 shrink-0 items-center justify-center rounded-full text-app-ink-mute group-hover:text-app-ink-dim">
+                          <Icon />
+                        </span>
+                        {!collapsed ? <span className="min-w-0 truncate">{item.label}</span> : null}
+                      </NavLink>
+                    </li>
+                  );
                 }
-                return rows;
+                return null;
               })}
 
               {"pipelineGroup" in section && section.pipelineGroup ? (
                 <>
                   <li>
-                    <NavLink
-                      to="/app/pipelines"
+                    {collapsed ? (
+                      <NavLink
+                        to="/app/pipelines"
+                        title="Pipelines"
+                        className={({ isActive }) =>
+                          `group mt-1 flex items-center justify-center rounded-full px-2 py-2 type-nav transition-all ${
+                            isActive || location.pathname.startsWith("/app/pipelines")
+                              ? "bg-app-surface text-app-ink shadow-app-nav-active"
+                              : "text-app-ink-dim hover:bg-white/50 hover:text-app-ink"
+                          }`
+                        }
+                      >
+                        <span className="relative flex size-7 items-center justify-center">
+                          <IconPipeline />
+                          {counts.review > 0 ? (
+                            <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-danger ring-2 ring-app-surface" />
+                          ) : null}
+                        </span>
+                      </NavLink>
+                    ) : (
+                    <button
+                      type="button"
+                      onClick={() => !collapsed && toggle("pipelines")}
                       title={collapsed ? "Pipelines" : undefined}
-                      className={({ isActive }) => {
-                        const onPipelines = location.pathname.startsWith("/app/pipelines");
-                        const active = isActive || onPipelines;
-                        return `group mt-1 flex items-center rounded-full py-2 type-nav transition-all duration-200 ease-out ${
-                          collapsed ? "justify-center px-2" : "gap-2.5 px-3"
-                        } ${
-                          active
-                            ? "bg-app-surface text-app-ink shadow-app-nav-active"
-                            : "text-app-ink-dim hover:bg-white/50 hover:text-app-ink"
-                        }`;
-                      }}
+                      className={`group mt-1 flex w-full items-center rounded-full py-2 type-nav transition-all duration-200 ease-out ${
+                        collapsed ? "justify-center px-2" : "gap-2.5 px-3"
+                      } ${
+                        location.pathname.startsWith("/app/pipelines")
+                          ? "bg-app-surface text-app-ink shadow-app-nav-active"
+                          : "text-app-ink-dim hover:bg-white/50 hover:text-app-ink"
+                      }`}
                     >
                       <span className="relative flex size-7 shrink-0 items-center justify-center rounded-full text-app-ink-mute group-hover:text-app-ink-dim">
                         <IconPipeline />
@@ -171,17 +181,19 @@ export default function Sidebar() {
                       </span>
                       {!collapsed ? (
                         <>
-                          <span className="min-w-0 truncate">Pipelines</span>
+                          <span className="min-w-0 flex-1 truncate text-left">Pipelines</span>
+                          <IconExpandChevron open={isExpanded("pipelines")} />
                           {counts.review > 0 ? (
-                            <span className="ml-auto flex size-5 shrink-0 items-center justify-center rounded-full bg-danger text-[10px] font-semibold text-white">
+                            <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-danger text-[10px] font-semibold text-white">
                               {counts.review > 9 ? "9+" : counts.review}
                             </span>
                           ) : null}
                         </>
                       ) : null}
-                    </NavLink>
+                    </button>
+                    )}
                   </li>
-                  {!collapsed
+                  {!collapsed && isExpanded("pipelines")
                     ? PIPELINE_SUB_NAV.map((sub) => {
                         const count =
                           sub.badgeKey === "active"
@@ -191,8 +203,7 @@ export default function Sidebar() {
                               : 0;
                         const isReview = sub.badgeKey === "review";
                         const active =
-                          location.pathname === "/app/pipelines" &&
-                          pipelineTab === sub.tab;
+                          location.pathname === "/app/pipelines" && pipelineTab === sub.tab;
                         return (
                           <li key={sub.tab}>
                             <NavLink
@@ -223,11 +234,166 @@ export default function Sidebar() {
                     : null}
                 </>
               ) : null}
+
+              {"agentGroup" in section && section.agentGroup
+                ? AGENT_NAV.map((agent) => {
+                    const Icon = NAV_ICONS[agent.id] ?? IconProduct;
+                    const active = agentIsActive(agent);
+                    const expanded = isExpanded(agent.id);
+                    const hasSub = agent.subNav.length > 1;
+                    const showSub = !collapsed && expanded && hasSub;
+
+                    if (!hasSub) {
+                      return (
+                        <li key={agent.id}>
+                          <NavLink
+                            to={agent.to}
+                            title={collapsed ? agent.label : undefined}
+                            className={({ isActive }) =>
+                              `group flex items-center rounded-full py-2 type-nav transition-all duration-200 ease-out ${
+                                collapsed ? "justify-center px-2" : "gap-2.5 px-3"
+                              } ${
+                                isActive || active
+                                  ? "bg-app-surface text-app-ink shadow-app-nav-active"
+                                  : "text-app-ink-dim hover:bg-white/50 hover:text-app-ink"
+                              }`
+                            }
+                          >
+                            <span
+                              className={`relative flex size-7 shrink-0 items-center justify-center rounded-full transition-colors ${
+                                active
+                                  ? "bg-app-lavender/60 text-app-accent"
+                                  : "bg-transparent text-app-ink-mute group-hover:text-app-ink-dim"
+                              }`}
+                            >
+                              <Icon />
+                            </span>
+                            {!collapsed ? (
+                              <span className="min-w-0 truncate">{agent.label}</span>
+                            ) : null}
+                          </NavLink>
+                        </li>
+                      );
+                    }
+
+                    return (
+                      <li key={agent.id}>
+                        <button
+                          type="button"
+                          onClick={() => !collapsed && toggle(agent.id)}
+                          title={collapsed ? agent.label : undefined}
+                          className={`group flex w-full items-center rounded-full py-2 type-nav transition-all duration-200 ease-out ${
+                            collapsed ? "justify-center px-2" : "gap-2.5 px-3"
+                          } ${
+                            active
+                              ? "bg-app-surface text-app-ink shadow-app-nav-active"
+                              : "text-app-ink-dim hover:bg-white/50 hover:text-app-ink"
+                          }`}
+                        >
+                          <span
+                            className={`relative flex size-7 shrink-0 items-center justify-center rounded-full transition-colors ${
+                              active
+                                ? "bg-app-lavender/60 text-app-accent"
+                                : "bg-transparent text-app-ink-mute group-hover:text-app-ink-dim"
+                            }`}
+                          >
+                            <Icon />
+                          </span>
+                          {!collapsed ? (
+                            <>
+                              <span className="min-w-0 flex-1 truncate text-left">{agent.label}</span>
+                              <IconExpandChevron open={expanded} />
+                            </>
+                          ) : null}
+                        </button>
+                        {showSub ? (
+                          <ul className="mt-0.5 space-y-0.5">
+                            {agent.subNav.map((sub) => {
+                              const subActive = subIsActive(sub, agent.id);
+                              return (
+                                <li key={sub.to}>
+                                  <NavLink
+                                    to={sub.to}
+                                    className={`ml-6 flex items-center gap-2 rounded-full py-1.5 pl-3 pr-3 text-[13px] transition ${
+                                      subActive
+                                        ? "bg-app-lavender/40 font-medium text-app-ink"
+                                        : "text-app-ink-dim hover:bg-white/50 hover:text-app-ink"
+                                    }`}
+                                  >
+                                    <span className="text-app-ink-mute">└</span>
+                                    <span className="flex-1 truncate">{sub.label}</span>
+                                  </NavLink>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : null}
+                      </li>
+                    );
+                  })
+                : null}
+
+              {!("pipelineGroup" in section) &&
+              !("agentGroup" in section) &&
+              !section.items.every((i) => "end" in i)
+                ? null
+                : null}
+
+              {section.id !== "workspace" && section.id !== "agents"
+                ? section.items.map((item) => {
+                    const Icon = NAV_ICONS[item.to] ?? IconSettings;
+                    return (
+                      <li key={item.to}>
+                        <NavLink
+                          to={item.to}
+                          title={collapsed ? item.label : undefined}
+                          className={({ isActive }) =>
+                            `group flex items-center rounded-full py-2 type-nav transition-all duration-200 ease-out ${
+                              collapsed ? "justify-center px-2" : "gap-2.5 px-3"
+                            } ${
+                              isActive
+                                ? "bg-app-surface text-app-ink shadow-app-nav-active"
+                                : "text-app-ink-dim hover:bg-white/50 hover:text-app-ink"
+                            }`
+                          }
+                        >
+                          <span className="relative flex size-7 shrink-0 items-center justify-center rounded-full text-app-ink-mute group-hover:text-app-ink-dim">
+                            <Icon />
+                          </span>
+                          {!collapsed ? (
+                            <span className="min-w-0 truncate">{item.label}</span>
+                          ) : null}
+                        </NavLink>
+                      </li>
+                    );
+                  })
+                : null}
             </ul>
           </div>
         ))}
       </nav>
     </aside>
+  );
+}
+
+function IconExpandChevron({ open }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      fill="none"
+      aria-hidden
+      className={`shrink-0 text-app-ink-mute transition-transform ${open ? "rotate-180" : ""}`}
+    >
+      <path
+        d="M3 4.5 L6 7.5 L9 4.5"
+        stroke="currentColor"
+        strokeWidth="1.3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -281,17 +447,6 @@ function IconProduct() {
     <svg width="16" height="16" viewBox="0 0 14 14" fill="none" aria-hidden>
       <circle cx="7" cy="4.5" r="2" stroke="currentColor" />
       <path d="M3 12c0-2.2 1.8-4 4-4s4 1.8 4 4" stroke="currentColor" />
-    </svg>
-  );
-}
-function IconEngineering() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 14 14" fill="none" aria-hidden>
-      <circle cx="7" cy="7" r="2" stroke="currentColor" />
-      <path
-        d="M7 1.5v1.4M7 11.1v1.4M1.5 7h1.4M11.1 7h1.4"
-        stroke="currentColor"
-      />
     </svg>
   );
 }

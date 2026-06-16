@@ -20,7 +20,7 @@ import {
 } from "../../integrations/git/githubApp";
 import { resolveGitIntegrationSetupState } from "../../git-integration/gitSetupState";
 import { getLatestGithubInstallState } from "../../git-integration/githubInstallationStore";
-import { validateOAuthState } from "../../git-integration/oauthState";
+import { parseOAuthState, createOAuthState } from "../../git-integration/oauthState";
 import { getPublicOrganizationGitConfig } from "../../organization/gitConfigStore";
 import {
   requireOrganizationUser,
@@ -50,7 +50,7 @@ function frontendBaseUrl(): string {
 
 function frontendGitUrl(): string {
   const base = frontendBaseUrl();
-  return base ? `${base}/app/git` : "";
+  return base ? `${base}/app/settings/integrations/github` : "";
 }
 
 router.get("/integration/setup", async (req, res, next) => {
@@ -60,7 +60,10 @@ router.get("/integration/setup", async (req, res, next) => {
 
     await withOrganizationContext(user.organizationId, async () => {
       const git = await getPublicOrganizationGitConfig(user.organizationId!);
-      const setupState = await resolveGitIntegrationSetupState(git, { orgScoped: true });
+      const setupState = await resolveGitIntegrationSetupState(git, {
+        orgScoped: true,
+        organizationId: user.organizationId!,
+      });
       const { connected, needsRepoSelection, availableRepositories } = setupState;
 
       const base = publicApiBase(req);
@@ -74,6 +77,7 @@ router.get("/integration/setup", async (req, res, next) => {
         connected,
         needsRepoSelection,
         installationDetected: setupState.installationDetected,
+        accountLogin: setupState.accountLogin,
         databaseConfigured: Boolean(process.env.DATABASE_URL?.trim()),
         availableRepositories,
         githubApp: {
@@ -203,8 +207,25 @@ router.get("/integration/diagnostics", async (_req, res, next) => {
   }
 });
 
-router.get("/oauth/github/install", (_req, res) => {
-  const url = githubAppInstallUrl();
+router.get("/oauth/github/install-url", async (req, res) => {
+  const user = requireOrganizationUser(req, res);
+  if (!user?.organizationId) return;
+
+  const url = githubAppInstallUrl(createOAuthState(user.organizationId));
+  if (!url) {
+    res.status(503).json({
+      error: "github_app_not_configured",
+      message: "Set GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, and GITHUB_APP_SLUG on the server.",
+    });
+    return;
+  }
+  res.json({ url });
+});
+
+router.get("/oauth/github/install", async (req, res) => {
+  const user = requireOrganizationUser(req, res);
+  const state = user?.organizationId ? createOAuthState(user.organizationId) : undefined;
+  const url = githubAppInstallUrl(state);
   if (!url) {
     res.status(503).json({
       error: "github_app_not_configured",
@@ -220,8 +241,9 @@ router.get("/oauth/github/callback", async (req, res) => {
   const setupAction = String(req.query.setup_action ?? "");
   const state = String(req.query.state ?? "");
   const frontend = frontendGitUrl();
+  const parsedState = state ? parseOAuthState(state) : { valid: false as const };
+  const stateInvalid = Boolean(state && !parsedState.valid);
 
-  const stateInvalid = Boolean(state && !validateOAuthState(state));
   if (stateInvalid) {
     logger.warn(
       { installationId: installationId || null },
@@ -240,7 +262,10 @@ router.get("/oauth/github/callback", async (req, res) => {
   let installError: string | null = null;
   if (installationId) {
     try {
-      await completeGithubInstallation(installationId);
+      await completeGithubInstallation(
+        installationId,
+        parsedState.valid ? parsedState.organizationId : undefined
+      );
     } catch (err) {
       installError =
         err instanceof Error ? err.message : "GitHub install could not be saved";
@@ -302,7 +327,19 @@ router.post("/github/complete-install", async (req, res) => {
   }
   try {
     const result = await completeGithubInstallation(installationId, user.organizationId);
-    res.json(result);
+    const git = await getPublicOrganizationGitConfig(user.organizationId);
+    const setupState = await resolveGitIntegrationSetupState(git, {
+      orgScoped: true,
+      organizationId: user.organizationId,
+    });
+    res.json({
+      ...result,
+      connected: setupState.connected,
+      needsRepoSelection: setupState.needsRepoSelection,
+      installationDetected: setupState.installationDetected,
+      accountLogin: setupState.accountLogin,
+      availableRepositories: setupState.availableRepositories,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "complete_install_failed";
     logger.warn({ err, installationId }, "github complete-install failed");
@@ -321,7 +358,11 @@ router.post("/integration/disconnect", async (req, res, next) => {
     const { clearOrganizationGitConfig } = await import(
       "../../organization/gitConfigStore"
     );
+    const { unlinkGithubInstallationFromOrganization } = await import(
+      "../../git-integration/githubInstallationStore"
+    );
     await clearOrganizationGitConfig(user.organizationId);
+    await unlinkGithubInstallationFromOrganization(user.organizationId);
     res.json({
       ok: true,
       message:

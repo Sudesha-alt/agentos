@@ -24,6 +24,7 @@ export async function upsertGithubInstallation(input: {
   permissionsJson?: unknown;
   eventsJson?: unknown;
   suspendedAt?: Date | null;
+  organizationId?: string | null;
 }): Promise<GithubInstallationRecord> {
   const row = await prismaAny.githubInstallation.upsert({
     where: { installationId: input.installationId },
@@ -35,6 +36,7 @@ export async function upsertGithubInstallation(input: {
       permissionsJson: input.permissionsJson ?? null,
       eventsJson: input.eventsJson ?? null,
       suspendedAt: input.suspendedAt ?? null,
+      organizationId: input.organizationId ?? null,
     },
     update: {
       accountLogin: input.accountLogin,
@@ -43,6 +45,9 @@ export async function upsertGithubInstallation(input: {
       permissionsJson: input.permissionsJson ?? null,
       eventsJson: input.eventsJson ?? null,
       suspendedAt: input.suspendedAt ?? null,
+      ...(input.organizationId !== undefined
+        ? { organizationId: input.organizationId }
+        : {}),
     },
   });
   return row as GithubInstallationRecord;
@@ -179,6 +184,59 @@ export async function getLatestGithubInstallState(): Promise<GithubInstallState 
   }
 }
 
+export async function getGithubInstallByInstallationId(
+  installationId: string
+): Promise<GithubInstallState | null> {
+  try {
+    const row = (await prismaAny.githubInstallation.findUnique({
+      where: { installationId },
+      select: {
+        installationId: true,
+        accountLogin: true,
+        selectedRepoOwner: true,
+        selectedRepoName: true,
+        updatedAt: true,
+      },
+    })) as GithubInstallState | null;
+    return row;
+  } catch (err) {
+    logger.warn({ err, installationId }, "read github installation by id failed");
+    return null;
+  }
+}
+
+export async function getGithubInstallForOrganization(
+  organizationId: string
+): Promise<GithubInstallState | null> {
+  try {
+    const row = (await prismaAny.githubInstallation.findFirst({
+      where: { organizationId },
+      orderBy: { updatedAt: "desc" },
+      select: {
+        installationId: true,
+        accountLogin: true,
+        selectedRepoOwner: true,
+        selectedRepoName: true,
+        updatedAt: true,
+      },
+    })) as GithubInstallState | null;
+    return row;
+  } catch (err) {
+    logger.warn({ err, organizationId }, "read github installation for org failed");
+    return null;
+  }
+}
+
+export async function unlinkGithubInstallationFromOrganization(
+  organizationId: string
+): Promise<void> {
+  if (!process.env.DATABASE_URL?.trim()) return;
+  await prismaAny.githubInstallation.updateMany({
+    where: { organizationId },
+    data: { organizationId: null },
+  });
+}
+
 export async function removeGithubInstallation(installationId: string): Promise<void> {
   if (!process.env.DATABASE_URL?.trim()) return;
   await prismaAny.githubInstallation.deleteMany({
@@ -195,6 +253,7 @@ export async function persistInstallationFlow(input: {
   eventsJson?: unknown;
   suspendedAt?: Date | null;
   repositories: InstallationRepo[];
+  organizationId?: string | null;
 }): Promise<void> {
   if (!process.env.DATABASE_URL?.trim()) {
     logger.warn(
@@ -212,6 +271,7 @@ export async function persistInstallationFlow(input: {
     permissionsJson: input.permissionsJson,
     eventsJson: input.eventsJson,
     suspendedAt: input.suspendedAt,
+    organizationId: input.organizationId ?? null,
   });
   await syncInstallationRepositories(input.installationId, input.repositories);
 }

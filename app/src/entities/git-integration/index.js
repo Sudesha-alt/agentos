@@ -14,6 +14,8 @@ function requestHeaders(extra = {}) {
 const restGitIntegrationAdapter = {
   getSetup: () =>
     fetchJson(intake("/integration/setup"), { headers: requestHeaders() }),
+  getInstallUrl: () =>
+    fetchJson(intake("/oauth/github/install-url"), { headers: requestHeaders() }),
   connect: (body) =>
     fetchJson(intake("/integration/connect"), {
       method: "POST",
@@ -41,6 +43,10 @@ const restGitIntegrationAdapter = {
 
 const mockGitIntegrationAdapter = {
   getSetup: () => mockApi.gitIntegrationSetup(),
+  getInstallUrl: () =>
+    Promise.resolve({
+      url: "https://github.com/apps/agentos-dev/installations/new",
+    }),
   connect: (body) => mockApi.connectGitIntegration(body),
   completeInstall: (installationId) => mockApi.completeGithubInstall(installationId),
   selectRepo: (body) => mockApi.selectGithubRepository(body),
@@ -58,7 +64,16 @@ export async function connectGitIntegration(body) {
   return gitIntegrationAdapter.connect(body);
 }
 
-export function startGithubAppInstall() {
+export async function startGithubAppInstall() {
+  try {
+    const { url } = await gitIntegrationAdapter.getInstallUrl();
+    if (url) {
+      window.location.href = url;
+      return;
+    }
+  } catch {
+    // Fall back to legacy redirect (may lack org binding without auth headers in navigation)
+  }
   window.location.href = intake("/oauth/github/install");
 }
 
@@ -87,8 +102,9 @@ export async function fetchGitIntegrationSummary() {
       : null;
   return {
     connected: Boolean(setup?.connected),
-    needsRepoSelection,
+    needsRepoSelection: Boolean(setup?.needsRepoSelection),
     installationDetected: Boolean(setup?.installationDetected),
+    accountLogin: setup?.accountLogin ?? setup?.git?.workspace ?? null,
     repoLabel,
     authMethod: git?.authMethod ?? null,
     installationId: git?.installationId ?? null,

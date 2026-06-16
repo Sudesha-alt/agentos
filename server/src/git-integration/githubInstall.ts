@@ -13,6 +13,7 @@ import { logger } from "../utils/logger";
 import {
   getPublicGitCredentials,
   saveGithubAppInstallation,
+  saveGitCredentialsForOrganization,
 } from "./gitCredentialsStore";
 import {
   listStoredRepositories,
@@ -35,11 +36,12 @@ export async function completeGithubInstallation(
   const canonicalId = String(meta.id ?? id);
 
   if (organizationId) {
-    await saveOrganizationGitConfig(organizationId, {
+    await saveGitCredentialsForOrganization(organizationId, {
       provider: "github",
       authMethod: "github_app",
       installationId: canonicalId,
       workspace: meta.account.login,
+      repoSlug: "",
     });
   } else {
     saveGithubAppInstallation(canonicalId);
@@ -54,6 +56,7 @@ export async function completeGithubInstallation(
     eventsJson: meta.events ?? null,
     suspendedAt: meta.suspendedAt ? new Date(meta.suspendedAt) : null,
     repositories,
+    organizationId: organizationId ?? null,
   });
 
   let storedRepos = repositories;
@@ -142,7 +145,7 @@ export async function selectGithubRepository(input: {
     input.defaultBranch?.trim() || meta.default_branch || "main";
 
   if (input.organizationId) {
-    await saveOrganizationGitConfig(input.organizationId, {
+    await saveGitCredentialsForOrganization(input.organizationId, {
       provider: "github",
       workspace: owner,
       repoSlug: repo,

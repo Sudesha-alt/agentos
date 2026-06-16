@@ -80,6 +80,7 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
   const githubAppEnabled = Boolean(githubApp?.configured && githubApp?.installUrl);
   const git = setup?.git;
   const connected = Boolean(setup?.connected);
+  const accountLogin = setup?.accountLogin ?? git?.workspace ?? null;
   const activeInstallationId = pendingInstallationId || git?.installationId || "";
   const isGithubApp =
     git?.authMethod === "github_app" || Boolean(activeInstallationId && tab === "github");
@@ -112,7 +113,7 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
         const result = await completeGithubInstall(installationId);
         if (cancelled) return;
         setPendingInstallationId(installationId);
-        setRepos(result.repositories ?? []);
+        setRepos(result.repositories ?? result.availableRepositories ?? []);
         if (result.autoSelected?.fullName) {
           setStatus(
             `Connected to ${result.autoSelected.fullName}. Initial codebase index started.`
@@ -120,8 +121,12 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
           if (result.autoSelected.indexRunId) {
             setIndexRunId(result.autoSelected.indexRunId);
           }
-        } else if ((result.repositories ?? []).length > 0) {
+        } else if ((result.repositories ?? result.availableRepositories ?? []).length > 0) {
           setStatus("GitHub App installed — choose a repository below.");
+        } else if (result.accountLogin) {
+          setStatus(
+            `GitHub App installed for ${result.accountLogin} — choose a repository below.`
+          );
         } else {
           setStatus("GitHub App installed — grant repository access in GitHub if none appear below.");
         }
@@ -253,11 +258,19 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
       body="Connect a repository so Ananta can index your codebase and the pipeline can read implementation context."
     >
       {(connected || needsRepoPick) && !embedded ? (
-        <div className="flex justify-end">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           {connected ? (
             <LabelPill label={connectedLabel ?? "Connected"} tone="success" />
           ) : needsRepoPick ? (
             <LabelPill label="Select repository" tone="warning" />
+          ) : null}
+          {accountLogin && !connected ? (
+            <LabelPill label={`GitHub · ${accountLogin}`} tone="muted" />
+          ) : null}
+          {git?.installationId ? (
+            <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute">
+              Install #{git.installationId}
+            </span>
           ) : null}
         </div>
       ) : null}
@@ -322,6 +335,13 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
 
               {!connected ? (
                 <div className="flex flex-wrap items-center gap-3">
+                  {accountLogin ? (
+                    <p className="text-sm text-muted">
+                      Installed on GitHub account{" "}
+                      <span className="font-mono text-ink">{accountLogin}</span>
+                      {activeInstallationId ? ` · #${activeInstallationId}` : ""}
+                    </p>
+                  ) : null}
                   <button
                     type="button"
                     disabled={!githubAppEnabled || installPending}

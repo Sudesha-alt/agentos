@@ -1,14 +1,16 @@
 import { useMemo } from "react";
 import { usePipelineList } from "../../entities/pipeline";
+import { useCostsDaily } from "../../entities/costs";
+import { useQaReports } from "../../entities/qa";
 import {
   derivePipelineCounts,
   deriveRecentCompletions,
   deriveReviewQueueItems,
 } from "../../shared/lib/pipelineCounts";
+import { formatCostToday, derivePassRate } from "../../shared/lib/dashboardMetrics";
 import {
   useActivityEvents,
   useAgentHealth,
-  useMetricsSummary,
   useWeeklyTrend,
 } from "../../entities/workspace";
 import DashboardStatusBar from "./DashboardStatusBar";
@@ -19,7 +21,7 @@ import RecentCompletionsPanel from "./RecentCompletionsPanel";
 import AgentHealthPanel from "./AgentHealthPanel";
 import DashboardCostEstimator from "./DashboardCostEstimator";
 
-function buildStatusMetrics(counts, costToday = "$18.40", passRate = "94%") {
+function buildStatusMetrics(counts, costToday = "—", passRate = "—") {
   return [
     {
       id: "running",
@@ -67,13 +69,15 @@ export default function LandingDashboardWidget() {
   const reviewItems = useMemo(() => deriveReviewQueueItems(pipelines), [pipelines]);
   const completions = useMemo(() => deriveRecentCompletions(pipelines), [pipelines]);
 
-  const { data: legacyMetrics } = useMetricsSummary({ pollMs: 30_000 });
-  const costToday =
-    legacyMetrics?.metrics?.find((m) => m.id === "cost_today")?.value ?? "$18.40";
+  const { data: costsDaily, loading: costsLoading } = useCostsDaily({ pollMs: 30_000 });
+  const { data: qaReports, loading: qaLoading } = useQaReports({ pollMs: 30_000 });
+  const costToday = useMemo(() => formatCostToday(costsDaily), [costsDaily]);
+  const passRate = useMemo(() => derivePassRate(qaReports), [qaReports]);
   const statusMetrics = useMemo(
-    () => buildStatusMetrics(counts, costToday),
-    [counts, costToday]
+    () => buildStatusMetrics(counts, costToday, passRate),
+    [counts, costToday, passRate]
   );
+  const metricsLoading = pipelinesLoading || costsLoading || qaLoading;
 
   const { data: eventsData, loading: eventsLoading } = useActivityEvents({ pollMs: 30_000 });
   const { data: trendData, loading: trendLoading } = useWeeklyTrend();
@@ -81,7 +85,7 @@ export default function LandingDashboardWidget() {
 
   return (
     <div className="space-y-6">
-      <DashboardStatusBar metrics={statusMetrics} loading={pipelinesLoading} />
+      <DashboardStatusBar metrics={statusMetrics} loading={metricsLoading} />
 
       <section className="grid gap-6 lg:grid-cols-[1.35fr_1fr]">
         <ReviewQueuePanel items={reviewItems} loading={pipelinesLoading} />

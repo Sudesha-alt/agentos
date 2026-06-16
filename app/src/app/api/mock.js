@@ -936,8 +936,8 @@ const MOCK_WEEKLY_TREND = {
 const MOCK_AGENT_HEALTH = {
   agents: [
     {
-      id: "product",
-      name: "Product Agent",
+      id: "virin",
+      name: "Virin",
       primaryMetric: "Avg confidence",
       primaryValue: "84%",
       secondaryMetric: "22 PRDs today",
@@ -945,8 +945,8 @@ const MOCK_AGENT_HEALTH = {
       status: "Healthy",
     },
     {
-      id: "engineering",
-      name: "Engineering Agent",
+      id: "ananta",
+      name: "Ananta",
       primaryMetric: "Avg criteria hit",
       primaryValue: "97%",
       secondaryMetric: "18 PRs created",
@@ -954,10 +954,10 @@ const MOCK_AGENT_HEALTH = {
       status: "Healthy",
     },
     {
-      id: "qa",
-      name: "QA Agent",
+      id: "neel",
+      name: "Neel",
       primaryMetric: "Pass rate",
-      primaryValue: "94%",
+      primaryValue: "83%",
       secondaryMetric: "47 tests run",
       lastRunAt: minutes(2),
       status: "Healthy",
@@ -1359,10 +1359,23 @@ let mockGitState = {
 
 function buildMockGitIntegrationSetup() {
   const webhookUrl = `${MOCK_GIT_API_BASE}/webhooks/github`;
+  const git = { ...mockGitState.git };
+  const connected = Boolean(mockGitState.connected);
+  const needsRepoSelection = Boolean(
+    git.authMethod === "github_app" &&
+      git.installationId &&
+      (!git.workspace || !git.repoSlug)
+  );
+  const installationDetected = Boolean(git.installationId);
   return {
     publicApiBase: MOCK_GIT_API_BASE,
-    git: { ...mockGitState.git },
-    connected: mockGitState.connected,
+    git,
+    connected,
+    needsRepoSelection,
+    installationDetected,
+    accountLogin: git.workspace || null,
+    availableRepositories: needsRepoSelection ? MOCK_GIT_REPOS : [],
+    databaseConfigured: true,
     githubApp: {
       configured: true,
       appSlug: "agentos-dev",
@@ -1531,10 +1544,21 @@ export const mockApi = {
   async qaReports() {
     markUsed();
     await delay(100);
+    const now = Date.now();
     return {
       reports: [
-        { ticketId: "PLT-1287", passRate: 94, recommendation: "approve_with_conditions" },
-        { ticketId: "PLT-1271", passRate: 72, recommendation: "request_changes" },
+        {
+          ticketId: "PLT-1287",
+          passRate: 94,
+          recommendation: "approve_with_conditions",
+          completedAt: new Date(now - 3600_000).toISOString(),
+        },
+        {
+          ticketId: "PLT-1271",
+          passRate: 72,
+          recommendation: "request_changes",
+          completedAt: new Date(now - 7200_000).toISOString(),
+        },
       ],
     };
   },
@@ -2022,9 +2046,28 @@ export const mockApi = {
   async completeGithubInstall(installationId) {
     markUsed();
     await delay(140);
-    mockGitState.git.installationId = String(installationId);
-    mockGitState.git.authMethod = "github_app";
-    return { repositories: MOCK_GIT_REPOS };
+    mockGitState = {
+      connected: false,
+      git: {
+        ...mockGitState.git,
+        installationId: String(installationId),
+        authMethod: "github_app",
+        workspace: "acme-corp",
+        repoSlug: "",
+        configured: false,
+        hasToken: false,
+        source: "database",
+      },
+    };
+    return {
+      installationId: String(installationId),
+      accountLogin: "acme-corp",
+      repositories: MOCK_GIT_REPOS,
+      availableRepositories: MOCK_GIT_REPOS,
+      connected: false,
+      needsRepoSelection: true,
+      installationDetected: true,
+    };
   },
   async selectGithubRepository(body) {
     markUsed();

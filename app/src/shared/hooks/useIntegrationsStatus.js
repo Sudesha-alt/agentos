@@ -11,7 +11,9 @@ function resolveDisplayStatus(integration, live) {
     return "coming_soon";
   }
   if (integration.liveStatusKey === "github") {
-    return live.githubConnected ? "connected" : "not_connected";
+    if (live.githubConnected) return "connected";
+    if (live.githubNeedsSetup) return "setup_incomplete";
+    return "not_connected";
   }
   if (integration.liveStatusKey === "jira") {
     return live.jiraConnected ? "connected" : "not_connected";
@@ -26,9 +28,12 @@ export function useIntegrationsStatus() {
   const live = useMemo(
     () => ({
       githubConnected: Boolean(git?.connected),
+      githubNeedsSetup: Boolean(
+        !git?.connected && (git?.needsRepoSelection || git?.installationDetected)
+      ),
       jiraConnected: Boolean(jira?.connected),
     }),
-    [git?.connected, jira?.connected]
+    [git?.connected, git?.needsRepoSelection, git?.installationDetected, jira?.connected]
   );
 
   const integrations = useMemo(

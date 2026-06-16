@@ -1,9 +1,8 @@
 import { Link } from "react-router-dom";
 import { DATA_MODE } from "../../shared/config/app";
 import { useReadiness } from "../../entities/system";
-import { usePipelineList } from "../../entities/pipeline";
 import { useAuth } from "../../shared/providers/useAuth";
-import ReviewQueueBadge from "../../shared/components/ReviewQueueBadge";
+import NotificationCenter from "../../shared/components/NotificationCenter";
 import { useCodebaseCommandPalette } from "../../widgets/codebase-search/useCodebaseCommandPalette";
 
 function userInitials(user) {
@@ -22,8 +21,6 @@ function userInitials(user) {
 export default function TopBar() {
   const { data } = useReadiness({ pollMs: 15000 });
   const { user, logout } = useAuth();
-  const { items: pipelines } = usePipelineList(undefined, { pollMs: 12_000 });
-  const reviewCount = pipelines.filter((p) => p.status === "PAUSED").length;
   const { openPalette } = useCodebaseCommandPalette();
 
   const systemReady = data?.status === "ready" || data?.status === "ok";
@@ -50,7 +47,7 @@ export default function TopBar() {
       </button>
 
       <div className="flex items-center gap-2 sm:gap-3">
-        <ReviewQueueBadge count={reviewCount} className="hidden sm:inline-flex" />
+        <NotificationCenter />
         <span
           className={`hidden items-center gap-2 rounded-full border border-app-border bg-app-surface px-3 py-1.5 text-[11px] font-medium sm:inline-flex ${
             DATA_MODE === "mock" ? "text-warning" : "text-success"

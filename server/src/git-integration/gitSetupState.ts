@@ -1,5 +1,7 @@
 import type { PublicGitCredentials } from "./gitCredentialsStore";
 import {
+  getGithubInstallByInstallationId,
+  getGithubInstallForOrganization,
   getLatestGithubInstallState,
   listStoredRepositories,
 } from "./githubInstallationStore";
@@ -12,31 +14,57 @@ export type GitIntegrationSetupState = {
   needsRepoSelection: boolean;
   availableRepositories: Awaited<ReturnType<typeof listStoredRepositories>>;
   installationDetected: boolean;
+  accountLogin: string | null;
 };
 
-/** Merge SQLite/runtime creds with Postgres install (source of truth on Render). */
+/** Merge org git config with Postgres GitHub App install metadata. */
 export async function resolveGitIntegrationSetupState(
   git: PublicGitCredentials,
-  options?: { orgScoped?: boolean }
+  options?: { orgScoped?: boolean; organizationId?: string }
 ): Promise<GitIntegrationSetupState> {
-  const pg = options?.orgScoped ? null : await getLatestGithubInstallState();
-
   const merged: PublicGitCredentials = { ...git };
-  if (pg?.installationId) {
-    merged.provider = merged.provider ?? "github";
-    merged.authMethod = merged.authMethod ?? "github_app";
-    merged.installationId = merged.installationId ?? pg.installationId;
-    if (pg.selectedRepoOwner && pg.selectedRepoName) {
-      merged.workspace = merged.workspace || pg.selectedRepoOwner;
-      merged.repoSlug = merged.repoSlug || pg.selectedRepoName;
-      merged.configured = Boolean(merged.installationId && merged.workspace && merged.repoSlug);
+  let pg = null as Awaited<ReturnType<typeof getLatestGithubInstallState>>;
+
+  if (options?.orgScoped && options.organizationId) {
+    if (merged.installationId) {
+      pg = await getGithubInstallByInstallationId(merged.installationId);
+    }
+    if (!pg) {
+      pg = await getGithubInstallForOrganization(options.organizationId);
+    }
+    if (pg?.installationId) {
+      merged.provider = merged.provider ?? "github";
+      merged.authMethod = merged.authMethod ?? "github_app";
+      merged.installationId = merged.installationId ?? pg.installationId;
+      merged.workspace = merged.workspace || pg.accountLogin;
+      if (pg.selectedRepoOwner && pg.selectedRepoName) {
+        merged.repoSlug = merged.repoSlug || pg.selectedRepoName;
+        merged.workspace = merged.workspace || pg.selectedRepoOwner;
+      }
+      merged.configured = Boolean(
+        merged.installationId && merged.workspace && merged.repoSlug
+      );
+    }
+  } else if (!options?.orgScoped) {
+    pg = await getLatestGithubInstallState();
+    if (pg?.installationId) {
+      merged.provider = merged.provider ?? "github";
+      merged.authMethod = merged.authMethod ?? "github_app";
+      merged.installationId = merged.installationId ?? pg.installationId;
+      if (pg.selectedRepoOwner && pg.selectedRepoName) {
+        merged.workspace = merged.workspace || pg.selectedRepoOwner;
+        merged.repoSlug = merged.repoSlug || pg.selectedRepoName;
+        merged.configured = Boolean(
+          merged.installationId && merged.workspace && merged.repoSlug
+        );
+      }
     }
   }
 
   const needsRepoSelection = Boolean(
     merged.authMethod === "github_app" &&
       merged.installationId &&
-      (!merged.workspace || !merged.repoSlug)
+      !merged.repoSlug
   );
 
   const connected = Boolean(
@@ -46,7 +74,10 @@ export async function resolveGitIntegrationSetupState(
   );
 
   let availableRepositories: Awaited<ReturnType<typeof listStoredRepositories>> = [];
-  if (needsRepoSelection && merged.installationId) {
+  const shouldListRepos = Boolean(
+    merged.installationId && (needsRepoSelection || !connected)
+  );
+  if (shouldListRepos && merged.installationId) {
     try {
       availableRepositories = await listStoredRepositories(merged.installationId);
       if (!availableRepositories.length) {
@@ -66,5 +97,6 @@ export async function resolveGitIntegrationSetupState(
     needsRepoSelection,
     availableRepositories,
     installationDetected: Boolean(pg?.installationId ?? merged.installationId),
+    accountLogin: pg?.accountLogin ?? (merged.workspace || null),
   };
 }

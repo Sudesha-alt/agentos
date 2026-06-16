@@ -16,46 +16,61 @@ export const AGENT_NAMES = {
   NEEL: "Neel",
 } as const;
 
-/** Agent modules — Product, Tech (codebase), Engineering (coding review), QA. */
-export const AGENT_NAV = [
-  {
-    to: "/app/pm-agents",
-    label: "Product Agent",
-    breadcrumb: AGENT_NAMES.VIRIN,
-    role: "Product",
-  },
-  {
-    to: "/app/codebase",
-    label: "Tech Agent",
-    breadcrumb: AGENT_NAMES.ANANTA,
-    role: "Tech",
-  },
-  {
-    to: "/app/engineering",
-    label: "Engineering Agent",
-    breadcrumb: "Engineering Agent",
-    role: "Engineering",
-  },
-  {
-    to: "/app/qa",
-    label: "QA Agent",
-    breadcrumb: AGENT_NAMES.NEEL,
-    role: "QA",
-  },
-] as const;
+export type AgentNavId = "virin" | "ananta" | "neel";
 
-export const TECH_AGENT_SUB_NAV: Array<{
-  tab: string;
+export type NavSubItem = {
   label: string;
   to: string;
-}> = [{ tab: "map", label: "Codebase Map", to: "/app/codebase?tab=map" }];
+  tab?: string;
+};
+
+/** Three agent personas — sub-nav reveals on expand in sidebar. */
+export const AGENT_NAV: Array<{
+  id: AgentNavId;
+  to: string;
+  label: string;
+  breadcrumb: string;
+  subNav: NavSubItem[];
+}> = [
+  {
+    id: "virin",
+    to: "/app/pm-agents",
+    label: AGENT_NAMES.VIRIN,
+    breadcrumb: AGENT_NAMES.VIRIN,
+    subNav: [
+      { label: "Workspace", to: "/app/pm-agents" },
+      { label: "Roadmap", to: "/app/roadmap" },
+    ],
+  },
+  {
+    id: "ananta",
+    to: "/app/codebase",
+    label: AGENT_NAMES.ANANTA,
+    breadcrumb: AGENT_NAMES.ANANTA,
+    subNav: [
+      { label: "Workspace", to: "/app/codebase" },
+      { label: "Codebase Map", to: "/app/codebase?tab=map", tab: "map" },
+    ],
+  },
+  {
+    id: "neel",
+    to: "/app/qa",
+    label: AGENT_NAMES.NEEL,
+    breadcrumb: AGENT_NAMES.NEEL,
+    subNav: [],
+  },
+];
+
+/** @deprecated Use AGENT_NAV item subNav */
+export const TECH_AGENT_SUB_NAV = AGENT_NAV.find((a) => a.id === "ananta")!.subNav.filter(
+  (s) => s.tab
+);
 
 /** Flat list for breadcrumbs and mobile nav. */
 export const APP_NAV = [
   { to: "/app", label: "Dashboard", breadcrumb: "Dashboard", end: true },
   { to: "/app/pipelines", label: "Pipelines", breadcrumb: "Pipelines" },
   ...AGENT_NAV.map(({ to, label, breadcrumb }) => ({ to, label, breadcrumb })),
-  { to: "/app/roadmap", label: "Roadmap", breadcrumb: "Roadmap" },
   { to: "/app/costs", label: "Cost & ROI", breadcrumb: "Costs" },
   { to: "/app/settings", label: "Configuration", breadcrumb: "Settings" },
   { to: "/app/audit", label: "Audit Trail", breadcrumb: "Audit" },
@@ -90,13 +105,14 @@ export const APP_NAV_SECTIONS = [
   {
     id: "agents",
     label: "Agents",
-    items: AGENT_NAV.map(({ to, label, breadcrumb }) => ({ to, label, breadcrumb })),
-    techAgentGroup: true,
-  },
-  {
-    id: "intelligence",
-    label: "Intelligence",
-    items: [{ to: "/app/roadmap", label: "Roadmap", breadcrumb: "Roadmap" }],
+    agentGroup: true,
+    items: AGENT_NAV.map(({ id, to, label, breadcrumb, subNav }) => ({
+      id,
+      to,
+      label,
+      breadcrumb,
+      subNav,
+    })),
   },
   {
     id: "analytics",
