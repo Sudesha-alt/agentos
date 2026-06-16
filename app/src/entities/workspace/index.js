@@ -2,19 +2,24 @@ import { useMemo } from "react";
 import { DATA_MODE } from "../../shared/config/app";
 import { fetchJson } from "../../shared/lib/fetchJson";
 import { apiPath } from "../../shared/config/apiBase";
+import { authHeaders } from "../../shared/lib/authHeaders";
 import { useResource } from "../../shared/lib/useResource";
 import { mockApi } from "../../app/api/mock";
 
+function authedGet(path) {
+  return fetchJson(apiPath(path), { headers: authHeaders() });
+}
+
 const restWorkspaceAdapter = {
-  metricsSummary: () => fetchJson(apiPath("/api/metrics/summary")),
-  activityEvents: () => fetchJson(apiPath("/api/events/recent")),
-  cycleTrend: () => fetchJson(apiPath("/api/metrics/cycle-trend")),
-  weeklyTrend: () => fetchJson(apiPath("/api/metrics/weekly-trend")),
-  agentHealth: () => fetchJson(apiPath("/api/metrics/agent-health")),
+  metricsSummary: () => authedGet("/api/metrics/summary"),
+  activityEvents: () => authedGet("/api/events/recent"),
+  cycleTrend: () => authedGet("/api/metrics/cycle-trend"),
+  weeklyTrend: () => authedGet("/api/metrics/weekly-trend"),
+  agentHealth: () => authedGet("/api/metrics/agent-health"),
   dashboardStatus: (counts) =>
     fetchJson(apiPath("/api/metrics/dashboard-status"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify(counts),
     }),
 };

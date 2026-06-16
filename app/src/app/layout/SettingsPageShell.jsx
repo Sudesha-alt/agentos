@@ -18,10 +18,23 @@ export function SettingsPageShell({
       <div className={`space-y-5 ${className}`}>
         <Link
           to={backTo}
-          className="inline-flex text-[13px] font-medium text-indigo hover:underline"
+          className="inline-flex text-[13px] font-medium text-app-ink-dim transition hover:text-indigo"
         >
           {backLabel}
         </Link>
+        {kicker || title ? (
+          <div className="space-y-1">
+            {kicker ? <p className="type-kicker">{kicker}</p> : null}
+            {title ? (
+              <h2 className="text-[clamp(1.35rem,2.5vw,1.75rem)] font-semibold text-app-ink">
+                {title}
+              </h2>
+            ) : null}
+            {body ? (
+              <p className="max-w-2xl text-[14px] leading-relaxed text-app-ink-dim">{body}</p>
+            ) : null}
+          </div>
+        ) : null}
         {children}
       </div>
     );

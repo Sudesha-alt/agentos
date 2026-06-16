@@ -65,16 +65,13 @@ export async function connectGitIntegration(body) {
 }
 
 export async function startGithubAppInstall() {
-  try {
-    const { url } = await gitIntegrationAdapter.getInstallUrl();
-    if (url) {
-      window.location.href = url;
-      return;
-    }
-  } catch {
-    // Fall back to legacy redirect (may lack org binding without auth headers in navigation)
+  const { url } = await gitIntegrationAdapter.getInstallUrl();
+  if (!url) {
+    throw new Error(
+      "GitHub App is not configured on the server (GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, GITHUB_APP_SLUG)."
+    );
   }
-  window.location.href = intake("/oauth/github/install");
+  window.location.href = url;
 }
 
 export async function completeGithubInstall(installationId) {

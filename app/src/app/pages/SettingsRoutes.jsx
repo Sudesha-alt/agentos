@@ -12,12 +12,12 @@ export default function SettingsRoutes() {
   return (
     <Routes>
       <Route element={<SettingsLayout />}>
-        <Route index element={<Navigate to="plan" replace />} />
+        <Route index element={<Navigate to="integrations" replace />} />
         <Route path="plan" element={<SettingsPlanPage />} />
-        <Route path="integrations" element={<SettingsIntegrationsPage />} />
-        <Route path="integrations/:integrationId" element={<SettingsIntegrationDetailPage />} />
         <Route path="integrations/github" element={<GitIntegration embedded />} />
         <Route path="integrations/jira" element={<JiraIntegration embedded />} />
+        <Route path="integrations" element={<SettingsIntegrationsPage />} />
+        <Route path="integrations/:integrationId" element={<SettingsIntegrationDetailPage />} />
         <Route path="company" element={<CompanyIntelligence embedded />} />
         <Route path="pipeline" element={<SettingsPipelinePage />} />
       </Route>
