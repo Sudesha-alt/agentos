@@ -129,7 +129,9 @@ export async function getPublicOrganizationGitConfig(
     workspace: creds.workspace,
     repoSlug: creds.repoSlug,
     username: creds.username,
-    hasToken: Boolean(creds.token),
+    hasToken:
+      Boolean(creds.token) ||
+      (creds.authMethod === "github_app" && Boolean(creds.installationId)),
     tokenHint: creds.token ? tokenHint(creds.token) : null,
     webhookSecret: creds.webhookSecret,
     defaultBranch: creds.defaultBranch,

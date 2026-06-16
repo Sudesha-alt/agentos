@@ -4,28 +4,24 @@ import LabelPill from "../../../app/components/LabelPill";
 import { getIntegrationById } from "../../../shared/config/integrationsCatalog";
 import { useIntegrationsStatus } from "../../../shared/hooks/useIntegrationsStatus";
 import { Panel, PanelHeader } from "../../../shared/ui/Panel";
-import GitIntegration from "../GitIntegration";
-import JiraIntegration from "../JiraIntegration";
 
 const NOTIFY_KEY_PREFIX = "agentos.integrationNotify.";
 
 export default function SettingsIntegrationDetailPage() {
   const { integrationId } = useParams();
-  const integration = getIntegrationById(integrationId);
   const { integrations } = useIntegrationsStatus();
   const live = integrations.find((item) => item.id === integrationId);
 
-  if (!integration) {
-    return <Navigate to="/app/settings/integrations" replace />;
+  if (integrationId === "github") {
+    return <Navigate to="/app/settings/integrations/github" replace />;
+  }
+  if (integrationId === "jira") {
+    return <Navigate to="/app/settings/integrations/jira" replace />;
   }
 
-  if (integration.catalogStatus === "available") {
-    if (integration.id === "github") {
-      return <GitIntegration embedded />;
-    }
-    if (integration.id === "jira") {
-      return <JiraIntegration embedded />;
-    }
+  const integration = getIntegrationById(integrationId);
+  if (!integration) {
+    return <Navigate to="/app/settings/integrations" replace />;
   }
 
   return (
@@ -57,8 +53,11 @@ function ComingSoonIntegration({ integration, displayStatus }) {
   const statusMeta =
     displayStatus === "coming_soon"
       ? { label: "Coming soon", tone: "indigo" }
-      : { label: "Not connected", tone: "muted" };
-
+      : displayStatus === "setup_incomplete"
+        ? { label: "Select repository", tone: "warning" }
+        : displayStatus === "connected"
+          ? { label: "Connected", tone: "success" }
+          : { label: "Not connected", tone: "muted" };
   return (
     <div className="space-y-5">
       <Link

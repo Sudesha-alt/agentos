@@ -84,12 +84,14 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
   const activeInstallationId = pendingInstallationId || git?.installationId || "";
   const isGithubApp =
     git?.authMethod === "github_app" || Boolean(activeInstallationId && tab === "github");
+  const installationDetected = Boolean(setup?.installationDetected);
   const needsRepoPick =
     Boolean(setup?.needsRepoSelection) ||
-    Boolean(setup?.installationDetected && !connected) ||
+    Boolean(installationDetected && !connected) ||
     (isGithubApp &&
       Boolean(activeInstallationId) &&
       (!git?.workspace || !git?.repoSlug));
+  const installPendingFinish = installationDetected && !connected;
 
   useEffect(() => {
     if (clearedGithubError.current) return;
@@ -97,6 +99,15 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
     clearedGithubError.current = true;
     setSearchParams({}, { replace: true });
   }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (setup?.git?.installationId) {
+      setPendingInstallationId(setup.git.installationId);
+    }
+    if (setup?.availableRepositories?.length) {
+      setRepos(setup.availableRepositories);
+    }
+  }, [setup?.git?.installationId, setup?.availableRepositories]);
 
   useEffect(() => {
     const installationId = searchParams.get("installation_id");
@@ -134,7 +145,7 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
         await refetch();
       } catch (e) {
         if (!cancelled) {
-          setErr(e instanceof Error ? e.message : "GitHub install failed");
+          setErr(formatGitIntegrationError(e));
         }
       } finally {
         if (!cancelled) setInstallPending(false);
@@ -168,7 +179,7 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
         }
       } catch (e) {
         if (!cancelled) {
-          setErr(e instanceof Error ? e.message : "Could not load repositories");
+          setErr(formatGitIntegrationError(e));
         }
       } finally {
         if (!cancelled) setInstallPending(false);
@@ -214,7 +225,7 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
       setStatus(result.message ?? "GitHub disconnected.");
       await refetch();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not disconnect GitHub");
+      setErr(formatGitIntegrationError(e));
     } finally {
       setDisconnectPending(false);
     }
@@ -237,7 +248,7 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
       );
       await refetch();
     } catch (e) {
-      setErr(e instanceof Error ? e.message : "Could not select repository");
+      setErr(formatGitIntegrationError(e));
     } finally {
       setSelectPending(false);
     }
@@ -261,6 +272,8 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
         <div className="flex flex-wrap items-center justify-end gap-2">
           {connected ? (
             <LabelPill label={connectedLabel ?? "Connected"} tone="success" />
+          ) : installPendingFinish ? (
+            <LabelPill label="App installed — select repo" tone="warning" />
           ) : needsRepoPick ? (
             <LabelPill label="Select repository" tone="warning" />
           ) : null}
@@ -313,15 +326,29 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
         <>
           <Panel>
             <PanelHeader
-              kicker={connected ? "Connected" : "Step 1"}
+              kicker={connected ? "Connected" : installPendingFinish ? "Installed" : "Step 1"}
               title="GitHub App"
               body={
-                githubAppEnabled
-                  ? "Permissions: contents & pull requests (read/write), metadata, webhooks, actions (read). Webhooks are delivered to your API automatically."
-                  : "GitHub App env vars are not set on the server — use manual token setup below or configure GITHUB_APP_* on Render."
+                installPendingFinish
+                  ? "GitHub App installed — select a repository to finish connecting AgentOS to your codebase."
+                  : githubAppEnabled
+                    ? "Permissions: contents & pull requests (read/write), metadata, webhooks, actions (read). Webhooks are delivered to your API automatically."
+                    : "GitHub App env vars are not set on the server — use manual token setup below or configure GITHUB_APP_* on Render."
               }
             />
             <div className="space-y-4 p-5 sm:p-6">
+              {installPendingFinish && !status ? (
+                <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-ink">
+                  GitHub App installed — select a repository below to finish setup.
+                  {accountLogin ? (
+                    <>
+                      {" "}
+                      Installed on{" "}
+                      <span className="font-mono text-ink">{accountLogin}</span>.
+                    </>
+                  ) : null}
+                </p>
+              ) : null}
               {githubApp?.capabilities?.length ? (
                 <ul className="grid gap-2 sm:grid-cols-2 text-sm text-muted">
                   {githubApp.capabilities.map((item) => (
@@ -345,7 +372,12 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
                   <button
                     type="button"
                     disabled={!githubAppEnabled || installPending}
-                    onClick={() => startGithubAppInstall()}
+                    onClick={() => {
+                      setErr("");
+                      startGithubAppInstall().catch((e) => {
+                        setErr(formatGitIntegrationError(e));
+                      });
+                    }}
                     className="rounded-full bg-indigo px-8 py-3 font-mono text-[11px] uppercase tracking-[0.18em] text-white disabled:opacity-50"
                   >
                     {installPending ? "Finishing install…" : "Connect with GitHub"}
@@ -365,7 +397,12 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
                 <div className="flex flex-wrap items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => startGithubAppInstall()}
+                    onClick={() => {
+                      setErr("");
+                      startGithubAppInstall().catch((e) => {
+                        setErr(formatGitIntegrationError(e));
+                      });
+                    }}
                     className="rounded-full border border-hairline px-4 py-2 font-mono text-[10.5px] uppercase tracking-[0.16em] text-ink-dim"
                   >
                     Reconfigure installation
@@ -752,4 +789,16 @@ function ManualFields({
       </label>
     </>
   );
+}
+
+function formatGitIntegrationError(error) {
+  const message = error instanceof Error ? error.message : "GitHub request failed";
+  const lower = message.toLowerCase();
+  if (lower.includes("unauthorized") || lower.includes("401")) {
+    return "Session expired — sign in again, then retry Connect with GitHub.";
+  }
+  if (lower.includes("organization_required") || lower.includes("organization")) {
+    return "Your workspace organization is missing. Complete onboarding or sign in again, then retry.";
+  }
+  return message;
 }

@@ -32,6 +32,16 @@ export async function resolveGitIntegrationSetupState(
     if (!pg) {
       pg = await getGithubInstallForOrganization(options.organizationId);
     }
+    if (!pg) {
+      const latest = await getLatestGithubInstallState();
+      if (
+        latest?.installationId &&
+        (latest.organizationId === null ||
+          latest.organizationId === options.organizationId)
+      ) {
+        pg = latest;
+      }
+    }
     if (pg?.installationId) {
       merged.provider = merged.provider ?? "github";
       merged.authMethod = merged.authMethod ?? "github_app";

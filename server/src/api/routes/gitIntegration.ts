@@ -19,6 +19,7 @@ import {
   probeGithubAppCredentials,
 } from "../../integrations/git/githubApp";
 import { resolveGitIntegrationSetupState } from "../../git-integration/gitSetupState";
+import { repairOrganizationGithubInstall } from "../../git-integration/githubOrgRepair";
 import { getLatestGithubInstallState } from "../../git-integration/githubInstallationStore";
 import { parseOAuthState, createOAuthState } from "../../git-integration/oauthState";
 import { getPublicOrganizationGitConfig } from "../../organization/gitConfigStore";
@@ -59,6 +60,7 @@ router.get("/integration/setup", async (req, res, next) => {
     if (!user?.organizationId) return;
 
     await withOrganizationContext(user.organizationId, async () => {
+      await repairOrganizationGithubInstall(user.organizationId!);
       const git = await getPublicOrganizationGitConfig(user.organizationId!);
       const setupState = await resolveGitIntegrationSetupState(git, {
         orgScoped: true,
@@ -222,10 +224,8 @@ router.get("/oauth/github/install-url", async (req, res) => {
   res.json({ url });
 });
 
-router.get("/oauth/github/install", async (req, res) => {
-  const user = requireOrganizationUser(req, res);
-  const state = user?.organizationId ? createOAuthState(user.organizationId) : undefined;
-  const url = githubAppInstallUrl(state);
+router.get("/oauth/github/install", (_req, res) => {
+  const url = githubAppInstallUrl();
   if (!url) {
     res.status(503).json({
       error: "github_app_not_configured",
@@ -326,6 +326,7 @@ router.post("/github/complete-install", async (req, res) => {
     return;
   }
   try {
+    await repairOrganizationGithubInstall(user.organizationId);
     const result = await completeGithubInstallation(installationId, user.organizationId);
     const git = await getPublicOrganizationGitConfig(user.organizationId);
     const setupState = await resolveGitIntegrationSetupState(git, {

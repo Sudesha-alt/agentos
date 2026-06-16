@@ -26,6 +26,7 @@ import qaRouter from "./api/routes/qa";
 import settingsRouter from "./api/routes/settings";
 import agentChatRouter from "./api/routes/agentChat";
 import costsRouter from "./api/routes/costs";
+import eventsRouter from "./api/routes/events";
 import webhooksRouter from "./api/routes/webhooks";
 import { isAppError } from "./utils/errors";
 import { logger } from "./utils/logger";
@@ -97,6 +98,7 @@ export function createApp(): express.Express {
   app.use("/api/jira/oauth", jiraOAuthRouter);
   app.use("/jira/oauth", jiraOAuthRouter);
   app.use("/git-integration", gitIntegrationRouter);
+  app.use("/api/git-integration", gitIntegrationRouter);
   app.use("/pipeline-jira", pipelineJiraRouter);
   app.use("/webhooks", webhooksRouter);
   app.use("/pipelines", pipelineRouter);
@@ -113,6 +115,7 @@ export function createApp(): express.Express {
   app.use("/api/settings", settingsRouter);
   app.use("/api/agent-chat", agentChatRouter);
   app.use("/api/costs", costsRouter);
+  app.use("/api/events", eventsRouter);
 
   app.use((_req, res) => {
     res.status(404).json({ error: "not_found" });

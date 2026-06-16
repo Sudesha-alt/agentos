@@ -161,6 +161,7 @@ export type GithubInstallState = {
   accountLogin: string;
   selectedRepoOwner: string | null;
   selectedRepoName: string | null;
+  organizationId: string | null;
   updatedAt: Date;
 };
 
@@ -174,6 +175,7 @@ export async function getLatestGithubInstallState(): Promise<GithubInstallState 
         accountLogin: true,
         selectedRepoOwner: true,
         selectedRepoName: true,
+        organizationId: true,
         updatedAt: true,
       },
     })) as GithubInstallState | null;
@@ -195,6 +197,7 @@ export async function getGithubInstallByInstallationId(
         accountLogin: true,
         selectedRepoOwner: true,
         selectedRepoName: true,
+        organizationId: true,
         updatedAt: true,
       },
     })) as GithubInstallState | null;
@@ -217,6 +220,7 @@ export async function getGithubInstallForOrganization(
         accountLogin: true,
         selectedRepoOwner: true,
         selectedRepoName: true,
+        organizationId: true,
         updatedAt: true,
       },
     })) as GithubInstallState | null;
