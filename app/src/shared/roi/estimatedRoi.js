@@ -13,7 +13,7 @@ function roundRatio(value) {
   return Math.round(value * 10) / 10;
 }
 
-/** Mirror of server/src/roi/estimatedRoi.ts */
+/** Mirror of server/src/roi/estimatedRoi.ts — baselineHours is human labor saved, not agent runtime. */
 export function computeEstimatedRoi(raw = {}) {
   const assumptions = DEFAULT_ROI_ASSUMPTIONS;
   const planId = normalizePlanId(raw.planId);

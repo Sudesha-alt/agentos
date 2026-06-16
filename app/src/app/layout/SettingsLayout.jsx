@@ -10,6 +10,9 @@ function tabActive(item, pathname) {
   if (item.id === "company" && pathname.startsWith("/app/settings/company")) {
     return true;
   }
+  if (item.id === "codebase-index" && pathname.startsWith("/app/settings/codebase-index")) {
+    return true;
+  }
   return false;
 }
 

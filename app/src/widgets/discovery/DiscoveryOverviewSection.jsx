@@ -65,12 +65,13 @@ export default function DiscoveryOverviewSection({ parsed, scores }) {
 
       {complexity?.effortEstimate ? (
         <div className="rounded-[1rem] border border-hairline bg-canvas/40 px-4 py-4">
-          <p className="editorial-kicker text-ink-mute">Effort range (LLM estimate)</p>
+          <p className="editorial-kicker text-ink-mute">Agent pipeline time (LLM estimate)</p>
           <p className="mt-3 font-mono text-[12px] text-ink-dim">
             {complexity.effortEstimate.optimistic}–
             {complexity.effortEstimate.pessimistic}{" "}
             {complexity.effortEstimate.unit} · realistic{" "}
-            {complexity.effortEstimate.realistic}
+            {complexity.effortEstimate.realistic}{" "}
+            {complexity.effortEstimate.unit}
           </p>
           {complexity.priorityAssessment?.recommendedPriority ? (
             <p className="mt-2 text-[13px] text-ink-dim">

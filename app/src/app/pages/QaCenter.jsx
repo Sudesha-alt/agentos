@@ -12,12 +12,12 @@ import {
   useCanaryRuns,
 } from "../../entities/canary";
 import { useSettings } from "../../entities/settings";
-import { AGENT_NAMES } from "../../shared/config/app";
-import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
+import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import { AppTabButton } from "../../shared/ui/AppChrome";
 import { Link } from "react-router-dom";
 import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
 import { AgentPageWithChat } from "../../widgets/agent-chat/AgentPageWithChat";
+import { AgentPageHeader } from "../../widgets/agent-chat/AgentPageHeader";
 
 const HEATMAP_CELL = {
   pass: "bg-success",
@@ -88,7 +88,7 @@ export default function QaCenter() {
   return (
     <AnimatedAppPage wide>
       <AgentPageWithChat domain="neel" contextKey={qaContextKey}>
-      <PageIntro kicker="QA" title={AGENT_NAMES.NEEL} />
+      <AgentPageHeader domain="neel" />
 
       <div className="flex flex-wrap gap-2">
         {TABS.map((t) => (

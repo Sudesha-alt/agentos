@@ -15,6 +15,8 @@ import { codebaseVectorStore } from "./vectorStore";
 import { visualizationCache } from "./visualizationCache";
 import { generateKnowledge } from "./knowledgeService";
 import { generateTour } from "./tourService";
+import { recordOversizedSkipped } from "./indexSkipStats";
+import { MAX_HEADER_ONLY_FILE_SIZE } from "./retrievalConfig";
 import type { LayoutFileInput } from "./layoutComputer";
 
 function repoIds() {
@@ -99,7 +101,7 @@ function assertRepoContext(): { repoOwner: string; repoName: string } {
 
 export async function runFullIndex(
   branchName: string,
-  options?: { runId?: string; triggerType?: "manual" | "webhook" }
+  options?: { runId?: string; triggerType?: "manual" | "webhook" | "pr_merge" }
 ): Promise<IndexRunResult> {
   const { repoOwner, repoName } = assertRepoContext();
   const startedAt = Date.now();
@@ -127,16 +129,25 @@ export async function runFullIndex(
 
   try {
     const tree = await gitClient.getRepoTree(branchName);
-    const candidates = tree.filter(
-      (item) =>
-        item.type === "blob" &&
-        !shouldSkip(item.path) &&
-        (item.size ?? 0) <= MAX_FILE_SIZE
+    const blobs = tree.filter(
+      (item) => item.type === "blob" && !shouldSkip(item.path)
     );
+    const candidates = blobs.filter((item) => (item.size ?? 0) <= MAX_FILE_SIZE);
+    const headerOnlyCandidates = blobs.filter(
+      (item) =>
+        (item.size ?? 0) > MAX_FILE_SIZE &&
+        (item.size ?? 0) <= MAX_HEADER_ONLY_FILE_SIZE
+    );
+    const oversizedSkipped = blobs.filter(
+      (item) => (item.size ?? 0) > MAX_HEADER_ONLY_FILE_SIZE
+    ).length;
+    recordOversizedSkipped(oversizedSkipped);
+
+    const totalWork = candidates.length + headerOnlyCandidates.length;
 
     await prismaAny.codebaseIndexRun.update({
       where: { id: runId },
-      data: { filesTotal: candidates.length, filesProcessed: 0 },
+      data: { filesTotal: totalWork, filesProcessed: 0 },
     });
 
     let filesIndexed = 0;
@@ -154,7 +165,29 @@ export async function runFullIndex(
       else filesSkipped += 1;
       filesProcessed += 1;
 
-      if (filesProcessed % 5 === 0 || filesProcessed === candidates.length) {
+      if (filesProcessed % 5 === 0 || filesProcessed === totalWork) {
+        await prismaAny.codebaseIndexRun.update({
+          where: { id: runId },
+          data: {
+            filesProcessed,
+            filesIndexed,
+            filesUpdated,
+          },
+        });
+      }
+    }
+
+    for (const item of headerOnlyCandidates) {
+      const result = await indexFileHeaderOnly(item.path, branchName).catch((err) => {
+        logger.warn({ filePath: item.path, err }, "header-only index failed");
+        return "unchanged" as const;
+      });
+      if (result === "indexed") filesIndexed += 1;
+      else if (result === "updated") filesUpdated += 1;
+      else filesSkipped += 1;
+      filesProcessed += 1;
+
+      if (filesProcessed % 5 === 0 || filesProcessed === totalWork) {
         await prismaAny.codebaseIndexRun.update({
           where: { id: runId },
           data: {
@@ -167,7 +200,7 @@ export async function runFullIndex(
     }
 
     const filesDeleted = await markDeletedFiles(
-      candidates.map((item) => item.path),
+      [...candidates, ...headerOnlyCandidates].map((item) => item.path),
       branchName
     );
 
@@ -175,7 +208,7 @@ export async function runFullIndex(
       where: { id: runId },
       data: {
         status: "completed",
-        filesProcessed: candidates.length,
+        filesProcessed: totalWork,
         filesIndexed,
         filesUpdated,
         filesDeleted,
@@ -218,20 +251,32 @@ export async function runIncrementalIndex(input: {
   deletedFiles: string[];
   commitSha: string;
   triggerType: "webhook" | "manual";
+  runId?: string;
 }): Promise<IndexRunResult> {
   const { repoOwner, repoName } = assertRepoContext();
   const startedAt = Date.now();
-  const run = await prismaAny.codebaseIndexRun.create({
-    data: {
-      repoOwner,
-      repoName,
-      branchName: input.branchName,
-      runType: "incremental",
-      status: "running",
-      triggerType: input.triggerType,
-      triggerSha: input.commitSha,
-    },
-  });
+  const prismaAny = prisma as any;
+
+  let runId = input.runId;
+  if (runId) {
+    await prismaAny.codebaseIndexRun.update({
+      where: { id: runId },
+      data: { status: "running", triggerSha: input.commitSha, triggerType: input.triggerType },
+    });
+  } else {
+    const run = await prismaAny.codebaseIndexRun.create({
+      data: {
+        repoOwner,
+        repoName,
+        branchName: input.branchName,
+        runType: "incremental",
+        status: "running",
+        triggerType: input.triggerType,
+        triggerSha: input.commitSha,
+      },
+    });
+    runId = run.id;
+  }
 
   let filesIndexed = 0;
   let filesUpdated = 0;
@@ -253,7 +298,7 @@ export async function runIncrementalIndex(input: {
     }
 
     await prismaAny.codebaseIndexRun.update({
-      where: { id: run.id },
+      where: { id: runId },
       data: {
         status: "completed",
         filesIndexed,
@@ -276,7 +321,7 @@ export async function runIncrementalIndex(input: {
     };
   } catch (err) {
     await prismaAny.codebaseIndexRun.update({
-      where: { id: run.id },
+      where: { id: runId },
       data: {
         status: "failed",
         error: err instanceof Error ? err.message : String(err),
@@ -290,9 +335,39 @@ async function indexFile(
   filePath: string,
   branchName: string
 ): Promise<"indexed" | "updated" | "unchanged"> {
-  const { organizationId, repoOwner, repoName } = repoIds();
   const file = await gitClient.getFileContent(filePath, branchName);
-  const contentHash = sha256(file.content);
+  if (file.size > MAX_FILE_SIZE) {
+    if (file.size <= MAX_HEADER_ONLY_FILE_SIZE) {
+      return indexFileHeaderOnly(filePath, branchName, file);
+    }
+    return "unchanged";
+  }
+  return indexFileContent(filePath, branchName, file);
+}
+
+async function indexFileHeaderOnly(
+  filePath: string,
+  branchName: string,
+  file?: Awaited<ReturnType<typeof gitClient.getFileContent>>
+): Promise<"indexed" | "updated" | "unchanged"> {
+  const resolved = file ?? (await gitClient.getFileContent(filePath, branchName));
+  const headerContent = resolved.content.slice(0, 8000);
+  return indexFileContent(
+    filePath,
+    branchName,
+    { ...resolved, content: headerContent },
+    { headerOnly: true }
+  );
+}
+
+async function indexFileContent(
+  filePath: string,
+  branchName: string,
+  file: Awaited<ReturnType<typeof gitClient.getFileContent>>,
+  opts?: { headerOnly?: boolean }
+): Promise<"indexed" | "updated" | "unchanged"> {
+  const { organizationId, repoOwner, repoName } = repoIds();
+  const contentHash = sha256(opts?.headerOnly ? `header:${file.content}` : file.content);
 
   const existing = await prismaAny.codebaseFile.findUnique({
     where: {
@@ -328,7 +403,7 @@ async function indexFile(
       repoName,
       filePath,
       branchName,
-      content: file.content,
+      content: opts?.headerOnly ? null : file.content,
       contentHash,
       size: file.size,
       language,
@@ -341,7 +416,7 @@ async function indexFile(
       isDeleted: false,
     },
     update: {
-      content: file.content,
+      content: opts?.headerOnly ? null : file.content,
       contentHash,
       size: file.size,
       language,

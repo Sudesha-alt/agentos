@@ -1,6 +1,6 @@
 import { formatToolResult } from "../agenticLoop/toolResultFormatter";
 import { auditRepo } from "../db/repositories/auditRepo";
-import { codebaseQueryService } from "../codebaseIntelligence/queryService";
+import { searchCodebaseFiles } from "../codebaseIntelligence/searchService";
 import {
   getCodingArtifacts,
 } from "../engineering/codingArtifactStore";
@@ -70,21 +70,22 @@ export async function executeEngineeringCodingToolCall(
       case "search_codebase": {
         const query = stringValue(toolCall.input.query);
         const branch = defaultBranch(stringValue(toolCall.input.branch_name));
-        const hits = await codebaseQueryService.searchCodebaseSemantically({
+        const includeContext = toolCall.input.include_context === true;
+        const { workFiles, allFiles } = await searchCodebaseFiles({
           query,
           branchName: branch,
-          topK: 8,
+          includeContext,
+          topN: 10,
         });
+        const base = includeContext ? allFiles : workFiles;
         const filters = arrayOfStrings(toolCall.input.filter_patterns);
         const results = filters.length
-          ? (hits as Array<{ file_path?: string }>).filter((hit) =>
-              filters.some((pattern) =>
-                String(hit.file_path ?? "").includes(pattern)
-              )
+          ? base.filter((hit) =>
+              filters.some((pattern) => String(hit.path ?? "").includes(pattern))
             )
-          : hits;
-        result = { query, branch, results };
-        resultsFound = Array.isArray(results) ? results.length : 0;
+          : base;
+        result = { query, branch, workFiles, results };
+        resultsFound = results.length;
         metaQuery = query;
         break;
       }

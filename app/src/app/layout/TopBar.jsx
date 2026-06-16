@@ -17,7 +17,7 @@ export default function TopBar() {
           <path d="M8.5 8.5L12 12" stroke="currentColor" />
         </svg>
         <span className="hidden truncate sm:inline">
-          Search tickets, codebase, audit events…
+          Search tickets, pages, audit events…
         </span>
         <span className="truncate sm:hidden">Search…</span>
         <kbd className="ml-auto hidden shrink-0 rounded-md border border-app-border bg-app-surface px-1.5 py-0.5 text-[10px] font-medium text-app-ink-mute md:inline">

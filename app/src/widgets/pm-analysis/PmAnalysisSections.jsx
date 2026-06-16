@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
   PM_STAGE_ORDER,
@@ -166,16 +167,23 @@ export function PmImpactSection({ impact }) {
   );
 }
 
+const PIPELINE_BREAKDOWN_LABELS = {
+  discovery: "Discovery (Virin)",
+  engineering: "Engineering (Ananta)",
+  qa: "QA (Neel)",
+  review: "Review",
+};
+
 export function PmEffortSection({ effort }) {
   if (!effort) return null;
   return (
-    <JsonCard kicker="Stage 4" title="Effort estimate">
+    <JsonCard kicker="Stage 4" title="Agent pipeline estimate">
       <div className="flex flex-wrap gap-3">
         <span className="rounded-full bg-indigo/15 px-3 py-1 font-display text-[1.2rem] text-indigo">
           {effort.tshirt}
         </span>
         <span className="rounded-full border border-hairline px-3 py-1 font-mono text-[12px]">
-          {effort.storyPoints} points
+          Pipeline complexity {effort.storyPoints}
         </span>
         <span className="rounded-full border border-hairline px-3 py-1 font-mono text-[12px]">
           {effort.confidenceInEstimate}% confidence
@@ -184,7 +192,9 @@ export function PmEffortSection({ effort }) {
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
         {Object.entries(effort.breakdown ?? {}).map(([k, v]) => (
           <div key={k} className="rounded-lg border border-hairline px-3 py-2">
-            <p className="font-mono text-[10px] uppercase text-ink-mute">{k}</p>
+            <p className="font-mono text-[10px] uppercase text-ink-mute">
+              {PIPELINE_BREAKDOWN_LABELS[k] ?? k}
+            </p>
             <p className="text-[13px] text-ink">{v}</p>
           </div>
         ))}
@@ -404,6 +414,7 @@ export function PmRetrospectiveSection({ retrospective, onRun, running }) {
 }
 
 export function PmTechHandoffSection({ jiraKey, analysisComplete }) {
+  const navigate = useNavigate();
   const [handoffData, setHandoffData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [copyState, setCopyState] = useState(null);
@@ -437,6 +448,9 @@ export function PmTechHandoffSection({ jiraKey, analysisComplete }) {
     try {
       const result = await startPmCodingPipeline(jiraKey);
       setPipelineMsg(result.message ?? "Coding pipeline started.");
+      const params = new URLSearchParams({ ticket: jiraKey });
+      if (result.pipelineId) params.set("pipeline", result.pipelineId);
+      navigate(`/app/ananta?${params.toString()}`);
     } catch (err) {
       const msg = err.message ?? "Failed to start coding pipeline";
       setHandoffError(
@@ -469,6 +483,12 @@ export function PmTechHandoffSection({ jiraKey, analysisComplete }) {
         title="Tech Agent Handoff"
         right={
           <div className="flex flex-wrap gap-2">
+            <Link
+              to={`/app/ananta?ticket=${encodeURIComponent(jiraKey)}`}
+              className="rounded-full border border-hairline px-4 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-indigo hover:border-indigo"
+            >
+              Open in Ananta
+            </Link>
             <button
               type="button"
               disabled={loading}

@@ -1,7 +1,29 @@
 import { runAgenticChatTurn } from "../agenticLoop/chatTurn";
 import { QA_CHAT_TOOL_DEFINITIONS } from "../tools/qaChatToolDefinitions";
 import { executeQaChatToolCall } from "../tools/qaChatToolExecutor";
+import { buildAgentChatSystemPrompt } from "./chatPrompts";
+import { lookupJiraTicketForChat } from "./ticketLookup";
 import type { AgentChatTurnResult } from "./types";
+
+async function buildQaContextBlock(contextKey: string): Promise<string> {
+  if (!contextKey?.trim()) {
+    return "No pipeline or canary run selected — answer from general QA perspective.";
+  }
+
+  const lines = [`Active context id: ${contextKey}`];
+
+  if (/^[A-Z]+-\d+$/i.test(contextKey.trim())) {
+    const ticket = await lookupJiraTicketForChat(contextKey);
+    if (ticket.found) {
+      lines.push(
+        `Linked ticket ${ticket.jiraKey}: ${ticket.summary ?? ""}`,
+        ticket.status ? `Status: ${ticket.status}` : ""
+      );
+    }
+  }
+
+  return lines.filter(Boolean).join("\n");
+}
 
 export async function runQaChatTurn(input: {
   threadId: string;
@@ -9,16 +31,12 @@ export async function runQaChatTurn(input: {
   conversationHistory: Array<{ role: "user" | "assistant"; content: string }>;
   userMessage: string;
 }): Promise<AgentChatTurnResult> {
-  const contextBlock = input.contextKey?.trim()
-    ? `Active context: pipeline or ticket id "${input.contextKey}".`
-    : "No specific pipeline selected — answer from general QA perspective.";
+  const contextBlock = await buildQaContextBlock(input.contextKey);
 
-  const systemPrompt = `You are Neel, the QA agent for AgentOS.
-Help users review test coverage, analyze failures, suggest test cases, and interpret canary findings.
-Use read-only tools only — do not write tests or run pipelines from this chat.
-Be concise and actionable.
-
-${contextBlock}`;
+  const systemPrompt = buildAgentChatSystemPrompt({
+    domain: "neel",
+    contextBlock,
+  });
 
   const turn = await runAgenticChatTurn({
     systemPrompt,
@@ -29,6 +47,8 @@ ${contextBlock}`;
     tools: QA_CHAT_TOOL_DEFINITIONS,
     executeToolCall: executeQaChatToolCall,
     maxToolCalls: 10,
+    forcedWrapUpMessage:
+      "Stop calling tools. Answer in first person as Neel, discussion-only.",
   });
 
   return {

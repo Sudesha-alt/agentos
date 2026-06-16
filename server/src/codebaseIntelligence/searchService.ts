@@ -1,27 +1,32 @@
 import { codebaseQueryService } from "./queryService";
 import { prisma } from "../db/client";
 import { requireRepoScope } from "./repoScope";
+import {
+  formatWorkFilesList,
+  mergeWorkFileResults,
+  searchWorkFiles,
+  type WorkFileHit,
+} from "./fileRanker";
+import { detectPatternTags, KNOWN_PATTERN_TAGS } from "./patternTags";
+import {
+  CHUNK_FETCH_THRESHOLD,
+  FILE_PRESENT_THRESHOLD,
+  RETRIEVAL_CHUNK_TOP_K,
+} from "./retrievalConfig";
+
+export { KNOWN_PATTERN_TAGS, detectPatternTags };
+export type { PatternTag } from "./patternTags";
+export type { WorkFileHit };
 
 const prismaAny = prisma as any;
-
-export const KNOWN_PATTERN_TAGS = [
-  "api-route",
-  "database-query",
-  "auth",
-  "test",
-  "service-layer",
-  "ui-component",
-  "utility",
-  "module",
-] as const;
-
-export type PatternTag = (typeof KNOWN_PATTERN_TAGS)[number];
 
 export interface UnifiedSearchFileHit {
   path: string;
   score: number;
   snippet: string;
   summary?: string;
+  matchReasons?: string[];
+  changeScope?: "modify" | "create_new" | "context_only";
 }
 
 export interface UnifiedSearchPatternHit {
@@ -32,6 +37,7 @@ export interface UnifiedSearchPatternHit {
 export interface UnifiedSearchResult {
   query: string;
   files: UnifiedSearchFileHit[];
+  workFiles: WorkFileHit[];
   patterns: UnifiedSearchPatternHit[];
   concepts?: Array<{ label: string; paths: string[] }>;
   /** Flat list for backward compatibility with older clients */
@@ -43,36 +49,6 @@ function parsePatterns(raw: unknown): string[] {
     return raw.filter((p): p is string => typeof p === "string");
   }
   return [];
-}
-
-function normalizeQuery(q: string): string {
-  return q.trim().toLowerCase();
-}
-
-function detectPatternTags(query: string): string[] {
-  const q = normalizeQuery(query);
-  const tags: string[] = [];
-
-  for (const tag of KNOWN_PATTERN_TAGS) {
-    if (q === tag || q.includes(tag) || q.replace(/\s+/g, "-") === tag) {
-      tags.push(tag);
-    }
-  }
-
-  if (/\bapi\b|\broute\b|\bendpoint\b/.test(q) && !tags.includes("api-route")) {
-    tags.push("api-route");
-  }
-  if (/\bdatabase\b|\bquery\b|\bprisma\b|\bsql\b/.test(q) && !tags.includes("database-query")) {
-    tags.push("database-query");
-  }
-  if (/\bauth\b|\blogin\b|\bjwt\b|\bsession\b/.test(q) && !tags.includes("auth")) {
-    tags.push("auth");
-  }
-  if (/\btest\b|\bspec\b|\bdescribe\b/.test(q) && !tags.includes("test")) {
-    tags.push("test");
-  }
-
-  return [...new Set(tags)];
 }
 
 async function getFilesMatchingPatterns(
@@ -134,13 +110,32 @@ function buildConceptGroupings(files: UnifiedSearchFileHit[]): Array<{ label: st
     .map(([label, paths]) => ({ label, paths }));
 }
 
-export async function searchCodebase(input: {
+export async function searchCodebaseFiles(input: {
   query: string;
   branchName: string;
-}): Promise<UnifiedSearchResult> {
-  const query = input.query.trim();
-  if (!query) {
-    return { query: "", files: [], patterns: [], results: [] };
+  ticketText?: string;
+  includeContext?: boolean;
+  topN?: number;
+}): Promise<{ workFiles: WorkFileHit[]; allFiles: UnifiedSearchFileHit[] }> {
+  const workFiles = await searchWorkFiles({
+    query: input.query,
+    branchName: input.branchName,
+    ticketText: input.ticketText,
+    topN: input.topN,
+  });
+
+  if (!input.includeContext) {
+    return {
+      workFiles,
+      allFiles: workFiles.map((f) => ({
+        path: f.path,
+        score: f.score,
+        snippet: f.bestChunk ?? "",
+        summary: f.summary,
+        matchReasons: f.matchReasons,
+        changeScope: f.changeScope,
+      })),
+    };
   }
 
   let semanticRaw: Array<{
@@ -153,24 +148,64 @@ export async function searchCodebase(input: {
 
   try {
     semanticRaw = await codebaseQueryService.searchCodebaseSemantically({
-      query,
+      query: input.query,
       branchName: input.branchName,
-      topK: 8,
-      similarityThreshold: 0.65,
+      topK: RETRIEVAL_CHUNK_TOP_K,
+      similarityThreshold: CHUNK_FETCH_THRESHOLD,
     });
   } catch {
     semanticRaw = [];
   }
 
-  const files: UnifiedSearchFileHit[] = semanticRaw.map((hit) => {
-    const path = hit.file_path ?? hit.path ?? "unknown";
-    return {
-      path,
-      score: hit.similarity ?? 0,
-      snippet: (hit.chunk_content ?? hit.summary ?? "").slice(0, 280),
-      summary: hit.summary,
-    };
-  }).filter((f) => f.path !== "unknown");
+  const allFiles: UnifiedSearchFileHit[] = semanticRaw
+    .map((hit) => {
+      const path = hit.file_path ?? hit.path ?? "unknown";
+      const score = hit.similarity ?? 0;
+      return {
+        path,
+        score,
+        snippet: (hit.chunk_content ?? hit.summary ?? "").slice(0, 280),
+        summary: hit.summary,
+        changeScope:
+          score >= FILE_PRESENT_THRESHOLD
+            ? ("modify" as const)
+            : ("context_only" as const),
+      };
+    })
+    .filter((f) => f.path !== "unknown");
+
+  return { workFiles, allFiles };
+}
+
+export async function searchCodebase(input: {
+  query: string;
+  branchName: string;
+  ticketText?: string;
+  includeContext?: boolean;
+}): Promise<UnifiedSearchResult> {
+  const query = input.query.trim();
+  if (!query) {
+    return { query: "", files: [], workFiles: [], patterns: [], results: [] };
+  }
+
+  const { workFiles, allFiles } = await searchCodebaseFiles({
+    query,
+    branchName: input.branchName,
+    ticketText: input.ticketText,
+    includeContext: input.includeContext,
+  });
+
+  const files: UnifiedSearchFileHit[] =
+    input.includeContext && allFiles.length > 0
+      ? allFiles
+      : workFiles.map((f) => ({
+          path: f.path,
+          score: f.score,
+          snippet: f.bestChunk ?? "",
+          summary: f.summary,
+          matchReasons: f.matchReasons,
+          changeScope: f.changeScope,
+        }));
 
   const patternTags = detectPatternTags(query);
   let patterns = await getFilesMatchingPatterns(patternTags, input.branchName);
@@ -199,8 +234,30 @@ export async function searchCodebase(input: {
   return {
     query,
     files,
+    workFiles,
     patterns,
     concepts: concepts.length ? concepts : undefined,
     results: files,
   };
 }
+
+export async function searchCodebaseWithExpandedQueries(input: {
+  queries: string[];
+  branchName: string;
+  ticketText?: string;
+  topN?: number;
+}): Promise<WorkFileHit[]> {
+  const sets = await Promise.all(
+    input.queries.map((query) =>
+      searchWorkFiles({
+        query,
+        branchName: input.branchName,
+        ticketText: input.ticketText,
+        topN: input.topN ?? 10,
+      })
+    )
+  );
+  return (await mergeWorkFileResults(sets)).slice(0, input.topN ?? 10);
+}
+
+export { formatWorkFilesList };

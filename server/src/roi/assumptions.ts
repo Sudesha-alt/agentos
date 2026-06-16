@@ -3,6 +3,7 @@ import type { PlanId, RoiAssumptionsSnapshot } from "./types";
 /** v1 — keep in sync with app/src/shared/roi/assumptions.js */
 export const ROI_ASSUMPTIONS_VERSION = "1.0.0";
 
+/** Human labor baseline saved per agent pipeline run (ROI comparison) — NOT agent runtime. */
 export const DEFAULT_ROI_ASSUMPTIONS: RoiAssumptionsSnapshot = {
   version: ROI_ASSUMPTIONS_VERSION,
   baselineHoursPerRun: 32,
@@ -12,6 +13,9 @@ export const DEFAULT_ROI_ASSUMPTIONS: RoiAssumptionsSnapshot = {
   reworkMultiplier: 0.4,
   defaultSprintWeeks: 2,
 };
+
+/** Typical end-to-end agent pipeline wall-clock time for display/reference only. */
+export const TYPICAL_AGENT_PIPELINE_HOURS = 4;
 
 export interface PlanPricing {
   monthlyPrice: number;

@@ -17,7 +17,8 @@ function roundRatio(value: number): number {
 /**
  * Estimated ROI model (v1):
  * hoursSavedPerRun = baselineHours × stageSavingsSum × (1 + reworkRate × reworkMultiplier) × velocityFactor
- * velocityFactor = sprintWeeks / defaultSprintWeeks
+ * baselineHoursPerRun is human labor saved per agent run — NOT agent pipeline runtime.
+ * velocityFactor scales the human baseline by sprint length — NOT agent execution speed.
  */
 export function computeEstimatedRoi(raw: Partial<EstimatedRoiInputs>): RoiResult {
   const assumptions = DEFAULT_ROI_ASSUMPTIONS;

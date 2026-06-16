@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   completeGithubInstall,
   connectGitIntegration,
@@ -294,6 +294,16 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
           enabled={Boolean(connected || indexRunId)}
         />
       )}
+
+      {connected ? (
+        <p className="text-[13px] text-ink-dim">
+          Full index status, embedding counts, and reindex controls live in{" "}
+          <Link to="/app/settings/codebase-index" className="font-medium text-indigo hover:underline">
+            Settings → Codebase indexing
+          </Link>
+          .
+        </p>
+      ) : null}
 
       {setup?.databaseConfigured === false ? (
         <Panel>

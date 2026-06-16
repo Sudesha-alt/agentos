@@ -14,6 +14,9 @@ import { mirrorPmArtifactsToPipeline, buildProductPackageExport } from "../../pi
 import { enqueueIntakeFromJiraKey } from "../../pipeline/jira/intakeEnqueueService";
 import { prepareTechAgentHandoff } from "../../agents/tech/orchestrator";
 import { pmAnalysisStore } from "../../agents/pm/store";
+import { ticketRepo } from "../../db/repositories/ticketRepo";
+import { prisma } from "../../db/client";
+import { activeOrganizationFilter } from "../../organization/orgScope";
 import type { PmStageId, PmTicketInput, RetrospectiveInput } from "../../agents/pm/types";
 import { getPipelineQueueState } from "../../queue/inProcessRunner";
 import { resolveUserFromAuthHeader } from "./authSession";
@@ -277,8 +280,19 @@ router.post("/handoff/:ticketId/start-pipeline", async (req, res, next) => {
 
       const intake = await enqueueIntakeFromJiraKey(jiraKey, undefined, pmContext);
 
+      let pipelineId: string | null = null;
+      const ticket = await ticketRepo.findByJiraKey(jiraKey);
+      if (ticket) {
+        const pipeline = await prisma.pipeline.findFirst({
+          where: { ticketId: ticket.id, ...activeOrganizationFilter() },
+          orderBy: { startedAt: "desc" },
+        });
+        pipelineId = pipeline?.id ?? null;
+      }
+
       res.status(202).json({
         jiraKey,
+        pipelineId,
         status: "started",
         message:
           intake.enqueued > 0

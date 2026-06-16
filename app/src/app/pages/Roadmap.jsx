@@ -7,6 +7,8 @@ import {
 } from "../../entities/roadmap";
 import { useOrgIntelligence } from "../../entities/org-intelligence";
 import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
+import { AgentPageWithChat } from "../../widgets/agent-chat/AgentPageWithChat";
+import { AgentPageHeader } from "../../widgets/agent-chat/AgentPageHeader";
 import Spinner from "../components/Spinner";
 
 const ROUTE_TYPE_OPTIONS = [
@@ -108,16 +110,15 @@ export default function Roadmap() {
 
   return (
     <AnimatedAppPage wide>
+      <AgentPageWithChat domain="virin" contextKey="">
       <div className="min-w-0 space-y-5">
+        <AgentPageHeader domain="virin" />
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="type-kicker text-app-ink-mute">Structure</p>
-            <h1 className="text-2xl font-bold text-app-ink">
+            <h2 className="text-xl font-bold text-app-ink">
               {displayBoard?.title ?? "Roadmap"}
-            </h1>
-            <p className="mt-1 max-w-2xl text-[13px] text-app-ink-dim">
-              Stage-based playbook with dependency routing — tickets unlock as prerequisites complete.
-            </p>
+            </h2>
           </div>
           <div className="flex rounded-full border border-app-border p-1">
             <TabButton active={tab === "board"} onClick={() => setTab("board")}>
@@ -279,6 +280,7 @@ export default function Roadmap() {
         </div>
       ) : null}
       </div>
+      </AgentPageWithChat>
     </AnimatedAppPage>
   );
 }

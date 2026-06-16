@@ -36,7 +36,7 @@ export function deriveReviewQueueItems(pipelines = []) {
       const actionTo = isPrd
         ? `/app/pipelines/${p.id}/prd`
         : isEng
-          ? `/app/engineering/${p.id}`
+          ? `/app/ananta?pipeline=${p.id}`
           : `/app/pipelines/${p.id}/override`;
       const started = p.startedAt ? new Date(p.startedAt).getTime() : Date.now();
       const waitingMinutes = Math.max(1, Math.round((Date.now() - started) / 60_000));

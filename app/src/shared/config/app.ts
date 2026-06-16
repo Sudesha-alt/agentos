@@ -44,13 +44,10 @@ export const AGENT_NAV: Array<{
   },
   {
     id: "ananta",
-    to: "/app/codebase",
+    to: "/app/ananta",
     label: AGENT_NAMES.ANANTA,
     breadcrumb: AGENT_NAMES.ANANTA,
-    subNav: [
-      { label: "Workspace", to: "/app/codebase" },
-      { label: "Codebase Map", to: "/app/codebase?tab=map", tab: "map" },
-    ],
+    subNav: [{ label: "Workspace", to: "/app/ananta" }],
   },
   {
     id: "neel",
@@ -61,10 +58,8 @@ export const AGENT_NAV: Array<{
   },
 ];
 
-/** @deprecated Use AGENT_NAV item subNav */
-export const TECH_AGENT_SUB_NAV = AGENT_NAV.find((a) => a.id === "ananta")!.subNav.filter(
-  (s) => s.tab
-);
+/** @deprecated Ananta no longer has tabbed sub-nav */
+export const TECH_AGENT_SUB_NAV = AGENT_NAV.find((a) => a.id === "ananta")!.subNav;
 
 /** Flat list for breadcrumbs and mobile nav. */
 export const APP_NAV = [

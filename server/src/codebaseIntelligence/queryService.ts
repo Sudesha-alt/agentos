@@ -1,12 +1,18 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { prisma } from "../db/client";
 import { getOpenAIClient } from "../llm/openaiClient";
 import { requireRepoScope } from "./repoScope";
 
-const supabase = createClient(
-  process.env.SUPABASE_URL ?? "",
-  process.env.SUPABASE_SERVICE_KEY ?? ""
-);
+let supabaseClient: SupabaseClient | null = null;
+
+function getSupabase(): SupabaseClient {
+  if (!supabaseClient) {
+    const url = process.env.SUPABASE_URL?.trim() || "http://127.0.0.1:54321";
+    const key = process.env.SUPABASE_SERVICE_KEY?.trim() || "test-service-key";
+    supabaseClient = createClient(url, key);
+  }
+  return supabaseClient;
+}
 
 const prismaAny = prisma as any;
 
@@ -23,7 +29,7 @@ export const codebaseQueryService = {
       input: input.query,
     });
 
-    const { data, error } = await supabase.rpc("search_codebase", {
+    const { data, error } = await getSupabase().rpc("search_codebase", {
       query_embedding: JSON.stringify(embedding.data[0].embedding),
       p_repo_owner: repoOwner,
       p_repo_name: repoName,

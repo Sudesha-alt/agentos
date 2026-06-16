@@ -101,8 +101,9 @@ export const agentChatRepo = {
   },
 
   async getThreadById(threadId: string): Promise<AgentChatThreadDto | null> {
-    const row = await prisma.agentChatThread.findUnique({
-      where: { id: threadId },
+    const organizationId = requireActiveOrganizationId();
+    const row = await prisma.agentChatThread.findFirst({
+      where: { id: threadId, organizationId },
       include: { messages: { orderBy: { createdAt: "asc" } } },
     });
     return row ? toThreadDto(row) : null;
@@ -150,6 +151,9 @@ export const agentChatRepo = {
   },
 
   async deleteThread(threadId: string): Promise<void> {
-    await prisma.agentChatThread.delete({ where: { id: threadId } });
+    const organizationId = requireActiveOrganizationId();
+    await prisma.agentChatThread.deleteMany({
+      where: { id: threadId, organizationId },
+    });
   },
 };

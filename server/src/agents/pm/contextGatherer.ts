@@ -1,5 +1,9 @@
 import { prisma } from "../../db/client";
-import { searchCodebase } from "../../codebaseIntelligence/searchService";
+import {
+  formatWorkFilesList,
+  searchCodebaseWithExpandedQueries,
+} from "../../codebaseIntelligence/searchService";
+import { expandTicketQueries } from "../../codebaseIntelligence/queryExpander";
 import { resolveRepoScope } from "../../codebaseIntelligence/repoScope";
 import { getJiraIssueByKey } from "../../jira-sync/issueRepository";
 import { getPipelineJiraClient } from "../../pipeline/jira/client";
@@ -188,65 +192,36 @@ async function fetchCommitHistory(
 }
 
 async function buildCandidateFilesList(
-  query: string,
+  ticket: PmTicketInput,
   branchName: string
 ): Promise<{ list: string; paths: string[] }> {
   try {
-    const results = await searchCodebase({ query, branchName });
-    const files = results.files.slice(0, 10);
-    if (files.length === 0) {
+    const ticketText = [ticket.summary, ticket.description, ...ticket.components]
+      .filter(Boolean)
+      .join(" ");
+
+    const queries = await expandTicketQueries({
+      summary: ticket.summary,
+      description: ticket.description,
+      components: ticket.components,
+    });
+
+    const workFiles = await searchCodebaseWithExpandedQueries({
+      queries,
+      branchName,
+      ticketText,
+      topN: 10,
+    });
+
+    if (workFiles.length === 0) {
       return {
-        list: "No codebase index results (index may be empty or query too narrow)",
+        list: "No candidate files to change (index may be empty or query too narrow)",
         paths: [],
       };
     }
 
-    const scope = resolveRepoScope();
-    const paths = files.map((f) => f.path);
-    let fileRows: Array<{
-      filePath: string;
-      summary: string | null;
-      lastCommitAt: Date | null;
-      lastCommitMsg: string | null;
-      patterns: unknown;
-    }> = [];
-
-    if (scope) {
-      try {
-        fileRows = await prisma.codebaseFile.findMany({
-          where: {
-            repoOwner: scope.repoOwner,
-            repoName: scope.repoName,
-            branchName,
-            filePath: { in: paths },
-            isDeleted: false,
-          },
-          select: {
-            filePath: true,
-            summary: true,
-            lastCommitAt: true,
-            lastCommitMsg: true,
-            patterns: true,
-          },
-        });
-      } catch {
-        /* optional enrichment */
-      }
-    }
-
-    const byPath = new Map(fileRows.map((r) => [r.filePath, r]));
-    const list = files
-      .map((f) => {
-        const row = byPath.get(f.path);
-        const summary = row?.summary ?? f.summary ?? f.snippet;
-        const modified = row?.lastCommitAt?.toISOString().slice(0, 10) ?? "unknown";
-        const patterns = Array.isArray(row?.patterns)
-          ? (row.patterns as string[]).join(", ")
-          : "unknown";
-        return `- ${f.path} (score ${f.score.toFixed(2)})\n  Summary: ${summary}\n  Last modified: ${modified}\n  Patterns: ${patterns}`;
-      })
-      .join("\n\n");
-
+    const paths = workFiles.map((f) => f.path);
+    const list = formatWorkFilesList(workFiles);
     return { list, paths };
   } catch (err) {
     logger.warn({ err }, "pm context: codebase search failed");
@@ -391,13 +366,8 @@ export async function gatherPmContext(
   let similarTicketsList = "none found";
   similarTicketsList = await buildSimilarTicketsList(ticket);
 
-  const searchQuery = [ticket.summary, ticket.description, ...ticket.components]
-    .filter(Boolean)
-    .join(" ")
-    .slice(0, 500);
-
   const { list: candidateFilesListRaw, paths } = await buildCandidateFilesList(
-    searchQuery,
+    ticket,
     branchName
   );
   const candidateFilesList = await mergeImplementationContext(

@@ -3,6 +3,7 @@ import { canaryRunRepo } from "../db/repositories/canaryRunRepo";
 import { logger } from "../utils/logger";
 import type { ToolCallInput, ToolCallResult } from "./executor";
 import { executeQaToolCall } from "./qaToolExecutor";
+import { executeSharedChatToolCall } from "./sharedChatToolExecutor";
 
 const READ_ONLY_QA_TOOLS = new Set([
   "read_implementation_files",
@@ -24,6 +25,9 @@ export async function executeQaChatToolCall(
   sessionId: string,
   contextKey: string
 ): Promise<ToolCallResult> {
+  const shared = await executeSharedChatToolCall(toolCall);
+  if (shared) return shared;
+
   if (toolCall.name === "get_canary_summary") {
     try {
       const runId = stringValue(toolCall.input.run_id);

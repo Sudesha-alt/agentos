@@ -1,8 +1,13 @@
 import { DATA_MODE, DATA_MODES } from "../../shared/config/app";
 import { apiPath } from "../../shared/config/apiBase";
+import { authHeaders } from "../../shared/lib/authHeaders";
 import { fetchJson } from "../../shared/lib/fetchJson";
 
 const STORAGE_PREFIX = "agentos.agentChat.";
+
+function headers(extra = {}) {
+  return { ...authHeaders(), ...extra };
+}
 
 function storageKey(domain, contextKey) {
   return `${STORAGE_PREFIX}${domain}:${contextKey || ""}`;
@@ -63,7 +68,9 @@ function mockReply(domain, content) {
 const restAdapter = {
   async getThread(domain, contextKey = "") {
     const qs = new URLSearchParams({ domain, contextKey });
-    const data = await fetchJson(apiPath("/api", `/agent-chat/threads?${qs}`));
+    const data = await fetchJson(apiPath("/api", `/agent-chat/threads?${qs}`), {
+      headers: headers(),
+    });
     return data?.thread ?? null;
   },
   async ensureThread(domain, contextKey = "") {
@@ -71,25 +78,28 @@ const restAdapter = {
     if (existing) return existing;
     const data = await fetchJson(apiPath("/api", "/agent-chat/threads"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: headers({ "Content-Type": "application/json" }),
       body: JSON.stringify({ domain, contextKey }),
     });
     return data.thread;
   },
   async listMessages(threadId) {
-    const data = await fetchJson(apiPath("/api", `/agent-chat/threads/${threadId}/messages`));
+    const data = await fetchJson(apiPath("/api", `/agent-chat/threads/${threadId}/messages`), {
+      headers: headers(),
+    });
     return data?.messages ?? [];
   },
   async sendMessage(threadId, content) {
     return fetchJson(apiPath("/api", `/agent-chat/threads/${threadId}/messages`), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: headers({ "Content-Type": "application/json" }),
       body: JSON.stringify({ content }),
     });
   },
   async clearThread(threadId) {
     return fetchJson(apiPath("/api", `/agent-chat/threads/${threadId}`), {
       method: "DELETE",
+      headers: headers(),
     });
   },
 };

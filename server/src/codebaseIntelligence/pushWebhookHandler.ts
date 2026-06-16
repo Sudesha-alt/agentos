@@ -1,5 +1,7 @@
 import { prisma } from "../db/client";
 import { logger } from "../utils/logger";
+import { enqueueIncrementalIndexFromWebhook } from "./indexQueue";
+import { isTrackedDefaultBranch } from "./webhookIndexHelpers";
 
 const prismaAny = prisma as any;
 
@@ -20,6 +22,8 @@ export async function enqueueCodebaseIndexFromPush(input: {
     modified: string[];
     removed: string[];
   }>;
+  triggerSource?: "push" | "pr_merge";
+  prNumber?: number;
 }): Promise<void> {
   const {
     repoOwner,
@@ -30,6 +34,8 @@ export async function enqueueCodebaseIndexFromPush(input: {
     changedFiles,
     deletedFiles,
     commits,
+    triggerSource = "push",
+    prNumber,
   } = input;
 
   await prismaAny.branchState.upsert({
@@ -85,8 +91,30 @@ export async function enqueueCodebaseIndexFromPush(input: {
     });
   }
 
+  const onDefaultBranch = await isTrackedDefaultBranch(branchName);
+  if (!onDefaultBranch) {
+    logger.info({ branchName }, "push webhook skipped — not default branch");
+    return;
+  }
+
+  const indexResult = await enqueueIncrementalIndexFromWebhook({
+    branchName,
+    changedFiles,
+    deletedFiles,
+    commitSha: headSha,
+    triggerSource,
+    prNumber,
+  });
+
   logger.info(
-    { branchName, changedCount: changedFiles.length, deletedCount: deletedFiles.length },
-    "recorded push metadata — re-index from Codebase Intelligence or Git integration to refresh"
+    {
+      branchName,
+      changedCount: changedFiles.length,
+      deletedCount: deletedFiles.length,
+      triggerSource,
+      indexStarted: indexResult.started,
+      indexSkipped: indexResult.skipped,
+    },
+    "processed push webhook metadata and index enqueue"
   );
 }

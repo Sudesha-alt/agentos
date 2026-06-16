@@ -11,13 +11,20 @@ export const AGENT_CHAT_CONFIG = {
     get image() {
       return getAgentImage("virin");
     },
-    welcome: "Ask me about discovery, similar tickets, or requirement quality.",
-    placeholder: "Ask about this feature, PRD readiness, or competitors…",
+    welcome:
+      "I help with discovery, tickets, and requirement quality. Mention any Jira key — I'll look it up. For code or QA, I'll point you to Ananta or Neel.",
+    placeholder: "Ask me about a ticket, PRD readiness, or competitors…",
     suggestions: [
+      "What do we know about PLT-100?",
       "Search similar tickets from past work",
-      "Check requirement completeness for this idea",
-      "Summarize what we know so far",
-      "How do competitors approach this?",
+      "Is this requirement complete enough for a PRD?",
+      "How do competitors approach this problem?",
+    ],
+    principles: [
+      "One question at a time",
+      "Confirm before PRD",
+      "Codebase-informed ACs",
+      "Simplest version first",
     ],
   },
   ananta: {
@@ -27,13 +34,20 @@ export const AGENT_CHAT_CONFIG = {
     get image() {
       return getAgentImage("ananta");
     },
-    welcome: "Ask me anything about the codebase — architecture, flows, health.",
-    placeholder: "Ask about architecture, auth flow, or impact of a change…",
+    welcome:
+      "I help implement tickets handed off from Virin — review plans, explain diffs, and answer questions about files being written for this ticket.",
+    placeholder: "Ask about the implementation plan, a file change, or acceptance criteria…",
     suggestions: [
-      "Explain the overall architecture",
-      "Trace how authentication works",
-      "Summarize codebase health",
-      "What is the impact of changing this file?",
+      "Summarize the implementation plan for this ticket",
+      "Explain the changes in the latest file",
+      "Which acceptance criteria are not covered yet?",
+      "What should I review before approving the PR?",
+    ],
+    principles: [
+      "Ticket-scoped",
+      "Cite file paths",
+      "Diff-aware",
+      "Handoff-first",
     ],
   },
   neel: {
@@ -43,13 +57,20 @@ export const AGENT_CHAT_CONFIG = {
     get image() {
       return getAgentImage("neel");
     },
-    welcome: "Ask about test coverage, failures, canary findings, or test ideas.",
+    welcome:
+      "I focus on test coverage, failures, and canary findings. Reference a ticket or pipeline — I'll fetch context. Product and code questions go to Virin or Ananta.",
     placeholder: "Ask about test gaps, failures, or canary results…",
     suggestions: [
-      "Review test coverage gaps",
-      "Analyze recent test failures",
-      "Suggest test cases for a feature",
-      "Summarize latest canary findings",
+      "What are the biggest test coverage gaps?",
+      "Summarize recent test failures",
+      "Suggest test cases for this feature",
+      "What did the latest canary run find?",
+    ],
+    principles: [
+      "Coverage-led",
+      "Canary-aware",
+      "Read-only in chat",
+      "Ticket-grounded",
     ],
   },
 };

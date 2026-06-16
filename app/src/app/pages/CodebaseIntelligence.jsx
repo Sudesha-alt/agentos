@@ -13,11 +13,10 @@ import CodebaseIntelligenceStatusWidget from "../../widgets/codebase-intelligenc
 import { useGitIntegrationSetup } from "../../entities/git-integration";
 import { useCodebaseLayerStatus } from "../../entities/codebase";
 import Spinner from "../components/Spinner";
-import { AGENT_NAMES } from "../../shared/config/app";
-import { PageIntro } from "../../shared/ui/Panel";
 import { AppTabButton } from "../../shared/ui/AppChrome";
 import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
 import { AgentPageWithChat } from "../../widgets/agent-chat/AgentPageWithChat";
+import { AgentPageHeader } from "../../widgets/agent-chat/AgentPageHeader";
 import { tabPanelFade, motionSafe } from "../../lib/motion";
 
 const CodebaseVisualization = lazy(
@@ -94,10 +93,7 @@ export default function CodebaseIntelligence() {
   return (
     <AnimatedAppPage wide>
       <AgentPageWithChat domain="ananta" contextKey={branch}>
-      <PageIntro
-        kicker={AGENT_NAMES.ANANTA}
-        title={AGENT_NAMES.ANANTA}
-      />
+      <AgentPageHeader domain="ananta" />
       <CodebaseIntelligenceStatusWidget
         branch={branch}
         onIndexStarted={({ runId }) => setIndexRunId(runId)}

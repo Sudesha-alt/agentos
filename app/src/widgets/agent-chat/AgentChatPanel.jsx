@@ -14,7 +14,7 @@ export function AgentChatPanel({
   contextKey = "",
   disabled = false,
   onClose,
-  embedded = false,
+  layout = "popup",
 }) {
   const config = getAgentChatConfig(domain);
   const [thread, setThread] = useState(null);
@@ -22,6 +22,7 @@ export function AgentChatPanel({
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState(null);
+  const isPopup = layout === "popup";
 
   const loadThread = useCallback(async () => {
     setLoading(true);
@@ -83,18 +84,33 @@ export function AgentChatPanel({
 
   return (
     <div
-      className={`flex h-full min-h-0 flex-col overflow-hidden bg-app-surface ${
-        embedded ? "" : "min-h-[28rem] rounded-app border border-app-border shadow-sm"
+      className={`flex flex-col overflow-hidden bg-app-surface ${
+        isPopup
+          ? "h-full min-h-0"
+          : "min-h-[28rem] rounded-app border border-app-border shadow-sm"
       }`}
     >
-      <div className="shrink-0 border-b border-app-border px-4 py-3">
-        <div className="flex items-center gap-3">
-          <AgentChatAvatar domain={domain} size={44} />
+      <div className="shrink-0 border-b border-app-border px-4 py-3 sm:px-5">
+        <div className="flex items-start gap-3">
+          <AgentChatAvatar domain={domain} size={48} />
           <div className="min-w-0 flex-1">
-            <p className="type-kicker">{config.role}</p>
-            <h3 className="text-[15px] font-semibold leading-tight text-app-ink">
-              {config.displayName}
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="type-kicker">{config.role}</p>
+              <span className="rounded-full border border-app-border bg-app-surface-muted/60 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-app-ink-mute">
+                Discussion only
+              </span>
+            </div>
+            <h3 className="mt-0.5 text-[16px] font-semibold leading-tight text-app-ink">
+              Chat with {config.displayName}
             </h3>
+            <p className="mt-1.5 text-[12px] leading-relaxed text-app-ink-mute">
+              {config.welcome}
+            </p>
+            {contextKey ? (
+              <p className="mt-1 truncate text-[11px] text-app-ink-mute">
+                Context: <span className="font-mono">{contextKey}</span>
+              </p>
+            ) : null}
           </div>
           {onClose ? (
             <button
@@ -107,10 +123,6 @@ export function AgentChatPanel({
             </button>
           ) : null}
         </div>
-        <p className="mt-2 text-[12px] leading-relaxed text-app-ink-mute">{config.welcome}</p>
-        {contextKey ? (
-          <p className="mt-1 truncate text-[11px] text-app-ink-mute">Context: {contextKey}</p>
-        ) : null}
       </div>
 
       {error ? (
@@ -120,11 +132,11 @@ export function AgentChatPanel({
       ) : null}
 
       {loading ? (
-        <div className="flex flex-1 items-center justify-center text-[13px] text-app-ink-mute">
-          Loading chat…
+        <div className="flex min-h-0 flex-1 items-center justify-center text-[13px] text-app-ink-mute">
+          Loading conversation…
         </div>
       ) : (
-        <AgentChatMessages messages={messages} loading={sending} />
+        <AgentChatMessages domain={domain} messages={messages} loading={sending} compact={isPopup} />
       )}
 
       <AgentChatComposer

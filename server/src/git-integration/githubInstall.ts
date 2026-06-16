@@ -1,4 +1,6 @@
 import { enqueueFullIndex } from "../codebaseIntelligence/indexQueue";
+
+/** GitHub App webhooks should subscribe to `push` and `pull_request` (merged) events. */
 import {
   getInstallation,
   getInstallationAccessToken,

@@ -2,6 +2,7 @@ import { runAgenticChatTurn } from "../agenticLoop/chatTurn";
 import { getCodebaseLayerStatus } from "../codebaseIntelligence/layerStatus";
 import { ANANTA_CHAT_TOOL_DEFINITIONS } from "../tools/anantaChatToolDefinitions";
 import { executeAnantaChatToolCall } from "../tools/anantaChatToolExecutor";
+import { buildAgentChatSystemPrompt } from "./chatPrompts";
 import type { AgentChatTurnResult } from "./types";
 
 export async function runAnantaChatTurn(input: {
@@ -28,11 +29,10 @@ export async function runAnantaChatTurn(input: {
     /* optional */
   }
 
-  const systemPrompt = `You are Ananta, the tech / codebase intelligence agent for AgentOS.
-Answer questions about the connected repository using your tools. Cite specific file paths.
-Be concise and actionable. If the index is empty, say so and suggest indexing.
-
-${statusBlock}`;
+  const systemPrompt = buildAgentChatSystemPrompt({
+    domain: "ananta",
+    contextBlock: statusBlock,
+  });
 
   const turn = await runAgenticChatTurn({
     systemPrompt,
@@ -43,6 +43,8 @@ ${statusBlock}`;
     tools: ANANTA_CHAT_TOOL_DEFINITIONS,
     executeToolCall: executeAnantaChatToolCall,
     maxToolCalls: 10,
+    forcedWrapUpMessage:
+      "Stop calling tools. Answer in first person as Ananta, discussion-only.",
   });
 
   return {

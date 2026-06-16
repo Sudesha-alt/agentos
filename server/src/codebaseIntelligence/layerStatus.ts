@@ -4,8 +4,10 @@ import { isOpenAIConfigured } from "../llm/openaiClient";
 import { prisma } from "../db/client";
 import {
   getLatestIndexRun,
+  getLastPrMergeForBranch,
   indexRunProgress,
 } from "./indexQueue";
+import { getOversizedSkippedCount } from "./indexSkipStats";
 import { codebaseOrgWhere, resolveRepoScope } from "./repoScope";
 
 const prismaAny = prisma as any;
@@ -28,11 +30,15 @@ export type CodebaseLayerStatus = {
     percent: number | null;
     lastCompletedAt: string | null;
     lastIndexedAt: string | null;
+    lastTrigger: "manual" | "webhook" | "pr_merge" | "push" | null;
+    lastPrNumber: number | null;
     error: string | null;
   };
   counts: {
     filesIndexed: number;
     embeddings: number;
+    indexHealthPercent: number;
+    filesSkippedOversized: number;
   };
   graph: {
     ready: boolean;
@@ -180,9 +186,11 @@ export async function getCodebaseLayerStatus(
         percent: null,
         lastCompletedAt: null,
         lastIndexedAt: null,
+        lastTrigger: null,
+        lastPrNumber: null,
         error: null,
       },
-      counts: { filesIndexed: 0, embeddings: 0 },
+      counts: { filesIndexed: 0, embeddings: 0, indexHealthPercent: 0, filesSkippedOversized: 0 },
       graph: { ready: false, computedAt: null, nodeCount: null },
       configuration: {
         openaiConfigured,
@@ -228,6 +236,20 @@ export async function getCodebaseLayerStatus(
     blockers.push("Files indexed but no embeddings — check OPENAI_API_KEY and re-index.");
   }
 
+  const oversizedSkipped = getOversizedSkippedCount();
+  if (oversizedSkipped > 0) {
+    blockers.push(`${oversizedSkipped} files skipped (over size limit)`);
+  }
+
+  const indexHealthPercent =
+    fileStats.count > 0
+      ? Math.min(100, Math.round((embeddingCount / fileStats.count) * 100))
+      : 0;
+
+  const lastTrigger = (lastCompleted?.triggerType as CodebaseLayerStatus["index"]["lastTrigger"]) ?? null;
+  const lastPrNumber =
+    lastTrigger === "pr_merge" ? getLastPrMergeForBranch(branch) : null;
+
   const ready =
     connected &&
     fileStats.count > 0 &&
@@ -248,11 +270,15 @@ export async function getCodebaseLayerStatus(
       percent: progress?.percent ?? null,
       lastCompletedAt: lastCompleted?.completedAt?.toISOString() ?? progress?.completedAt ?? null,
       lastIndexedAt: fileStats.lastIndexedAt,
+      lastTrigger,
+      lastPrNumber,
       error: progress?.error ?? null,
     },
     counts: {
       filesIndexed: fileStats.count,
       embeddings: embeddingCount,
+      indexHealthPercent,
+      filesSkippedOversized: oversizedSkipped,
     },
     graph,
     configuration: {

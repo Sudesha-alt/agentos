@@ -6,9 +6,11 @@ import {
   getArchitectureDoc,
   getRunbook,
 } from "../codebaseIntelligence/knowledgeService";
+import { searchCodebaseFiles } from "../codebaseIntelligence/searchService";
 import { codebaseQueryService } from "../codebaseIntelligence/queryService";
 import { logger } from "../utils/logger";
 import type { ToolCallInput, ToolCallResult } from "./executor";
+import { executeSharedChatToolCall } from "./sharedChatToolExecutor";
 
 function stringValue(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
@@ -33,6 +35,9 @@ export async function executeAnantaChatToolCall(
 
   logger.info({ tool: toolCall.name, branch }, "ananta chat tool executing");
 
+  const shared = await executeSharedChatToolCall(toolCall);
+  if (shared) return shared;
+
   try {
     let result: unknown;
     let metaQuery = toolCall.name;
@@ -42,14 +47,15 @@ export async function executeAnantaChatToolCall(
       case "search_codebase": {
         const query = stringValue(toolCall.input.query);
         metaQuery = query;
-        const hits = await codebaseQueryService.searchCodebaseSemantically({
+        const includeContext = toolCall.input.include_context === true;
+        const { workFiles, allFiles } = await searchCodebaseFiles({
           query,
           branchName: branch,
-          topK: numberValue(toolCall.input.top_k, 8),
-          similarityThreshold: 0.65,
+          includeContext,
+          topN: numberValue(toolCall.input.top_k, 10),
         });
-        resultsFound = hits.length;
-        result = { hits };
+        resultsFound = includeContext ? allFiles.length : workFiles.length;
+        result = { workFiles, files: includeContext ? allFiles : workFiles };
         break;
       }
       case "list_directory": {

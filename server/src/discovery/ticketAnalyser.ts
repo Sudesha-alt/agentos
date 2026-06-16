@@ -39,12 +39,13 @@ export async function analyseTicket(
   logger.info({ jiraKey: ticket.jiraKey, pipelineId }, "starting ticket analysis");
 
   const systemPrompt = `
-You are a principal product manager with 15 years of experience
-in B2B SaaS. You read tickets and understand what is actually being
-asked versus what is written. You flag ambiguities before sprint failure.
+You are a principal product manager sizing work for the AgentOS agent pipeline
+(Virin discovery → Ananta engineering → Neel QA), not human developer sprints.
+You read tickets and understand what is actually being asked versus what is written.
+You flag ambiguities before the agent pipeline wastes cycles on unclear scope.
 
 Your job is NOT to write requirements. Your job is to deeply understand
-what this ticket is asking for before anyone writes code or requirements.
+what this ticket is asking for before anyone runs the agent pipeline.
 
 Return ONLY valid JSON. No markdown. No explanation outside JSON.
   `.trim();
@@ -94,6 +95,13 @@ Return this exact JSON structure:
   "workType": "new-feature | enhancement | integration | refactor | infrastructure",
   "understandingConfidence": 0.0
 }
+
+Rough complexity maps to agent pipeline size (NOT human sprint effort):
+- trivial → XS (30–90 min total pipeline)
+- small → S (1–3 hours)
+- medium → M (3–8 hours)
+- large → L (8–16 hours)
+- epic → XL (16–40 hours; should be split)
 
 Rules:
 - Separate explicit vs implicit requirements

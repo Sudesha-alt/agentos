@@ -155,7 +155,7 @@ export async function runDiscovery(
   usages.push(u4);
   await auditRepo.log(pipelineId, "COMPLEXITY_SCORED", {
     score: complexityAssessment.overallScore,
-    realisticDays: complexityAssessment.effortEstimate.realistic,
+    realisticHours: complexityAssessment.effortEstimate.realistic,
     priority: complexityAssessment.priorityAssessment.recommendedPriority,
   });
 

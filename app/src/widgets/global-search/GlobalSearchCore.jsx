@@ -4,12 +4,12 @@ import Spinner from "../../app/components/Spinner";
 import { globalSearch } from "../../entities/global-search";
 import { formatAuditInline, formatRelativeTime } from "../../shared/lib/format";
 import { useDebouncedValue } from "../codebase-search/useDebouncedValue";
-import { explorerUrl, mapHighlightUrl } from "../codebase-search/codebaseSearchUtils";
 
 const STATIC_PAGES = [
+  { label: "Ananta workspace", href: "/app/ananta", keywords: ["ananta", "engineering", "coding", "implementation"] },
   { label: "Audit Trail", href: "/app/audit", keywords: ["audit", "compliance", "log", "trail"] },
   { label: "Pipelines", href: "/app/pipelines", keywords: ["pipeline", "ticket", "queue", "review"] },
-  { label: "Codebase Explorer", href: "/app/codebase", keywords: ["codebase", "explorer", "files", "code"] },
+  { label: "Codebase indexing", href: "/app/settings/codebase-index", keywords: ["codebase", "index", "embeddings", "vector"] },
   { label: "GitHub integration", href: "/app/settings/integrations/github", keywords: ["github", "git", "repo", "repository"] },
   { label: "Jira integration", href: "/app/settings/integrations/jira", keywords: ["jira", "ticket", "board"] },
   { label: "Settings", href: "/app/settings", keywords: ["settings", "integrations", "billing", "plan"] },
@@ -111,9 +111,8 @@ export default function GlobalSearchCore({
 
   const tickets = results?.tickets ?? [];
   const audit = results?.audit ?? [];
-  const files = results?.codebase?.files ?? results?.codebase?.results ?? [];
   const hasResults =
-    tickets.length > 0 || audit.length > 0 || files.length > 0 || pageMatches.length > 0;
+    tickets.length > 0 || audit.length > 0 || pageMatches.length > 0;
   const showEmpty = debouncedQuery.trim() && !loading && !error && !hasResults;
 
   return (
@@ -128,7 +127,7 @@ export default function GlobalSearchCore({
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search tickets, codebase, audit events…"
+            placeholder="Search tickets, pages, audit events…"
             className="min-w-0 flex-1 bg-transparent text-sm text-app-ink outline-none placeholder:text-app-ink-mute"
             autoFocus={autoFocus}
             autoComplete="off"
@@ -172,37 +171,6 @@ export default function GlobalSearchCore({
                   onClick={() => go(`/app/pipelines/${ticket.id}`)}
                   compact={compact}
                 />
-              ))}
-            </Section>
-          ) : null}
-
-          {files.length > 0 ? (
-            <Section title="Codebase" count={files.length}>
-              {files.slice(0, 8).map((hit) => (
-                <div
-                  key={hit.path}
-                  className="group flex items-start justify-between gap-3 rounded-lg px-3 py-2 hover:bg-app-surface-muted/70"
-                >
-                  <button
-                    type="button"
-                    onClick={() => go(explorerUrl(hit.path))}
-                    className="min-w-0 flex-1 text-left"
-                  >
-                    <p className="truncate font-mono text-[12px] text-indigo group-hover:underline">{hit.path}</p>
-                    {hit.snippet || hit.summary ? (
-                      <p className="mt-0.5 line-clamp-2 text-[12px] text-app-ink-dim">
-                        {hit.snippet || hit.summary}
-                      </p>
-                    ) : null}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => go(mapHighlightUrl([hit.path]))}
-                    className="shrink-0 rounded-md border border-app-border px-2 py-1 text-[10px] font-medium text-app-ink-dim hover:text-app-ink"
-                  >
-                    Map
-                  </button>
-                </div>
               ))}
             </Section>
           ) : null}

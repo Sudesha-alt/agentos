@@ -234,6 +234,7 @@ Quality bar:
 - Success metrics tie to stated goals
 - Technical considerations include codebase findings
 - Open questions are real and named with owner
+- effortEstimate and complexitySummary use AgentOS agent pipeline wall-clock hours (Virin → Ananta → Neel), NOT human developer sprint days. Typical ranges: XS 30–90 min, S 1–3 h, M 3–8 h, L 8–16 h, XL 16–40 h.
 
 Use GeneratedPRD schema:
 {
@@ -243,7 +244,7 @@ Use GeneratedPRD schema:
   "jiraKey": "{{jira_key}}",
   "createdAt": "{{today_iso}}",
   "priority": "...",
-  "effortEstimate": "...",
+  "effortEstimate": "string — t-shirt and agent pipeline hours (e.g. M · ~5h)",
   "problemStatement": "...",
   "proposedSolution": "...",
   "successDefinition": "...",
@@ -263,9 +264,9 @@ Use GeneratedPRD schema:
   "successMetrics": [{"metric":"...","baseline":"...","target":"...","measurementMethod":"..."}],
   "complexitySummary": {
     "score": 0,
-    "effortOptimistic": "",
-    "effortRealistic": "",
-    "effortPessimistic": "",
+    "effortOptimistic": "agent pipeline hours (e.g. 3h)",
+    "effortRealistic": "agent pipeline hours (e.g. 5h)",
+    "effortPessimistic": "agent pipeline hours (e.g. 8h)",
     "keyComplexityDrivers": []
   },
   "prdConfidence": 0.0,

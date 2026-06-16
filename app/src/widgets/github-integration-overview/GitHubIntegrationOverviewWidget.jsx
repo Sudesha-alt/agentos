@@ -51,7 +51,7 @@ export default function GitHubIntegrationOverviewWidget({ embedded = false }) {
                 Open GitHub integration →
               </Link>
               <Link
-                to="/app/codebase"
+                to="/app/ananta"
                 className="text-ink-dim transition-colors hover:text-indigo"
               >
                 {AGENT_NAMES.ANANTA} →
@@ -91,7 +91,7 @@ export default function GitHubIntegrationOverviewWidget({ embedded = false }) {
     <Panel>
       <PanelHeader
         kicker="GitHub"
-        title="Repository connection"
+        title="Repository connection"
         right={
           <LabelPill
             label={

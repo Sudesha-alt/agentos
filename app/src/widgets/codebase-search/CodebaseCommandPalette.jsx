@@ -49,7 +49,7 @@ export function CodebaseCommandPaletteProvider({ children }) {
                     <p className="text-xs font-semibold uppercase tracking-[0.08em] text-app-ink-mute">
                       Search
                     </p>
-                    <p className="text-lg font-semibold text-app-ink">Tickets, codebase, audit</p>
+                    <p className="text-lg font-semibold text-app-ink">Tickets, pages, audit</p>
                   </div>
                   <kbd className="hidden rounded-md border border-app-border bg-app-surface-muted px-2 py-0.5 font-mono text-[10px] text-app-ink-mute sm:inline">
                     Esc
@@ -66,7 +66,7 @@ export function CodebaseCommandPaletteProvider({ children }) {
                 <footer className="border-t border-app-border px-5 py-2.5">
                   <p className="text-[11px] text-app-ink-mute">
                     <kbd className="rounded border border-app-border px-1">⌘K</kbd> toggle · Results open
-                    pipelines, codebase explorer, or audit context
+                    pipelines, Ananta, settings, or audit context
                   </p>
                 </footer>
               </div>

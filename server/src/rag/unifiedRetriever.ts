@@ -1,4 +1,6 @@
 import { codebaseQueryService } from "../codebaseIntelligence/queryService";
+import { searchWorkFiles } from "../codebaseIntelligence/fileRanker";
+import { CHUNK_FETCH_THRESHOLD, RETRIEVAL_CHUNK_TOP_K } from "../codebaseIntelligence/retrievalConfig";
 import { resolveRepoScope } from "../codebaseIntelligence/repoScope";
 import type { RetrievedContext, VectorContentType } from "../types/pipeline";
 import { logger } from "../utils/logger";
@@ -9,6 +11,8 @@ export interface UnifiedRetrieveOptions {
   ticketTypes?: readonly VectorContentType[];
   codebase?: { branchName?: string; topK?: number; similarityThreshold?: number };
   includeCodebase?: boolean;
+  /** When false (default), codebase hits are work files only (modify/create_new). */
+  includeContext?: boolean;
   topKTotal?: number;
   currentJiraKey: string;
   queryComponents?: string[];
@@ -67,6 +71,42 @@ export const unifiedRetriever = {
 
     const boostedQuery = appendBoostedTerms(query, options.queryComponents ?? []);
 
+    const codebasePromise =
+      includeCodebase && !options.includeContext
+        ? searchWorkFiles({
+            query: boostedQuery,
+            branchName,
+            topN: options.codebase?.topK ?? 10,
+          })
+            .then((workFiles) =>
+              workFiles.map(
+                (wf): CodebaseSearchRow => ({
+                  file_path: wf.path,
+                  similarity: wf.score,
+                  chunk_content: wf.bestChunk,
+                  summary: wf.summary,
+                })
+              )
+            )
+            .catch((err) => {
+              logger.warn({ err }, "unified retriever work-file search failed");
+              return [] as CodebaseSearchRow[];
+            })
+        : includeCodebase
+          ? codebaseQueryService
+              .searchCodebaseSemantically({
+                query: boostedQuery,
+                branchName,
+                topK: options.codebase?.topK ?? RETRIEVAL_CHUNK_TOP_K,
+                similarityThreshold:
+                  options.codebase?.similarityThreshold ?? CHUNK_FETCH_THRESHOLD,
+              })
+              .catch((err) => {
+                logger.warn({ err }, "unified retriever codebase search failed");
+                return [] as CodebaseSearchRow[];
+              })
+          : Promise.resolve([] as CodebaseSearchRow[]);
+
     const [ticketResults, codebaseRows] = await Promise.all([
       retriever.retrieve(boostedQuery, {
         contentTypes: ticketTypes,
@@ -77,19 +117,7 @@ export const unifiedRetriever = {
         currentJiraKey: options.currentJiraKey,
         queryComponents: options.queryComponents,
       }),
-      includeCodebase
-        ? codebaseQueryService
-            .searchCodebaseSemantically({
-              query: boostedQuery,
-              branchName,
-              topK: options.codebase?.topK ?? 10,
-              similarityThreshold: options.codebase?.similarityThreshold ?? 0.68,
-            })
-            .catch((err) => {
-              logger.warn({ err }, "unified retriever codebase search failed");
-              return [] as CodebaseSearchRow[];
-            })
-        : Promise.resolve([] as CodebaseSearchRow[]),
+      codebasePromise,
     ]);
 
     const candidates: RawCandidate[] = [

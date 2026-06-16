@@ -7,6 +7,7 @@ import {
   resolveOrganizationByGitWebhookSecret,
 } from "../organization/webhookResolver";
 import { enqueueCodebaseIndexFromPush } from "./pushWebhookHandler";
+import { listPullRequestChangedFiles } from "./webhookIndexHelpers";
 import { logger } from "../utils/logger";
 
 type PushWebhookPayload = {
@@ -24,6 +25,19 @@ type PushWebhookPayload = {
     modified?: string[];
     removed?: string[];
   }>;
+};
+
+type PullRequestPayload = {
+  action?: string;
+  number?: number;
+  pull_request?: {
+    merged?: boolean;
+    merge_commit_sha?: string | null;
+    base?: { ref?: string };
+    head?: { sha?: string };
+  };
+  repository?: { name?: string; owner?: { login?: string } };
+  sender?: { login?: string };
 };
 
 async function resolveGithubWebhookOrganization(req: Request): Promise<string | null> {
@@ -118,6 +132,50 @@ async function processGithubPush(req: Request): Promise<void> {
         modified: c.modified ?? [],
         removed: c.removed ?? [],
       })),
+    triggerSource: "push",
+  });
+}
+
+async function processGithubPullRequestMerged(req: Request): Promise<void> {
+  const payload = req.body as PullRequestPayload;
+  const pr = payload.pull_request;
+  if (!pr?.merged) return;
+
+  const repoOwner = payload.repository?.owner?.login ?? "";
+  const repoName = payload.repository?.name ?? "";
+  const branchName = pr.base?.ref ?? "main";
+  const headSha = pr.merge_commit_sha ?? pr.head?.sha ?? "";
+  const prNumber = payload.number ?? 0;
+
+  const { changedFiles, deletedFiles } = await listPullRequestChangedFiles({
+    owner: repoOwner,
+    repo: repoName,
+    pullNumber: prNumber,
+  });
+
+  await enqueueCodebaseIndexFromPush({
+    repoOwner,
+    repoName,
+    branchName,
+    headSha,
+    pushedBy: payload.sender?.login ?? "unknown",
+    changedFiles,
+    deletedFiles,
+    commits: headSha
+      ? [
+          {
+            sha: headSha,
+            message: `Merged PR #${prNumber}`,
+            author: payload.sender?.login ?? "unknown",
+            authoredAt: new Date(),
+            added: changedFiles,
+            modified: [],
+            removed: deletedFiles,
+          },
+        ]
+      : [],
+    triggerSource: "pr_merge",
+    prNumber,
   });
 }
 
@@ -129,14 +187,30 @@ export async function handleGithubWebhook(req: Request, res: Response): Promise<
   }
 
   const event = req.header("x-github-event");
-  if (event !== "push") {
-    res.status(202).json({ ok: true, ignored: event ?? "unknown" });
+
+  if (event === "push") {
+    res.status(202).json({ ok: true, queued: true });
+    void withOrganizationContext(organizationId!, () => processGithubPush(req)).catch((err) => {
+      logger.error({ err, organizationId }, "github push webhook async processing failed");
+    });
     return;
   }
 
-  res.status(202).json({ ok: true, queued: true });
+  if (event === "pull_request") {
+    const action = (req.body as PullRequestPayload).action;
+    const merged = (req.body as PullRequestPayload).pull_request?.merged;
+    if (action === "closed" && merged) {
+      res.status(202).json({ ok: true, queued: true, event: "pull_request_merged" });
+      void withOrganizationContext(organizationId!, () =>
+        processGithubPullRequestMerged(req)
+      ).catch((err) => {
+        logger.error({ err, organizationId }, "github PR merge webhook async processing failed");
+      });
+      return;
+    }
+    res.status(202).json({ ok: true, ignored: `pull_request:${action}` });
+    return;
+  }
 
-  void withOrganizationContext(organizationId!, () => processGithubPush(req)).catch((err) => {
-    logger.error({ err, organizationId }, "github webhook async processing failed");
-  });
+  res.status(202).json({ ok: true, ignored: event ?? "unknown" });
 }

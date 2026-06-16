@@ -1,6 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import { LOOKUP_JIRA_TICKET_TOOL } from "./sharedChatToolDefinitions";
 
 export const ANANTA_CHAT_TOOL_DEFINITIONS: Anthropic.Tool[] = [
+  LOOKUP_JIRA_TICKET_TOOL,
   {
     name: "search_codebase",
     description:

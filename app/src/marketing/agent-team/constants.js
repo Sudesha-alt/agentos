@@ -53,7 +53,7 @@ export const AGENTS = [
       "Engineering gate before QA",
     ],
     sectionId: "agent-ananta",
-    appPath: "/app/codebase",
+    appPath: "/app/ananta",
   },
   {
     id: "neel",

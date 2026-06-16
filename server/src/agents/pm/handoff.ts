@@ -3,6 +3,7 @@ import { resolveRepoScope } from "../../codebaseIntelligence/repoScope";
 import { githubClient } from "../../integrations/githubClient";
 import { getActivePipelineJiraCredentials } from "../../pipeline/jira/credentialsStore";
 import { ValidationError, NotFoundError } from "../../utils/errors";
+import { refineHandoffFiles } from "./handoffRefine";
 import { pmAnalysisStore } from "./store";
 import type {
   AcceptanceCriterion,
@@ -54,6 +55,14 @@ export interface TechAgentHandoff {
   prdProblemStatement: string | null;
   prdUserStoryCount: number;
   prdConfidence: number | null;
+  retrievalMeta?: {
+    files: Array<{
+      path: string;
+      score: number;
+      changeScope: string;
+      matchReasons: string[];
+    }>;
+  };
 }
 
 function jiraBrowseUrl(jiraKey: string): string | null {
@@ -140,8 +149,14 @@ export function formatAffectedFiles(files: AffectedFileEntry[]): string {
   if (!files.length) return "None identified.";
   return files
     .map((f) => {
+      const scope =
+        f.changeScope === "create_new"
+          ? "new file"
+          : f.changeScope === "modify"
+            ? "modify"
+            : null;
       const lines = [
-        `- ${f.path}`,
+        `- ${f.path}${scope ? ` (${scope})` : ""}`,
         `  Role: ${f.role}`,
         `  Risk: ${f.riskLevel}`,
         `  Why: ${f.reason}`,
@@ -208,9 +223,9 @@ export function formatCommitHistory(history: string): string {
 
 export function formatEffortBreakdown(breakdown: EffortBreakdown): string {
   return [
-    `- Investigation: ${breakdown.investigation}`,
-    `- Implementation: ${breakdown.implementation}`,
-    `- Testing: ${breakdown.testing}`,
+    `- Discovery (Virin): ${breakdown.discovery}`,
+    `- Engineering (Ananta): ${breakdown.engineering}`,
+    `- QA (Neel): ${breakdown.qa}`,
     `- Review: ${breakdown.review}`,
   ].join("\n");
 }
@@ -283,7 +298,7 @@ export function buildTechAgentHandoffFromRecord(
     tshirt: "M",
     storyPoints: "5",
     confidenceInEstimate: 0.6,
-    breakdown: { investigation: "4h", implementation: "16h", testing: "8h", review: "4h" },
+    breakdown: { discovery: "30m", engineering: "2h", qa: "45m", review: "15m" },
     riskFactors: record.codebaseAnalysis?.technicalRisks ?? [],
     assumptions: [],
     recommendedApproach: record.solutioning?.recommendedApproach ?? "",
@@ -387,18 +402,19 @@ export async function buildTechAgentHandoff(ticketId: string): Promise<TechAgent
   }
 
   const handoff = buildTechAgentHandoffFromRecord(record);
-  handoff.recentCommitHistory = await fetchRecentCommitHistory(
-    handoff.affectedFiles.map((f) => f.path),
-    handoff.branchName
+  const refined = await refineHandoffFiles(handoff, record);
+  refined.recentCommitHistory = await fetchRecentCommitHistory(
+    refined.affectedFiles.map((f) => f.path),
+    refined.branchName
   );
-  return handoff;
+  return refined;
 }
 
 export async function attachCodeSnapshots(
   handoff: TechAgentHandoff
 ): Promise<TechAgentHandoff> {
   const topFiles = handoff.affectedFiles
-    .filter((f) => f.role.toLowerCase() === "primary")
+    .filter((f) => f.role.toLowerCase() === "primary" && f.changeScope !== "create_new")
     .slice(0, 3);
 
   if (topFiles.length === 0) {
@@ -538,9 +554,9 @@ ${handoff.testingGuidance || "No specific testing guidance provided."}
 ## 7. EFFORT CONTEXT
 
 - **T-shirt size:** ${handoff.tshirt}
-- **Story points:** ${handoff.storyPoints}
+- **Pipeline complexity band:** ${handoff.storyPoints} (1=XS … 13=XL)
 
-**Hour breakdown:**
+**Agent pipeline breakdown:**
 ${formatEffortBreakdown(handoff.effortBreakdown)}
 
 ---

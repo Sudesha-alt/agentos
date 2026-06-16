@@ -21,16 +21,10 @@ import { usePipelineIntakeTickets } from "../../entities/pipeline-jira";
 import { VirinWorkspace } from "../../widgets/pm-analysis/VirinWorkspace";
 import { VirinStageStepper } from "../../widgets/pm-analysis/VirinStageStepper";
 import { AgentPageWithChat } from "../../widgets/agent-chat/AgentPageWithChat";
+import { AgentPageHeader } from "../../widgets/agent-chat/AgentPageHeader";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
 import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
 import Spinner from "../components/Spinner";
-
-const PRINCIPLES = [
-  "One question at a time",
-  "Confirm before PRD",
-  "Codebase-informed ACs",
-  "Simplest version first",
-];
 
 export default function PmAgents() {
   const [searchParams] = useSearchParams();
@@ -193,22 +187,7 @@ export default function PmAgents() {
   return (
     <AnimatedAppPage wide>
       <AgentPageWithChat domain="virin" contextKey={activeKey ?? ""}>
-      <header className="grid gap-4 pb-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-        <PageIntro
-          kicker="Product"
-          title={AGENT_NAMES.VIRIN}
-        />
-        <ul className="flex flex-wrap gap-2 lg:justify-end">
-          {PRINCIPLES.map((p) => (
-            <li
-              key={p}
-              className="rounded-full border border-app-border bg-app-surface-muted/50 px-3 py-1 text-[11px] text-app-ink-dim"
-            >
-              {p}
-            </li>
-          ))}
-        </ul>
-      </header>
+      <AgentPageHeader domain="virin" />
 
       {!companyConfigured && (
         <Panel className="border-warning/30 bg-warning/5">

@@ -143,9 +143,11 @@ Produce the following in JSON:
 
 Be specific. Do not list files that are only tangentially related.${JSON_ONLY}`;
 
-export const PROMPT_EFFORT = `You are a senior engineer and tech lead who estimates tickets for sprint planning.
+export const PROMPT_EFFORT = `You are an AgentOS pipeline effort estimator sizing tickets for the automated agent pipeline
+(Virin discovery → Ananta engineering → Neel QA), NOT human sprint planning.
 
-You have been given a ticket brief, the list of affected files with their complexity signals, and relevant git history. Your job is to produce an honest, grounded effort estimate — not an optimistic one.
+You have been given a ticket brief, the list of affected files with their complexity signals, and relevant git history.
+Produce an honest, grounded agent pipeline duration estimate — wall-clock time for agents to run discovery, implement, and QA.
 
 ---
 
@@ -162,23 +164,26 @@ CLASSIFICATION:
 Type: {{ticket_type}}
 Severity: {{severity}}
 
+Typical total pipeline ranges: XS 30–90 min, S 1–3 h, M 3–8 h, L 8–16 h, XL 16–40 h.
+Stage guidance: discovery 15–45 min, engineering 30 min–6 h, QA 15–60 min, review ~15 min.
+
 ---
 
 Produce the following in JSON:
 
 {
   "tshirt": "One of: XS / S / M / L / XL",
-  "storyPoints": "One of: 1 / 2 / 3 / 5 / 8 / 13",
+  "storyPoints": "Pipeline complexity band — one of: 1 (XS) / 2 (S) / 3 (S) / 5 (M) / 8 (L) / 13 (XL)",
   "confidenceInEstimate": 0,
   "breakdown": {
-    "investigation": "Time in hours",
-    "implementation": "Time in hours",
-    "testing": "Time in hours",
-    "review": "Time in hours"
+    "discovery": "Virin discovery time (e.g. 30m)",
+    "engineering": "Ananta engineering time (e.g. 2h)",
+    "qa": "Neel QA time (e.g. 45m)",
+    "review": "Review/handoff time (e.g. 15m)"
   },
-  "riskFactors": ["Specific risks that could blow up this estimate."],
+  "riskFactors": ["Specific risks that could extend agent pipeline runtime."],
   "assumptions": ["What must be true for this estimate to hold."],
-  "recommendedApproach": "One paragraph on safest path.",
+  "recommendedApproach": "One paragraph on safest path through the agent pipeline.",
   "estimateConfidenceNote": "If confidence is below 70, explain what information would improve it."
 }
 
@@ -202,7 +207,7 @@ RECENT RELEVANT COMMITS:
 CLASSIFICATION:
 Type: {{ticket_type}}
 Severity: {{severity}}
-Story Points: {{story_points}}
+Story Points (pipeline complexity): {{story_points}}
 
 ---
 
@@ -245,7 +250,7 @@ Reporter tier: {{reporter_tier}}
 
 EFFORT:
 T-shirt: {{tshirt}}
-Story points: {{story_points}}
+Pipeline complexity: {{story_points}}
 Risk factors: {{risk_factors}}
 
 CURRENT SPRINT CONTEXT:
@@ -334,7 +339,7 @@ Scope: {{scope_assessment}}
 Suggested first file: {{suggested_first_file}}
 
 EFFORT:
-T-shirt: {{tshirt}} · Story points: {{story_points}}
+T-shirt: {{tshirt}} · Pipeline complexity: {{story_points}}
 Recommended approach: {{recommended_approach}}
 
 IMPLEMENTATION GUIDANCE:
@@ -368,7 +373,7 @@ Return JSON matching this exact schema (GeneratedPRD):
   "jiraKey": "{{jira_key}}",
   "createdAt": "ISO-8601 timestamp",
   "priority": "string from classification severity and prioritization",
-  "effortEstimate": "string — t-shirt and story points",
+  "effortEstimate": "string — t-shirt size and agent pipeline hours (e.g. M · ~5h pipeline)",
   "problemStatement": "string — user problem and business context",
   "proposedSolution": "string — what we will build and how",
   "successDefinition": "string — what done looks like for users and the business",
@@ -432,9 +437,9 @@ Return JSON matching this exact schema (GeneratedPRD):
   ],
   "complexitySummary": {
     "score": 0,
-    "effortOptimistic": "string",
-    "effortRealistic": "string",
-    "effortPessimistic": "string",
+    "effortOptimistic": "string — agent pipeline hours (e.g. 3h)",
+    "effortRealistic": "string — agent pipeline hours (e.g. 5h)",
+    "effortPessimistic": "string — agent pipeline hours (e.g. 8h)",
     "keyComplexityDrivers": ["string"]
   },
   "prdConfidence": 0.0,
@@ -462,7 +467,7 @@ Type: {{ticket_type}}
 Severity: {{severity}}
 Recommendation: {{prioritization_recommendation}}
 Reasoning: {{recommendation_reasoning}}
-Effort: {{tshirt}} / {{story_points}} points
+Effort: {{tshirt}} / complexity {{story_points}}
 Affected components: {{affected_components}}
 Acceptance criteria summary: {{ac_summary}}
 

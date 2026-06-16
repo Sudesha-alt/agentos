@@ -40,7 +40,7 @@ const NAV_ICONS = {
   virin: IconProduct,
   ananta: IconCodebase,
   neel: IconQa,
-  "/app/codebase": IconCodebase,
+  "/app/ananta": IconCodebase,
   "/app/roadmap": IconRoadmap,
   "/app/qa": IconQa,
   "/app/costs": IconCosts,
@@ -54,9 +54,6 @@ export default function Sidebar() {
   const pipelineTab = location.pathname.startsWith("/app/pipelines")
     ? (searchParams.get("tab") ?? "active")
     : "active";
-  const codebaseTab = location.pathname.startsWith("/app/codebase")
-    ? (searchParams.get("tab") ?? "explorer")
-    : "explorer";
   const { collapsed, toggleCollapsed } = useSidebarCollapsed();
   const { isExpanded, toggle } = useNavExpanded(location.pathname);
   const { items: pipelines } = usePipelineList(undefined, { pollMs: 12_000 });
@@ -70,7 +67,7 @@ export default function Sidebar() {
       );
     }
     if (agent.id === "ananta") {
-      return location.pathname.startsWith("/app/codebase");
+      return location.pathname.startsWith("/app/ananta");
     }
     if (agent.id === "neel") {
       return location.pathname.startsWith("/app/qa");
@@ -79,20 +76,14 @@ export default function Sidebar() {
   }
 
   function subIsActive(sub, agentId) {
-    if (sub.to.includes("?tab=")) {
-      const tab = new URL(sub.to, "http://local").searchParams.get("tab");
-      if (agentId === "ananta") {
-        return location.pathname === "/app/codebase" && codebaseTab === tab;
-      }
-    }
     if (sub.to === "/app/roadmap") {
       return location.pathname === "/app/roadmap";
     }
     if (sub.to === "/app/pm-agents") {
       return location.pathname === "/app/pm-agents";
     }
-    if (sub.to === "/app/codebase") {
-      return location.pathname === "/app/codebase" && codebaseTab !== "map";
+    if (sub.to === "/app/ananta") {
+      return location.pathname === "/app/ananta";
     }
     if (sub.to === "/app/qa") {
       return location.pathname === "/app/qa";

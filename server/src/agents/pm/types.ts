@@ -72,6 +72,7 @@ export interface AffectedFileEntry {
   role: string;
   confidence: number;
   riskLevel: string;
+  changeScope?: "modify" | "create_new";
 }
 
 /** @deprecated Legacy — synced from Virin codebase analysis */
@@ -84,9 +85,9 @@ export interface CodebaseImpactOutput {
 }
 
 export interface EffortBreakdown {
-  investigation: string;
-  implementation: string;
-  testing: string;
+  discovery: string;
+  engineering: string;
+  qa: string;
   review: string;
 }
 

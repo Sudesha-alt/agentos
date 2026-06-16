@@ -6,7 +6,7 @@ function autoExpandedFromPath(pathname) {
   if (pathname.startsWith("/app/pm-agents") || pathname.startsWith("/app/roadmap")) {
     ids.push("virin");
   }
-  if (pathname.startsWith("/app/codebase")) ids.push("ananta");
+  if (pathname.startsWith("/app/ananta")) ids.push("ananta");
   if (pathname.startsWith("/app/qa")) ids.push("neel");
   return ids;
 }

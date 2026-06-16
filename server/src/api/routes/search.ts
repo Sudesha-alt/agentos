@@ -113,6 +113,7 @@ router.get("/", async (req, res, next) => {
       let codebase: Awaited<ReturnType<typeof searchCodebase>> = {
         query,
         files: [],
+        workFiles: [],
         patterns: [],
         results: [],
       };

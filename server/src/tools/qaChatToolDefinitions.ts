@@ -1,6 +1,8 @@
 import type Anthropic from "@anthropic-ai/sdk";
+import { LOOKUP_JIRA_TICKET_TOOL } from "./sharedChatToolDefinitions";
 
 export const QA_CHAT_TOOL_DEFINITIONS: Anthropic.Tool[] = [
+  LOOKUP_JIRA_TICKET_TOOL,
   {
     name: "read_implementation_files",
     description: "Read implementation source files from the repo (read-only).",

@@ -281,7 +281,7 @@ const MOCK_COMPLEXITY = {
     uxComplexity: 4,
     testingComplexity: 6,
   },
-  effortEstimate: { optimistic: 6, realistic: 9, pessimistic: 14, unit: "days" },
+  effortEstimate: { optimistic: 4, realistic: 6, pessimistic: 10, unit: "hours" },
   complexityDrivers: [
     {
       driver: "Streaming large datasets to object storage",
@@ -290,7 +290,7 @@ const MOCK_COMPLEXITY = {
     },
   ],
   estimateRisks: [
-    { risk: "PII policy change mid-sprint", probability: "medium", impactDays: 3 },
+    { risk: "PII policy change mid-pipeline", probability: "medium", impactHours: 2 },
   ],
   shouldBreakDown: false,
   breakdownSuggestion: null,
@@ -310,7 +310,7 @@ const MOCK_GENERATED_PRD = {
   jiraKey: "PLT-1271",
   createdAt: minutes(13.7),
   priority: "High",
-  effortEstimate: "9 days (realistic)",
+  effortEstimate: "M · ~6h agent pipeline (realistic)",
   problemStatement:
     "Enterprise admins cannot extract immutable audit trails of pipeline activity for SOC2 attestation without screen-scraping the dashboard.",
   proposedSolution:
@@ -388,9 +388,9 @@ const MOCK_GENERATED_PRD = {
   ],
   complexitySummary: {
     score: 6,
-    effortOptimistic: "6 days",
-    effortRealistic: "9 days",
-    effortPessimistic: "14 days",
+    effortOptimistic: "4h",
+    effortRealistic: "6h",
+    effortPessimistic: "10h",
     keyComplexityDrivers: ["Streaming to S3", "RBAC on new endpoints"],
   },
   prdConfidence: 0.62,
@@ -634,7 +634,7 @@ const MOCK_AUDIT = [
   },
   {
     event: "COMPLEXITY_SCORED",
-    metadata: { score: 6, realisticDays: 9, priority: "high" },
+    metadata: { score: 6, realisticHours: 6, priority: "high" },
     timestamp: minutes(13.7),
   },
   {
@@ -2282,12 +2282,14 @@ export const mockApi = {
   async startPmPipeline(ticketId) {
     markUsed();
     await delay(180);
+    const key = String(ticketId).toUpperCase();
     return {
-      jiraKey: String(ticketId).toUpperCase(),
+      jiraKey: key,
+      pipelineId: "pl_01J7A1",
       status: "started",
       message: "Coding pipeline enqueued from PM handoff (mock)",
-      intake: { enqueued: 1, skipped: 0, sourceKey: String(ticketId).toUpperCase() },
-      queue: { activeJiraKey: null, queuedJiraKeys: [String(ticketId).toUpperCase()] },
+      intake: { enqueued: 1, skipped: 0, sourceKey: key },
+      queue: { activeJiraKey: null, queuedJiraKeys: [key] },
     };
   },
   async runPmRetrospective(ticketId) {
@@ -2389,7 +2391,7 @@ const MOCK_PM_ANALYSIS_FULL = {
     tshirt: "M",
     storyPoints: "5",
     confidenceInEstimate: 72,
-    breakdown: { investigation: "4h", implementation: "12h", testing: "6h", review: "2h" },
+    breakdown: { discovery: "30m", engineering: "3h", qa: "45m", review: "15m" },
     riskFactors: ["Low test coverage on billing limits module"],
     assumptions: ["Alerting channel API already exists"],
     recommendedApproach: "Add limit model first, then wire UI and webhook alerts.",
@@ -2429,8 +2431,8 @@ const MOCK_PM_ANALYSIS_FULL = {
   artifacts: {
     engineeringPing: "PLT-1287 — workspace billing limits for enterprise admins.\nLikely files: server/src/billing/limits.ts, BillingPanel.jsx\nPriority: NOW (high revenue risk)\nGotcha: confirm hard vs soft limit before starting",
     stakeholderUpdate: "We've reviewed your billing limits request and understand the need to cap workspace spend. Engineering is scoping the change now. We'll share a timeline within this sprint.",
-    pmOneLiner: "Feature — Workspace billing limits for enterprise — Revenue risk, 3 active accounts — M / 5 pts — NOW",
-    sprintPlanningNote: "Enterprise CS escalated billing caps. High alignment with churn OKR. M effort, main risk is billing module test coverage. Done = limits enforced + admin UI + alerts.",
+    pmOneLiner: "Feature — Workspace billing limits for enterprise — Revenue risk, 3 active accounts — M / complexity 5 — NOW",
+    sprintPlanningNote: "Enterprise CS escalated billing caps. High alignment with churn OKR. ~4.5h agent pipeline estimate; main risk is billing module test coverage. Done = limits enforced + admin UI + alerts.",
   },
   retrospective: null,
   stageMeta: [],
