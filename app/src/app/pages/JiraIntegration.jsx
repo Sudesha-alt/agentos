@@ -49,7 +49,6 @@ export default function JiraIntegration({ embedded = false }) {
     return (
       <EmptyState
         title="Cannot reach API"
-        body="Set VITE_API_URL on Vercel to your Render URL and redeploy."
       />
     );
   }
@@ -262,7 +261,6 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
       embedded={embedded}
       kicker="Jira"
       title="Jira pipeline"
-      body="Connect Jira once to sync tickets, pick the AI Worker column for pipeline intake, and browse tickets from AgentOS."
     >
 
       {statusMessage ? (
@@ -435,10 +433,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
 
       {connected ? (
         <Panel>
-          <PanelHeader
-            title="Pipeline settings"
-            subtitle="Board and project keys are required for sync and AI Worker column mapping."
-          />
+          <PanelHeader title="Pipeline settings" />
           <form
             className="grid gap-4 p-4 md:grid-cols-2 sm:px-6"
             onSubmit={async (e) => {
@@ -496,10 +491,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
 
       {connected ? (
         <Panel>
-          <PanelHeader
-            title="AI Worker intake column"
-            subtitle="Tickets in this column are picked up automatically when moved in Jira."
-          />
+          <PanelHeader title="AI Worker intake column" />
           <form className="flex flex-wrap items-end gap-3 p-4 sm:px-6" onSubmit={handleSaveIntakeColumn}>
             <label className="block min-w-[240px] flex-1 text-sm">
               <span className="type-kicker">Board column</span>
@@ -548,15 +540,11 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
 
       {connected && intakeConfigured ? (
         <Panel>
-          <PanelHeader
-            title="Tickets in AI Worker"
-            subtitle="Move a Story here in Jira to start discovery → PRD → engineering → QA."
-          />
+          <PanelHeader title="Tickets in AI Worker" />
           {intakeLoading && !intakeItems.length ? <Spinner /> : null}
           {!intakeLoading && !intakeItems.length ? (
             <EmptyState
               title="No tickets in AI Worker"
-              body="Drag a Story into the AI Worker column on your Jira board."
             />
           ) : (
             <ul className="divide-y divide-app-border">

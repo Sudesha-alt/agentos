@@ -7,8 +7,7 @@ export default function RecentCompletionsPanel({ items, loading }) {
     <Panel className="h-full">
       <PanelHeader
         kicker="Momentum"
-        title="Recent completions"
-        body="Last five pipelines that finished successfully."
+        title="Recent completions"
       />
       <ul className="divide-y divide-app-border">
         {loading && !items?.length ? (

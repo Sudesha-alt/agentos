@@ -21,8 +21,7 @@ export default function CommandCenterWidget() {
         <Panel>
           <PanelHeader
             kicker="Live"
-            title="What is happening right now"
-            body="Progress, pauses, completions, and failures as they occur."
+            title="What is happening right now"
           />
           <div className="max-h-[420px] overflow-y-auto px-5 py-4 sm:px-6">
             <LiveActivityFeed events={eventsData?.events} loading={eventsLoading} />
@@ -32,8 +31,7 @@ export default function CommandCenterWidget() {
         <Panel>
           <PanelHeader
             kicker="Trend"
-            title="Cycle time per feature"
-            body="A line trending down means the pipeline is compressing delivery time."
+            title="Cycle time per feature"
           />
           <div className="px-5 py-6 sm:px-6">
             <CycleTrendChart points={trendData?.points ?? []} />

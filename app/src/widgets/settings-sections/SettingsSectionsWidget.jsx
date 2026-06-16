@@ -26,18 +26,15 @@ export default function SettingsSectionsWidget({
             <PanelHeader
               kicker="Integrations"
               title="Integrations hub"
-              body="Connect external services for ticket intake and repository access."
             />
             <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
               <IntegrationCard
                 to="/app/settings/integrations/jira"
                 title="Jira integration"
-                description="AI Worker queue, board webhooks, column mapping, and pipeline ingress from Jira tickets."
               />
               <IntegrationCard
                 to="/app/settings/integrations/github"
                 title="GitHub integration"
-                description="GitHub App or PAT for codebase indexing, branch push, pull requests, and QA sandboxes."
               />
             </div>
           </Panel>
@@ -54,7 +51,6 @@ export default function SettingsSectionsWidget({
             <PanelHeader
               kicker="Integration"
               title="Jira"
-              body="Use the Jira integration page for credentials — this legacy form is deprecated."
             />
             <div className="px-5 py-4 sm:px-6">
               <Link
@@ -77,7 +73,6 @@ export default function SettingsSectionsWidget({
           <PanelHeader
             kicker="Quality"
             title="Canary QA"
-            body="Live-app adversarial probes run against these URLs after pipeline QA and on a schedule."
           />
           <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
             <Field
@@ -112,7 +107,6 @@ export default function SettingsSectionsWidget({
           <PanelHeader
             kicker="Reasoning"
             title="Model and gate thresholds"
-            body="These settings tune how strict each validation checkpoint should be before human intervention."
           />
           <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
             <Field

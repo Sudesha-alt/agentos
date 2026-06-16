@@ -140,8 +140,7 @@ export default function TicketActivityWidget({
     <Panel>
       <PanelHeader
         kicker="Interactive trace"
-        title="Ticket live activity"
-        body="Track where the ticket is, inspect each action, and review code edits when the agent changes files."
+        title="Ticket live activity"
       />
 
       <div className="space-y-4 px-5 py-4 sm:px-6">

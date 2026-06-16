@@ -91,8 +91,7 @@ export default function GitHubIntegrationOverviewWidget({ embedded = false }) {
     <Panel>
       <PanelHeader
         kicker="GitHub"
-        title="Repository connection"
-        body="Codebase indexing, branch push, pull requests, and QA sandbox clones."
+        title="Repository connection"
         right={
           <LabelPill
             label={

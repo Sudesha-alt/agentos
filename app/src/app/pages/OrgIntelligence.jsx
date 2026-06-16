@@ -29,8 +29,7 @@ export default function OrgIntelligence() {
     <AnimatedAppPage wide>
       <PageIntro
         kicker="Learning"
-        title="Organizational intelligence"
-        body="Signals captured from product builds, engineering writes, and QA failures — fed back into discovery and agent context."
+        title="Organizational intelligence"
       />
 
       <div className="flex flex-wrap gap-2">

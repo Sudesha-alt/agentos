@@ -24,7 +24,6 @@ export default function CostIntelligence() {
       <PageIntro
         kicker="Finance"
         title="Cost per feature and ROI"
-        body="Compare real workspace spend against an estimated savings model by plan tier."
       />
 
       <div className="flex flex-wrap gap-1.5">
@@ -41,7 +40,6 @@ export default function CostIntelligence() {
           <PanelHeader
             kicker="ROI"
             title="Annual savings calculator"
-            body="Pre-filled from your selected plan. Tune team size, run volume, and rework to model payback."
           />
           <RoiCalculatorPanel initialPlanId={planParam} />
         </Panel>
@@ -52,7 +50,6 @@ export default function CostIntelligence() {
               <PanelHeader
                 kicker="Actual"
                 title="No pipeline cost data yet"
-                body="Run pipelines through AgentOS to populate spend charts and per-feature ROI. Use the Estimated tab to model savings before you scale."
               />
             </Panel>
           ) : null}

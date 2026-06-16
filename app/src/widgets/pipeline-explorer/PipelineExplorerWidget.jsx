@@ -116,7 +116,7 @@ export default function PipelineExplorerWidget() {
           {loading && filtered.length === 0 ? (
             <Spinner label="Loading pipelines" />
           ) : filtered.length === 0 ? (
-            <EmptyState title="No pipelines" body="Nothing in this queue right now." />
+            <EmptyState title="No pipelines" />
           ) : (
             filtered.map((pipeline) => (
               <motion.div key={pipeline.id} variants={motionSafe(sectionFadeUp)}>

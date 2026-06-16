@@ -97,8 +97,7 @@ export default function CodebaseTourExperience({ branch = "main" }) {
       <Panel>
         <PanelHeader
           kicker="Guided tour"
-          title="Learn this codebase step by step"
-          body="Walk districts on the map with narration, interactive checkpoints, and a cheat sheet for quick navigation."
+          title="Learn this codebase step by step"
         />
         <div className="mt-4 flex flex-wrap gap-2">
           <button

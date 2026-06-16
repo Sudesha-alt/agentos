@@ -182,7 +182,7 @@ export default function CodebaseKnowledgePanel({ branch = "main" }) {
   if (error && !data) {
     return (
       <Panel>
-        <PanelHeader kicker="Knowledge" title="Unavailable" body={error.message} />
+        <PanelHeader kicker="Knowledge" title="Unavailable" subtitle={error.message} />
       </Panel>
     );
   }
@@ -191,8 +191,7 @@ export default function CodebaseKnowledgePanel({ branch = "main" }) {
     <Panel>
       <PanelHeader
         kicker="Knowledge base"
-        title="Living documentation"
-        body="AI-generated architecture, component guides, and task runbooks from indexed intelligence — not raw README scraping."
+        title="Living documentation"
         right={
           <button
             type="button"

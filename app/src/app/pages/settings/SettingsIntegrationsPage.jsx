@@ -2,8 +2,8 @@ import { Link } from "react-router-dom";
 import LabelPill from "../../../app/components/LabelPill";
 import { useIntegrationsStatus } from "../../../shared/hooks/useIntegrationsStatus";
 import IntegrationsOverviewWidget from "../../../widgets/integrations-overview/IntegrationsOverviewWidget";
-import { Panel, PanelHeader } from "../../../shared/ui/Panel";
-
+import { SettingsSection } from "../../../shared/ui/SettingsForm";
+import { TitleWithInfo } from "../../../shared/ui/InfoTip";
 const STATUS_META = {
   connected: { label: "Connected", tone: "success", cta: "Configure" },
   setup_incomplete: { label: "Select repository", tone: "warning", cta: "Finish setup" },
@@ -42,12 +42,10 @@ function IntegrationCard({ integration }) {
         <IntegrationIcon integration={integration} />
         <LabelPill label={meta.label} tone={meta.tone} />
       </div>
-      <h3 className="mt-4 text-[15px] font-medium text-app-ink">{integration.name}</h3>
-      <p className="mt-2 flex-1 text-[13px] leading-relaxed text-app-ink-dim">
-        {integration.description}
-      </p>
-      <p className="mt-4 text-[11px] font-medium text-indigo transition group-hover:text-indigo/80">
-        {meta.cta} →
+      <h3 className="mt-4 flex items-center gap-1.5 text-[15px] font-medium text-app-ink">
+        <TitleWithInfo info={integration.description}>{integration.name}</TitleWithInfo>
+      </h3>
+      <p className="mt-4 text-[11px] font-medium text-indigo transition group-hover:text-indigo/80">        {meta.cta} →
       </p>
     </Link>
   );
@@ -57,28 +55,24 @@ export default function SettingsIntegrationsPage() {
   const { grouped } = useIntegrationsStatus();
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-2">
       <IntegrationsOverviewWidget />
 
-      <Panel>
-        <PanelHeader
-          kicker="Catalog"
-          title="Integrations"
-          body="Connect source control, issue trackers, databases, and observability tools to power your agent pipeline."
-        />
-        <div className="space-y-8 p-5 sm:p-6">
-          {grouped.map((section) => (
-            <section key={section.id}>
-              <h3 className="type-kicker">{section.label}</h3>
-              <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {section.items.map((integration) => (
-                  <IntegrationCard key={integration.id} integration={integration} />
-                ))}
-              </div>
-            </section>
-          ))}
-        </div>
-      </Panel>
+      <SettingsSection
+        title="Integrations"
+
+      >
+        {grouped.map((section) => (
+          <div key={section.id} className="border-t border-app-border py-6 first:border-t-0 first:pt-0">
+            <h3 className="text-xs font-semibold text-app-ink-dim">{section.label}</h3>
+            <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {section.items.map((integration) => (
+                <IntegrationCard key={integration.id} integration={integration} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </SettingsSection>
     </div>
   );
 }

@@ -96,8 +96,7 @@ export default function Override() {
         </Link>
         <PageIntro
           kicker="Override"
-          title="Correct the agent output and resume the pipeline."
-          body="Human intervention stays explicit: review the source artifact, make a bounded correction, and re-queue the flow with attribution."
+          title="Correct the agent output and resume the pipeline."
           right={<StatusPill status={item?.status} />}
         />
       </header>

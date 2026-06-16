@@ -44,10 +44,7 @@ export default function JiraTicketBrowser({ connected }) {
 
   return (
     <Panel>
-      <PanelHeader
-        title="Synced tickets"
-        subtitle="Browse all Jira tickets synced into AgentOS."
-      />
+      <PanelHeader title="Synced tickets" />
       <div className="border-b border-app-border px-5 py-3 sm:px-6">
         <div className="flex flex-wrap gap-3">
           <input
@@ -71,7 +68,6 @@ export default function JiraTicketBrowser({ connected }) {
       {!loading && !items.length ? (
         <EmptyState
           title="No synced tickets yet"
-          body="Run a full sync after connecting Jira to import all project tickets."
         />
       ) : (
         <div className="overflow-x-auto">

@@ -36,7 +36,6 @@ export default function JiraSearch() {
       <PageIntro
         kicker="Jira intake"
         title="Board keyword search"
-        body="Search the entire Jira board for keywords in summaries and descriptions. Results are grouped by board column and fetched live from Jira via the intake service."
         right={
           <Link
             to="/app/settings/integrations/jira"

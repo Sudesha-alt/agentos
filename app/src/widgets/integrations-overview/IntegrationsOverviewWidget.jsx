@@ -8,8 +8,7 @@ export default function IntegrationsOverviewWidget() {
     <Panel>
       <PanelHeader
         kicker="Integrations"
-        title="Connected services"
-        body="Jira intake, GitHub repository access, and codebase layer readiness at a glance."
+        title="Connected services"
       />
       <div className="flex w-full flex-col gap-4 p-5 sm:p-6 lg:flex-row lg:items-stretch">
         <div className="min-w-0 flex-1">

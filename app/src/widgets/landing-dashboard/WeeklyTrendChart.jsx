@@ -17,8 +17,7 @@ export default function WeeklyTrendChart({ trend, loading }) {
       <Panel>
         <PanelHeader
           kicker="Trend"
-          title="Weekly throughput"
-          body="Features completed vs human interventions — last 14 days."
+          title="Weekly throughput"
         />
         <p className="px-6 pb-6 text-sm text-app-ink-dim">No trend data yet.</p>
       </Panel>
@@ -48,8 +47,7 @@ export default function WeeklyTrendChart({ trend, loading }) {
     <Panel>
       <PanelHeader
         kicker="Trend"
-        title="Weekly throughput"
-        body="Green up and amber down means agents are improving and humans are interrupted less."
+        title="Weekly throughput"
       />
       <div className="px-5 py-4 sm:px-6">
         <div className="flex gap-4 text-xs text-app-ink-dim">

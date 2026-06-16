@@ -6,8 +6,7 @@ export default function AgentHealthPanel({ agents, loading }) {
     <Panel className="h-full">
       <PanelHeader
         kicker="Calibration"
-        title="Agent health"
-        body="Leading indicators before review queue pile-ups."
+        title="Agent health"
       />
       <div className="grid gap-3 px-5 py-4 sm:grid-cols-1 sm:px-6">
         {loading && !agents?.length

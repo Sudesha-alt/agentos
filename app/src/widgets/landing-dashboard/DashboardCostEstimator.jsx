@@ -25,8 +25,7 @@ export default function DashboardCostEstimator({ variant = "dashboard" }) {
       {!isMarketing ? (
         <PanelHeader
           kicker="Pricing"
-          title="Estimate your monthly cost"
-          body="Move the slider to see how pricing changes as you grow."
+          title="Estimate your monthly cost"
         />
       ) : null}
 

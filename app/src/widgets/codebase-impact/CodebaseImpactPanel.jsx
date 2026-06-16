@@ -94,11 +94,7 @@ export default function CodebaseImpactPanel({ branch = "main" }) {
   return (
     <div className="space-y-6">
       <Panel>
-        <PanelHeader
-          kicker="Impact analyser"
-          title="Change risk before you ship"
-          body="Describe a planned change and select files — we trace import dependencies and assess blast radius."
-        />
+        <PanelHeader kicker="Impact analyser" title="Change risk before you ship" />
         <form onSubmit={handleAnalyze} className="space-y-4 px-5 py-5 sm:px-6">
           <div>
             <label className="font-mono text-[10px] uppercase tracking-[0.12em] text-ink-mute">
@@ -145,7 +141,7 @@ export default function CodebaseImpactPanel({ branch = "main" }) {
           <PanelHeader
             kicker="Impact report"
             title={`Risk: ${report.risk.level}`}
-            body={report.risk.reasoning}
+            subtitle={report.risk.reasoning}
             right={
               <button
                 type="button"

@@ -1,4 +1,5 @@
 import { formatScoreBand } from "../../shared/lib/formatScoreBand";
+import { TitleWithInfo } from "../../shared/ui/InfoTip";
 
 export default function DiscoveryOverviewSection({ parsed, scores }) {
   const analysis = parsed.ticketAnalysis;
@@ -24,17 +25,17 @@ export default function DiscoveryOverviewSection({ parsed, scores }) {
           <Stat
             label="Understanding score"
             value={formatScoreBand(scores.bands?.understanding)}
-            hint="ambiguities + clarity + personas"
+            info="Ambiguities, clarity, and personas."
           />
           <Stat
             label="PRD quality score"
             value={formatScoreBand(scores.bands?.prdQuality)}
-            hint="gaps + NFR + stories (70% gate)"
+            info="Gaps, NFRs, and stories (70% gate)."
           />
           <Stat
             label="Historical signal"
             value={formatScoreBand(scores.bands?.historicalSignal)}
-            hint="coverage-led RAG"
+            info="Coverage-led RAG from past tickets."
           />
           <Stat
             label="Complexity score"
@@ -43,7 +44,7 @@ export default function DiscoveryOverviewSection({ parsed, scores }) {
                 ? `${complexityDisplay}/10`
                 : "—"
             }
-            hint="from scope + gaps"
+            info="From scope size and gaps."
           />
         </div>
       ) : (
@@ -104,20 +105,17 @@ export default function DiscoveryOverviewSection({ parsed, scores }) {
   );
 }
 
-function Stat({ label, value, hint, highlight }) {
+function Stat({ label, value, info, highlight }) {
   return (
     <div
       className={`rounded-2xl border px-3 py-3 ${
         highlight ? "border-warning/40 bg-warning/5" : "border-hairline bg-canvas/35"
       }`}
     >
-      <p className="editorial-kicker text-ink-mute">{label}</p>
+      <p className="editorial-kicker text-ink-mute">
+        <TitleWithInfo info={info}>{label}</TitleWithInfo>
+      </p>
       <p className="mt-2 font-mono text-[14px] capitalize text-ink">{value}</p>
-      {hint ? (
-        <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.12em] text-ink-mute">
-          {hint}
-        </p>
-      ) : null}
     </div>
   );
 }

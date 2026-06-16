@@ -80,7 +80,6 @@ export default function PipelineTableWidget({
         ) : items.length === 0 ? (
           <EmptyState
             title="No pipelines match this filter"
-            body="Create a Jira ticket or relax the filter to see runs."
           />
         ) : (
           <ul>

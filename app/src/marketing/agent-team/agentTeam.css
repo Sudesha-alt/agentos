@@ -1,6 +1,8 @@
 @import url("https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;500&family=Poppins:wght@500;600;700&display=swap");
 
 .agent-team {
+  position: relative;
+  z-index: 2;
   --cream: #f7f3ec;
   --cream-light: #faf7f0;
   --charcoal: #2b2d33;
@@ -17,23 +19,20 @@
   --card-shadow: 0 24px 64px -24px rgba(43, 45, 51, 0.12), 0 8px 24px -12px rgba(43, 45, 51, 0.08);
   font-family: "DM Sans", ui-sans-serif, system-ui, sans-serif;
   color: var(--charcoal);
-  background: linear-gradient(180deg, var(--cream) 0%, var(--cream-light) 100%);
-}
-
-.agent-team .at-grid-bg {
   background-color: var(--cream);
   background-image:
     linear-gradient(180deg, var(--cream) 0%, var(--cream-light) 100%),
-    linear-gradient(rgba(43, 45, 51, 0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(43, 45, 51, 0.05) 1px, transparent 1px);
+    linear-gradient(rgba(43, 45, 51, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(43, 45, 51, 0.08) 1px, transparent 1px);
   background-size: 100% 100%, 28px 28px, 28px 28px;
-  mask-image: linear-gradient(
-    180deg,
-    transparent 0%,
-    rgba(0, 0, 0, 0.15) 10vh,
-    black 20vh,
-    black 100%
-  );
+}
+
+.agent-team .at-grid-bg {
+  background: transparent;
+  background-image:
+    linear-gradient(rgba(43, 45, 51, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(43, 45, 51, 0.08) 1px, transparent 1px);
+  background-size: 28px 28px, 28px 28px;
 }
 
 .agent-team .at-chapter-row {

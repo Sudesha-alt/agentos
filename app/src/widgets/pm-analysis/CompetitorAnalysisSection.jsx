@@ -25,8 +25,7 @@ export function CompetitorAnalysisSection({ competitorAnalysis, expanded = false
     <Panel>
       <PanelHeader
         kicker="Stage 3"
-        title="Competitor analysis"
-        body="How named competitors approach the same problem — informs solution direction and PRD."
+        title="Competitor analysis"
         right={<DecisionBadge decision={decision} />}
       />
       <div className="space-y-5 px-5 py-5 sm:px-6">

@@ -1993,6 +1993,57 @@ export const mockApi = {
     await delay(100);
     return { items: MOCK_AUDIT };
   },
+  async globalSearch(query, branch = "main") {
+    markUsed();
+    await delay(160);
+    const q = String(query ?? "").trim().toLowerCase();
+    if (!q) {
+      return { query: "", tickets: [], codebase: { files: [], patterns: [], results: [] }, audit: [] };
+    }
+
+    const tickets = MOCK_PIPELINES.filter((pipeline) => {
+      const key = pipeline.ticket?.jiraKey?.toLowerCase() ?? "";
+      const summary = pipeline.ticket?.normalizedData?.summary?.toLowerCase() ?? "";
+      return key.includes(q) || summary.includes(q);
+    })
+      .slice(0, 8)
+      .map((pipeline) => ({
+        id: pipeline.id,
+        jiraKey: pipeline.ticket?.jiraKey ?? pipeline.id,
+        summary: pipeline.ticket?.normalizedData?.summary ?? "Untitled ticket",
+        status: pipeline.status,
+        currentStage: pipeline.currentStage,
+      }));
+
+    const audit = MOCK_AUDIT.filter((entry) => {
+      const event = entry.event?.toLowerCase() ?? "";
+      const meta = JSON.stringify(entry.metadata ?? {}).toLowerCase();
+      return event.includes(q) || meta.includes(q);
+    })
+      .slice(0, 8)
+      .map((entry, index) => ({
+        id: `audit-${index}`,
+        event: entry.event,
+        timestamp: entry.timestamp,
+        pipelineId: MOCK_PIPELINES[0]?.id ?? "pl_01J7H2",
+        jiraKey: entry.metadata?.jiraKey ?? MOCK_PIPELINES[0]?.ticket?.jiraKey ?? "PROD-1863",
+        summary: MOCK_PIPELINES[0]?.ticket?.normalizedData?.summary ?? "Pipeline activity",
+        metadata: entry.metadata ?? {},
+      }));
+
+    const codebase = await mockApi.codebaseSearch(query, branch);
+
+    return {
+      query,
+      tickets,
+      codebase: {
+        files: codebase.files ?? [],
+        patterns: codebase.patterns ?? [],
+        results: codebase.results ?? codebase.files ?? [],
+      },
+      audit,
+    };
+  },
   async runPipeline(ticketId) {
     markUsed();
     await delay(140);

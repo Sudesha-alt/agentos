@@ -82,8 +82,7 @@ export default function PrdViewer() {
           </Link>
           <PageIntro
             kicker={item?.jiraKey ?? "PRD"}
-            title={prd?.title ?? item?.summary ?? "Product requirements"}
-            body="Document-style PRD with inline editing and gate feedback."
+            title={prd?.title ?? item?.summary ?? "Product requirements"}
           />
 
           <Panel>

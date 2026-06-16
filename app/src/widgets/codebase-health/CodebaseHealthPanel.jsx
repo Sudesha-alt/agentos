@@ -1,13 +1,15 @@
 import { useCodebaseHealth, useCodebaseHealthTimeline } from "../../entities/codebase";
 import Spinner from "../../app/components/Spinner";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
+import { TitleWithInfo } from "../../shared/ui/InfoTip";
 
-function MetricCard({ label, value, hint }) {
+function MetricCard({ label, value, info }) {
   return (
     <div className="rounded-lg border border-hairline bg-surface/40 px-4 py-3">
-      <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink-mute">{label}</p>
+      <p className="font-mono text-[9px] uppercase tracking-[0.14em] text-ink-mute">
+        <TitleWithInfo info={info}>{label}</TitleWithInfo>
+      </p>
       <p className="mt-2 font-display text-2xl text-ink">{value}</p>
-      {hint ? <p className="mt-1 text-[12px] text-ink-dim">{hint}</p> : null}
     </div>
   );
 }
@@ -60,7 +62,7 @@ export default function CodebaseHealthPanel({ branch = "main" }) {
   if (error && !health) {
     return (
       <Panel>
-        <PanelHeader kicker="Health" title="Health unavailable" body={error.message} />
+        <PanelHeader kicker="Health" title="Health unavailable" subtitle={error.message} />
       </Panel>
     );
   }
@@ -73,19 +75,18 @@ export default function CodebaseHealthPanel({ branch = "main" }) {
         <PanelHeader
           kicker="Health dashboard"
           title="Codebase quality & activity"
-          body="Coverage and complexity estimates from indexed files — no raw repo scan."
         />
         <div className="grid gap-4 px-5 py-5 sm:grid-cols-2 lg:grid-cols-3 sm:px-6">
           <MetricCard label="Avg coverage" value={`${t?.avgCoverage ?? 0}%`} />
-          <MetricCard label="Zero coverage" value={`${t?.zeroCoveragePct ?? 0}%`} hint="of indexed files" />
+          <MetricCard label="Zero coverage" value={`${t?.zeroCoveragePct ?? 0}%`} info="of indexed files" />
           <MetricCard label="Avg complexity" value={t?.avgComplexity ?? 0} />
-          <MetricCard label="High complexity" value={t?.highComplexityCount ?? 0} hint="refactor candidates" />
+          <MetricCard label="High complexity" value={t?.highComplexityCount ?? 0} info="refactor candidates" />
           <MetricCard
             label="Modified (7d)"
             value={t?.modifiedLast7Days?.total ?? 0}
-            hint={`${t?.modifiedLast7Days?.agent ?? 0} agent · ${t?.modifiedLast7Days?.human ?? 0} human`}
+            info={`${t?.modifiedLast7Days?.agent ?? 0} agent · ${t?.modifiedLast7Days?.human ?? 0} human`}
           />
-          <MetricCard label="Tech debt score" value={t?.technicalDebtScore ?? 0} hint="lower is better" />
+          <MetricCard label="Tech debt score" value={t?.technicalDebtScore ?? 0} info="lower is better" />
         </div>
       </Panel>
 
@@ -113,7 +114,6 @@ export default function CodebaseHealthPanel({ branch = "main" }) {
         <PanelHeader
           kicker="Activity timeline"
           title="30-day commit activity"
-          body="Stacked bars: agent (indigo) vs human (amber) file touches per day."
         />
         <div className="px-5 pb-5 sm:px-6">
           <TimelineChart days={timeline?.days} />

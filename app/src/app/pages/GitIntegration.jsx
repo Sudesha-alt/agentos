@@ -266,7 +266,6 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
             ? "Finish GitHub setup"
             : "Connect GitHub"
       }
-      body="Connect a repository so Ananta can index your codebase and the pipeline can read implementation context."
     >
       {(connected || needsRepoPick) && !embedded ? (
         <div className="flex flex-wrap items-center justify-end gap-2">
@@ -301,7 +300,7 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
           <PanelHeader
             kicker="Server config"
             title="DATABASE_URL is not set on the API"
-            body="GitHub installs cannot be saved without Postgres. Set DATABASE_URL on Render to your Supabase connection string, redeploy, then connect GitHub again."
+            subtitle="GitHub installs cannot be saved without Postgres. Set DATABASE_URL on Render to your Supabase connection string, redeploy, then connect GitHub again."
           />
         </Panel>
       ) : null}
@@ -328,12 +327,17 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
             <PanelHeader
               kicker={connected ? "Connected" : installPendingFinish ? "Installed" : "Step 1"}
               title="GitHub App"
-              body={
+              info={
+                githubAppEnabled && !installPendingFinish
+                  ? "Permissions: contents & pull requests (read/write), metadata, webhooks, actions (read). Webhooks are delivered to your API automatically."
+                  : undefined
+              }
+              subtitle={
                 installPendingFinish
                   ? "GitHub App installed — select a repository to finish connecting AgentOS to your codebase."
-                  : githubAppEnabled
-                    ? "Permissions: contents & pull requests (read/write), metadata, webhooks, actions (read). Webhooks are delivered to your API automatically."
-                    : "GitHub App env vars are not set on the server — use manual token setup below or configure GITHUB_APP_* on Render."
+                  : !githubAppEnabled
+                    ? "GitHub App env vars are not set on the server — use manual token setup below or configure GITHUB_APP_* on Render."
+                    : undefined
               }
             />
             <div className="space-y-4 p-5 sm:p-6">
@@ -434,7 +438,6 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
               <PanelHeader
                 kicker="Step 2"
                 title="Select repository"
-                body="Choose which installed repository Agentos should index and push to."
               />
               <div className="space-y-4 p-5 sm:p-6">
                 {installPending && displayRepos.length === 0 ? (
@@ -563,7 +566,7 @@ function GithubManualPanel({ setup, refetch }) {
       <PanelHeader
         kicker="Advanced"
         title="Manual token (fallback)"
-        body="Use a personal access token if the GitHub App is not configured."
+        info="Use a personal access token if the GitHub App is not configured."
       />
       <div className="p-5 sm:p-6">
         <button
@@ -660,7 +663,7 @@ function BitbucketManualPanel({ setup, refetch }) {
         <PanelHeader
           kicker="Step 1"
           title="Bitbucket credentials"
-          body="One-click Bitbucket OAuth is coming soon — use an app password for now."
+          info="One-click Bitbucket OAuth is coming soon — use an app password for now."
         />
         <div className="space-y-4 p-5 sm:p-6">
           <ManualFields

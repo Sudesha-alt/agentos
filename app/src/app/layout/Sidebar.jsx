@@ -5,6 +5,33 @@ import { usePipelineList } from "../../entities/pipeline";
 import { derivePipelineCounts } from "../../shared/lib/pipelineCounts";
 import { useSidebarCollapsed } from "../../shared/hooks/useSidebarCollapsed";
 import { useNavExpanded } from "../../shared/hooks/useNavExpanded";
+import SidebarUserCard from "./SidebarUserCard";
+
+function navItemClass(active, collapsed, { isGroupHeader = false, childActive = false } = {}) {
+  const showActiveBg = Boolean(active && (collapsed || !isGroupHeader || !childActive));
+  return [
+    "group flex w-full items-center text-[13px] font-medium transition-colors duration-150",
+    collapsed ? "justify-center rounded-md px-2 py-1.5" : "gap-2 rounded-md px-2.5 py-1.5",
+    showActiveBg
+      ? "bg-app-surface-muted text-app-ink"
+      : active && isGroupHeader && childActive
+        ? "text-app-ink"
+        : "text-app-ink-dim hover:bg-app-surface-muted/60 hover:text-app-ink",
+  ].join(" ");
+}
+
+function subNavItemClass(active) {
+  return [
+    "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-[12px] font-medium transition-colors",
+    active
+      ? "bg-app-surface-muted text-app-ink"
+      : "text-app-ink-dim hover:bg-app-surface-muted/60 hover:text-app-ink",
+  ].join(" ");
+}
+
+function sectionLabelClass(collapsed) {
+  return collapsed ? "sr-only" : "mb-1 px-2.5 text-[11px] font-semibold text-app-ink-mute";
+}
 
 const NAV_ICONS = {
   "/app": IconDashboard,
@@ -75,8 +102,8 @@ export default function Sidebar() {
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-30 hidden flex-col py-6 transition-[width,padding] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] md:flex ${
-        collapsed ? "w-16 px-2" : "w-[17.5rem] px-4"
+      className={`fixed inset-y-0 left-0 z-30 hidden flex-col border-r border-app-border bg-app-surface transition-[width,padding] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] md:flex ${
+        collapsed ? "w-14 px-1.5" : "w-[13.75rem] px-2"
       }`}
     >
       <button
@@ -89,7 +116,7 @@ export default function Sidebar() {
         <IconChevron collapsed={collapsed} />
       </button>
 
-      <div className={`mb-6 ${collapsed ? "flex justify-center px-0" : "px-2"}`}>
+      <div className={`shrink-0 py-3 ${collapsed ? "flex justify-center px-0" : "px-1"}`}>
         {collapsed ? (
           <NavLink to="/app" aria-label="AgentOS home" className="inline-flex">
             <LogoMark />
@@ -99,14 +126,10 @@ export default function Sidebar() {
         )}
       </div>
 
-      <nav className="flex-1 overflow-y-auto overflow-x-hidden px-1">
+      <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-0.5 py-1">
         {APP_NAV_SECTIONS.map((section, sectionIndex) => (
-          <div key={section.id} className={sectionIndex > 0 ? "mt-7" : ""}>
-            {!collapsed ? (
-              <p className="mb-2 px-3 type-kicker">{section.label}</p>
-            ) : sectionIndex > 0 ? (
-              <div className="my-3 border-t border-app-border/60" aria-hidden />
-            ) : null}
+          <div key={section.id} className={sectionIndex > 0 ? "mt-4" : ""}>
+            <p className={sectionLabelClass(collapsed)}>{section.label}</p>
             <ul className="space-y-0.5">
               {section.items.map((item) => {
                 if ("end" in item && item.end) {
@@ -118,16 +141,10 @@ export default function Sidebar() {
                         end
                         title={collapsed ? item.label : undefined}
                         className={({ isActive }) =>
-                          `group flex items-center rounded-full py-2 type-nav transition-all duration-200 ease-out ${
-                            collapsed ? "justify-center px-2" : "gap-2.5 px-3"
-                          } ${
-                            isActive
-                              ? "bg-app-surface text-app-ink shadow-app-nav-active"
-                              : "text-app-ink-dim hover:bg-white/50 hover:text-app-ink"
-                          }`
+                          navItemClass(isActive, collapsed)
                         }
                       >
-                        <span className="relative flex size-7 shrink-0 items-center justify-center rounded-full text-app-ink-mute group-hover:text-app-ink-dim">
+                        <span className="flex size-5 shrink-0 items-center justify-center text-app-ink-mute group-hover:text-app-ink">
                           <Icon />
                         </span>
                         {!collapsed ? <span className="min-w-0 truncate">{item.label}</span> : null}
@@ -146,14 +163,13 @@ export default function Sidebar() {
                         to="/app/pipelines"
                         title="Pipelines"
                         className={({ isActive }) =>
-                          `group mt-1 flex items-center justify-center rounded-full px-2 py-2 type-nav transition-all ${
-                            isActive || location.pathname.startsWith("/app/pipelines")
-                              ? "bg-app-surface text-app-ink shadow-app-nav-active"
-                              : "text-app-ink-dim hover:bg-white/50 hover:text-app-ink"
-                          }`
+                          navItemClass(
+                            isActive || location.pathname.startsWith("/app/pipelines"),
+                            true
+                          )
                         }
                       >
-                        <span className="relative flex size-7 items-center justify-center">
+                        <span className="relative flex size-5 items-center justify-center">
                           <IconPipeline />
                           {counts.review > 0 ? (
                             <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-danger ring-2 ring-app-surface" />
@@ -165,15 +181,19 @@ export default function Sidebar() {
                       type="button"
                       onClick={() => !collapsed && toggle("pipelines")}
                       title={collapsed ? "Pipelines" : undefined}
-                      className={`group mt-1 flex w-full items-center rounded-full py-2 type-nav transition-all duration-200 ease-out ${
-                        collapsed ? "justify-center px-2" : "gap-2.5 px-3"
-                      } ${
-                        location.pathname.startsWith("/app/pipelines")
-                          ? "bg-app-surface text-app-ink shadow-app-nav-active"
-                          : "text-app-ink-dim hover:bg-white/50 hover:text-app-ink"
-                      }`}
+                      className={navItemClass(
+                        location.pathname.startsWith("/app/pipelines"),
+                        collapsed,
+                        {
+                          isGroupHeader: true,
+                          childActive:
+                            !collapsed &&
+                            isExpanded("pipelines") &&
+                            location.pathname.startsWith("/app/pipelines"),
+                        }
+                      )}
                     >
-                      <span className="relative flex size-7 shrink-0 items-center justify-center rounded-full text-app-ink-mute group-hover:text-app-ink-dim">
+                      <span className="relative flex size-5 shrink-0 items-center justify-center text-app-ink-mute group-hover:text-app-ink">
                         <IconPipeline />
                         {collapsed && counts.review > 0 ? (
                           <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-danger ring-2 ring-app-surface" />
@@ -193,8 +213,9 @@ export default function Sidebar() {
                     </button>
                     )}
                   </li>
-                  {!collapsed && isExpanded("pipelines")
-                    ? PIPELINE_SUB_NAV.map((sub) => {
+                  {!collapsed && isExpanded("pipelines") ? (
+                    <ul className="mt-0.5 space-y-0.5">
+                      {PIPELINE_SUB_NAV.map((sub) => {
                         const count =
                           sub.badgeKey === "active"
                             ? counts.active
@@ -206,19 +227,14 @@ export default function Sidebar() {
                           location.pathname === "/app/pipelines" && pipelineTab === sub.tab;
                         return (
                           <li key={sub.tab}>
-                            <NavLink
-                              to={sub.to}
-                              className={`ml-6 flex items-center gap-2 rounded-full py-1.5 pl-3 pr-3 text-[13px] transition ${
-                                active
-                                  ? "bg-app-lavender/40 font-medium text-app-ink"
-                                  : "text-app-ink-dim hover:bg-white/50 hover:text-app-ink"
-                              }`}
-                            >
-                              <span className="text-app-ink-mute">└</span>
-                              <span className="flex-1 truncate">{sub.label}</span>
+                            <NavLink to={sub.to} className={subNavItemClass(active)}>
+                              <span className="flex size-5 shrink-0 items-center justify-center" aria-hidden>
+                                <span className="size-1 rounded-full bg-current opacity-40" />
+                              </span>
+                              <span className="min-w-0 flex-1 truncate">{sub.label}</span>
                               {count > 0 && sub.badgeKey ? (
                                 <span
-                                  className={`flex min-w-[1.25rem] items-center justify-center rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                                  className={`flex min-w-[1.1rem] shrink-0 items-center justify-center rounded-full px-1 py-0.5 text-[9px] font-semibold ${
                                     isReview
                                       ? "bg-danger text-white"
                                       : "bg-app-surface-muted text-app-ink-dim"
@@ -230,8 +246,9 @@ export default function Sidebar() {
                             </NavLink>
                           </li>
                         );
-                      })
-                    : null}
+                      })}
+                    </ul>
+                  ) : null}
                 </>
               ) : null}
 
@@ -250,22 +267,10 @@ export default function Sidebar() {
                             to={agent.to}
                             title={collapsed ? agent.label : undefined}
                             className={({ isActive }) =>
-                              `group flex items-center rounded-full py-2 type-nav transition-all duration-200 ease-out ${
-                                collapsed ? "justify-center px-2" : "gap-2.5 px-3"
-                              } ${
-                                isActive || active
-                                  ? "bg-app-surface text-app-ink shadow-app-nav-active"
-                                  : "text-app-ink-dim hover:bg-white/50 hover:text-app-ink"
-                              }`
+                              navItemClass(isActive || active, collapsed)
                             }
                           >
-                            <span
-                              className={`relative flex size-7 shrink-0 items-center justify-center rounded-full transition-colors ${
-                                active
-                                  ? "bg-app-lavender/60 text-app-accent"
-                                  : "bg-transparent text-app-ink-mute group-hover:text-app-ink-dim"
-                              }`}
-                            >
+                            <span className="flex size-5 shrink-0 items-center justify-center text-app-ink-mute group-hover:text-app-ink">
                               <Icon />
                             </span>
                             {!collapsed ? (
@@ -282,21 +287,15 @@ export default function Sidebar() {
                           type="button"
                           onClick={() => !collapsed && toggle(agent.id)}
                           title={collapsed ? agent.label : undefined}
-                          className={`group flex w-full items-center rounded-full py-2 type-nav transition-all duration-200 ease-out ${
-                            collapsed ? "justify-center px-2" : "gap-2.5 px-3"
-                          } ${
-                            active
-                              ? "bg-app-surface text-app-ink shadow-app-nav-active"
-                              : "text-app-ink-dim hover:bg-white/50 hover:text-app-ink"
-                          }`}
+                          className={navItemClass(active, collapsed, {
+                            isGroupHeader: true,
+                            childActive:
+                              !collapsed &&
+                              showSub &&
+                              agent.subNav.some((sub) => subIsActive(sub, agent.id)),
+                          })}
                         >
-                          <span
-                            className={`relative flex size-7 shrink-0 items-center justify-center rounded-full transition-colors ${
-                              active
-                                ? "bg-app-lavender/60 text-app-accent"
-                                : "bg-transparent text-app-ink-mute group-hover:text-app-ink-dim"
-                            }`}
-                          >
+                          <span className="flex size-5 shrink-0 items-center justify-center text-app-ink-mute group-hover:text-app-ink">
                             <Icon />
                           </span>
                           {!collapsed ? (
@@ -312,16 +311,14 @@ export default function Sidebar() {
                               const subActive = subIsActive(sub, agent.id);
                               return (
                                 <li key={sub.to}>
-                                  <NavLink
-                                    to={sub.to}
-                                    className={`ml-6 flex items-center gap-2 rounded-full py-1.5 pl-3 pr-3 text-[13px] transition ${
-                                      subActive
-                                        ? "bg-app-lavender/40 font-medium text-app-ink"
-                                        : "text-app-ink-dim hover:bg-white/50 hover:text-app-ink"
-                                    }`}
-                                  >
-                                    <span className="text-app-ink-mute">└</span>
-                                    <span className="flex-1 truncate">{sub.label}</span>
+                                  <NavLink to={sub.to} className={subNavItemClass(subActive)}>
+                                    <span
+                                      className="flex size-5 shrink-0 items-center justify-center"
+                                      aria-hidden
+                                    >
+                                      <span className="size-1 rounded-full bg-current opacity-40" />
+                                    </span>
+                                    <span className="min-w-0 flex-1 truncate">{sub.label}</span>
                                   </NavLink>
                                 </li>
                               );
@@ -347,17 +344,9 @@ export default function Sidebar() {
                         <NavLink
                           to={item.to}
                           title={collapsed ? item.label : undefined}
-                          className={({ isActive }) =>
-                            `group flex items-center rounded-full py-2 type-nav transition-all duration-200 ease-out ${
-                              collapsed ? "justify-center px-2" : "gap-2.5 px-3"
-                            } ${
-                              isActive
-                                ? "bg-app-surface text-app-ink shadow-app-nav-active"
-                                : "text-app-ink-dim hover:bg-white/50 hover:text-app-ink"
-                            }`
-                          }
+                          className={({ isActive }) => navItemClass(isActive, collapsed)}
                         >
-                          <span className="relative flex size-7 shrink-0 items-center justify-center rounded-full text-app-ink-mute group-hover:text-app-ink-dim">
+                          <span className="flex size-5 shrink-0 items-center justify-center text-app-ink-mute group-hover:text-app-ink">
                             <Icon />
                           </span>
                           {!collapsed ? (
@@ -372,6 +361,7 @@ export default function Sidebar() {
           </div>
         ))}
       </nav>
+      <SidebarUserCard collapsed={collapsed} />
     </aside>
   );
 }

@@ -274,7 +274,6 @@ export default function CodebaseExplorer({ branch = "main" }) {
           <PanelHeader
             kicker="Explorer"
             title="Directory tree"
-            body="Paths only — file details load on selection."
             className="!px-4 !py-3"
           />
           <Breadcrumb path={dirPath} onNavigate={setDir} />
@@ -292,8 +291,8 @@ export default function CodebaseExplorer({ branch = "main" }) {
           <PanelHeader
             kicker="Intelligence"
             title={panelTitle}
-            body={selectedFile ? selectedFile : "No file selected"}
-            className="!px-5 !py-3"
+            subtitle={selectedFile ? selectedFile : "No file selected"}
+            className="!px-4 !py-3"
           />
           <div className="flex-1 overflow-y-auto">
             <FileIntelligencePanel

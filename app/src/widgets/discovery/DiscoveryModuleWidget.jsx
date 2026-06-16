@@ -5,6 +5,7 @@ import { getDiscoveryScores } from "../../entities/discovery";
 import { formatScoreBand } from "../../shared/lib/formatScoreBand";
 import LabelPill from "../../app/components/LabelPill";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
+import { TitleWithInfo } from "../../shared/ui/InfoTip";
 import {
   formatCompactNumber,
   formatDuration,
@@ -42,7 +43,6 @@ export default function DiscoveryModuleWidget({ parsed, stage, rawOutput }) {
               ? "Paused — clarification needed"
               : "Discovery complete"
         }
-        body="Scores are computed on the server from ticket clarity, gaps, RAG coverage, and PRD structure — not model self-ratings."
         right={
           <div className="flex flex-wrap items-center gap-2">
             {scores?.recommendation ? (
@@ -77,12 +77,12 @@ export default function DiscoveryModuleWidget({ parsed, stage, rawOutput }) {
         <Metric
           label="Understanding"
           value={formatScoreBand(scores?.bands?.understanding)}
-          hint="ticket clarity"
+          info="Ticket clarity from ambiguities, personas, and scope."
         />
         <Metric
           label="PRD quality"
           value={formatScoreBand(scores?.bands?.prdQuality)}
-          hint="build-readiness"
+          info="Build-readiness from gaps, NFRs, and stories (70% gate)."
         />
         <Metric label="Tokens" value={formatCompactNumber(stage.tokenCount)} />
         <Metric label="Cost" value={formatUsd(stage.costUsd)} />
@@ -92,7 +92,7 @@ export default function DiscoveryModuleWidget({ parsed, stage, rawOutput }) {
         <Metric
           label="Historical signal"
           value={formatScoreBand(scores?.bands?.historicalSignal)}
-          hint="RAG strength"
+          info="Coverage-led RAG strength from past tickets."
         />
         <Metric
           label="Complexity"
@@ -101,7 +101,7 @@ export default function DiscoveryModuleWidget({ parsed, stage, rawOutput }) {
               ? `${scores.complexityScore}/10`
               : "—"
           }
-          hint="formula"
+          info="Derived from scope size and gap count."
         />
         <Metric
           label="Duration"
@@ -154,16 +154,13 @@ export default function DiscoveryModuleWidget({ parsed, stage, rawOutput }) {
   );
 }
 
-function Metric({ label, value, hint }) {
+function Metric({ label, value, info }) {
   return (
     <div className="rounded-2xl border border-hairline bg-canvas/35 px-3 py-3">
-      <p className="editorial-kicker text-ink-mute">{label}</p>
+      <p className="editorial-kicker text-ink-mute">
+        <TitleWithInfo info={info}>{label}</TitleWithInfo>
+      </p>
       <p className="mt-2 font-mono text-[14px] text-ink">{value}</p>
-      {hint ? (
-        <p className="mt-1 font-mono text-[9px] uppercase tracking-[0.12em] text-ink-mute">
-          {hint}
-        </p>
-      ) : null}
     </div>
   );
 }

@@ -71,7 +71,7 @@ function ComingSoonIntegration({ integration, displayStatus }) {
         <PanelHeader
           kicker="Integration"
           title={integration.name}
-          body={integration.description}
+          info={integration.description}
           right={<LabelPill label={statusMeta.label} tone={statusMeta.tone} />}
         />
         <div className="space-y-6 p-5 sm:p-6">

@@ -25,7 +25,7 @@ export default function SettingsPlanPage() {
           <PanelHeader
             kicker="Current plan"
             title={`${PILOT_PLAN.name} program`}
-            body={`${PILOT_PLAN.description} Cap: ${PILOT_PLAN.pipelineRunsCap} runs · ${PILOT_PLAN.durationDays}-day window.`}
+            info={`${PILOT_PLAN.description} Cap: ${PILOT_PLAN.pipelineRunsCap} runs · ${PILOT_PLAN.durationDays}-day window.`}
             right={
               <span className="w-full shrink-0 self-start rounded-full border border-indigo/30 bg-indigo/10 px-3 py-1 text-center text-[11px] font-medium text-indigo sm:w-auto sm:text-[12px]">
                 {billing?.runsUsed ?? 0} / {PILOT_PLAN.pipelineRunsCap} runs used
@@ -38,7 +38,6 @@ export default function SettingsPlanPage() {
           <PanelHeader
             kicker="Current plan"
             title={BILLING_PLANS.find((p) => p.id === currentPlanId)?.name ?? "Growth"}
-            body="Manage your subscription through your account team. Usage resets monthly."
           />
         </Panel>
       )}
@@ -47,7 +46,7 @@ export default function SettingsPlanPage() {
         <PanelHeader
           kicker="Usage unit"
           title="What counts as a pipeline run?"
-          body={PIPELINE_RUN_DEFINITION}
+          info={PIPELINE_RUN_DEFINITION}
         />
       </Panel>
 
@@ -87,7 +86,7 @@ export default function SettingsPlanPage() {
         <PanelHeader
           kicker="Add-ons"
           title="Available on any tier"
-          body="Annual billing saves 15% when billed yearly."
+          info="Annual billing saves 15% when billed yearly."
         />
         <ul className="space-y-2 px-5 py-4 sm:px-6">
           {BILLING_ADDONS.map((addon) => (

@@ -8,6 +8,7 @@ import {
 } from "../../entities/company-intelligence";
 import { AGENT_NAMES } from "../../shared/config/app";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
+import { TitleWithInfo } from "../../shared/ui/InfoTip";
 import { SettingsPageShell } from "../layout/SettingsPageShell";
 
 function linesToArray(text) {
@@ -21,11 +22,12 @@ function arrayToLines(arr) {
   return (arr ?? []).join("\n");
 }
 
-function Field({ label, hint, children }) {
+function Field({ label, info, children }) {
   return (
     <label className="block">
-      <span className="type-kicker">{label}</span>
-      {hint && <p className="mt-0.5 text-[12px] text-app-ink-mute">{hint}</p>}
+      <span className="type-kicker inline-flex items-center gap-1.5">
+        <TitleWithInfo info={info}>{label}</TitleWithInfo>
+      </span>
       <div className="mt-1.5">{children}</div>
     </label>
   );
@@ -232,7 +234,7 @@ export default function CompanyIntelligence({ embedded = false }) {
       backLabel="← Settings"
       kicker="Business intelligence"
       title="Company profile"
-      body={`Start with your website — we scrape public pages and pre-fill company details. Review and edit before saving. ${AGENT_NAMES.VIRIN} validates every idea against this before writing a PRD.`}
+      info={`Start with your website — we scrape public pages and pre-fill company details. ${AGENT_NAMES.VIRIN} validates every idea against this before writing a PRD.`}
     >
 
       <form onSubmit={handleSave} className="space-y-5">
@@ -240,7 +242,7 @@ export default function CompanyIntelligence({ embedded = false }) {
           <PanelHeader
             kicker="Basics"
             title="Company details"
-            body="Auto-fetch from your public website, then edit any field that looks wrong."
+            info="Auto-fetch from your public website, then edit any field that looks wrong."
             right={
               <button
                 type="button"
@@ -262,7 +264,7 @@ export default function CompanyIntelligence({ embedded = false }) {
                 className={inputClass}
               />
             </Field>
-            <Field label="Website" hint="Homepage URL — used for Jina Reader + meta scraping.">
+            <Field label="Website" info="Homepage URL — used for Jina Reader + meta scraping.">
               <input
                 type="url"
                 value={form?.website ?? ""}
@@ -274,7 +276,7 @@ export default function CompanyIntelligence({ embedded = false }) {
             <div className="sm:col-span-2">
               <Field
                 label="What you build"
-                hint="Product, platform, or service in plain language."
+                info="Product, platform, or service in plain language."
               >
                 <textarea
                   value={form?.productSummary ?? ""}
@@ -326,12 +328,12 @@ export default function CompanyIntelligence({ embedded = false }) {
           <PanelHeader
             kicker="Revenue"
             title="How you make money"
-            body={`${AGENT_NAMES.VIRIN} uses this to judge revenue impact and prioritization.`}
+            info={`${AGENT_NAMES.VIRIN} uses this to judge revenue impact and prioritization.`}
           />
           <div className="grid gap-5 px-5 py-5 sm:px-6">
             <Field
               label="Revenue model"
-              hint="Subscription, usage-based, services, marketplace take-rate, etc."
+              info="Subscription, usage-based, services, marketplace take-rate, etc."
             >
               <textarea
                 value={form?.revenueModel ?? ""}
@@ -356,7 +358,7 @@ export default function CompanyIntelligence({ embedded = false }) {
         <Panel>
           <PanelHeader kicker="Strategy" title="Goals & boundaries" />
           <div className="grid gap-5 px-5 py-5 sm:grid-cols-2 sm:px-6">
-            <Field label="Strategic goals" hint="One per line — replaces hardcoded OKRs.">
+            <Field label="Strategic goals" info="One per line — replaces hardcoded OKRs.">
               <textarea
                 value={form?.strategicGoalsText ?? ""}
                 onChange={(e) => update("strategicGoalsText", e.target.value)}
@@ -365,7 +367,7 @@ export default function CompanyIntelligence({ embedded = false }) {
                 placeholder={"Reduce enterprise churn\nShip self-serve admin\nExpand API revenue"}
               />
             </Field>
-            <Field label="Company non-goals" hint="Ideas that conflict with these get flagged.">
+            <Field label="Company non-goals" info="Ideas that conflict with these get flagged.">
               <textarea
                 value={form?.nonGoalsText ?? ""}
                 onChange={(e) => update("nonGoalsText", e.target.value)}
@@ -381,7 +383,7 @@ export default function CompanyIntelligence({ embedded = false }) {
           <PanelHeader
             kicker="Market"
             title="Competitors"
-            body={`${AGENT_NAMES.VIRIN} can analyze how competitors solve similar problems during discovery.`}
+            info={`${AGENT_NAMES.VIRIN} can analyze how competitors solve similar problems during discovery.`}
             right={
               <button
                 type="button"
@@ -468,7 +470,7 @@ export default function CompanyIntelligence({ embedded = false }) {
           <PanelHeader
             kicker="Generated · editable"
             title="Business context"
-            body={`Inferred from your indexed codebase (architecture, modules, billing/product signals) with gpt-5.5. Edit freely — ${AGENT_NAMES.VIRIN} reads this verbatim.`}
+            info={`Inferred from your indexed codebase. Edit freely — ${AGENT_NAMES.VIRIN} reads this verbatim.`}
             right={
               <button
                 type="button"

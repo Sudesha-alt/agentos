@@ -21,9 +21,11 @@ export function AppTabButton({ active, onClick, children, className = "" }) {
  * Standard page container for /app routes.
  */
 export function AppPage({ children, className = "", wide = false }) {
+  const hasMaxWidth = /\bmax-w-/.test(className);
+  const widthClass = hasMaxWidth ? "" : wide ? "max-w-[96rem]" : "max-w-[82rem]";
   return (
     <div
-      className={`mx-auto w-full min-w-0 space-y-5 ${wide ? "max-w-[96rem]" : "max-w-[82rem]"} ${className}`}
+      className={`mx-auto w-full min-w-0 space-y-5 ${widthClass} ${className}`}
     >
       {children}
     </div>

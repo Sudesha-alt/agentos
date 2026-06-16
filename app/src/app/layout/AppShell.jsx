@@ -19,7 +19,7 @@ function AppShellContent() {
       <Sidebar />
       <div
         className={`flex min-h-screen min-w-0 flex-1 flex-col overflow-x-hidden transition-[padding] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-          collapsed ? "md:pl-16" : "md:pl-[17.5rem]"
+          collapsed ? "md:pl-14" : "md:pl-[13.75rem]"
         }`}
       >
         <TopBar />

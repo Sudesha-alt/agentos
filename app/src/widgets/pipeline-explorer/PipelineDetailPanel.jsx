@@ -105,8 +105,7 @@ function ClassicPipelineDetailPanel({ pipelineId, onClose }) {
         <Panel>
           <PanelHeader
             kicker="Discovery"
-            title="What we understood before acting"
-            body="Requirements, ambiguities, and complexity from ticket analysis."
+            title="What we understood before acting"
           />
           <div className="px-5 py-4 sm:px-6">
             <dl className="grid gap-3 sm:grid-cols-3">
@@ -130,8 +129,7 @@ function ClassicPipelineDetailPanel({ pipelineId, onClose }) {
           <Panel className="border-warning/30">
             <PanelHeader
               kicker="Action required"
-              title="Is this safe to continue?"
-              body="Review validation failures before approving."
+              title="Is this safe to continue?"
             />
             <div className="space-y-4 px-5 py-4 sm:px-6">
               <ValidationPanelWidget validation={pausedStage.validationResult} />

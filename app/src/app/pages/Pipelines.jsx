@@ -7,8 +7,7 @@ export default function Pipelines() {
     <AnimatedAppPage wide>
       <PageIntro
         kicker="Pipeline Explorer"
-        title="What do I need to do next?"
-        body="Air-traffic view: classic agent pipelines and Virin discovery runs — active, review queue, and history with live stage progress and outputs."
+        title="What do I need to do next?"
       />
       <PipelineExplorerWidget />
     </AnimatedAppPage>

@@ -203,11 +203,8 @@ html.lenis body {
 
   /* Premium app shell (light SaaS) */
   .app-shell-gradient {
-    background-color: #f9f9f7;
-    background-image:
-      radial-gradient(ellipse 80% 60% at 10% 0%, rgba(232, 224, 248, 0.55), transparent 55%),
-      radial-gradient(ellipse 70% 50% at 90% 10%, rgba(252, 232, 220, 0.45), transparent 50%),
-      radial-gradient(ellipse 60% 40% at 50% 100%, rgba(228, 245, 234, 0.35), transparent 55%);
+    background-color: #f9fafb;
+    background-image: none;
   }
   .app-glass {
     background: rgba(255, 255, 255, 0.72);

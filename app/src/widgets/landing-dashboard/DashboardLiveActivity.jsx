@@ -5,7 +5,7 @@ import { Panel, PanelHeader } from "../../shared/ui/Panel";
 export default function DashboardLiveActivity({ events, loading }) {
   return (
     <Panel className="h-full">
-      <PanelHeader kicker="Live" title="Live activity" body="What is running right now." />
+      <PanelHeader kicker="Live" title="Live activity" />
       <div className="max-h-[360px] overflow-y-auto px-5 py-4 sm:px-6">
         {loading && (!events || events.length === 0) ? (
           <div className="space-y-2">

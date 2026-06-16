@@ -19,7 +19,6 @@ import DashboardLiveActivity from "./DashboardLiveActivity";
 import WeeklyTrendChart from "./WeeklyTrendChart";
 import RecentCompletionsPanel from "./RecentCompletionsPanel";
 import AgentHealthPanel from "./AgentHealthPanel";
-import DashboardCostEstimator from "./DashboardCostEstimator";
 
 function buildStatusMetrics(counts, costToday = "—", passRate = "—") {
   return [
@@ -98,8 +97,6 @@ export default function LandingDashboardWidget() {
         <RecentCompletionsPanel items={completions} loading={pipelinesLoading} />
         <AgentHealthPanel agents={healthData?.agents} loading={healthLoading} />
       </section>
-
-      <DashboardCostEstimator />
     </div>
   );
 }

@@ -116,10 +116,7 @@ export default function PipelineQueuePanel({ setup, showHeader = true, onRefresh
           </div>
         </div>
       ) : (
-        <EmptyState
-          title="Intake not configured"
-          body='Save an AI Worker column above — AgentOS will map it to Jira statuses and listen for transitions into them.'
-        />
+        <EmptyState title="Intake not configured" />
       )}
 
       {intake?.aiWorkerColumnName ? (
@@ -195,7 +192,6 @@ export default function PipelineQueuePanel({ setup, showHeader = true, onRefresh
     <Panel>
       <PanelHeader
         title="Pipeline queue"
-        subtitle="In-process FIFO queue after Jira intake — one subtask runs at a time."
         right={
           isActive ? (
             <LabelPill label="Running" tone="indigo" />

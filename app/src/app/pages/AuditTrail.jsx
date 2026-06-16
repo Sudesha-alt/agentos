@@ -18,19 +18,15 @@ export default function AuditTrail() {
 
   return (
     <AnimatedAppPage wide>
-      <PageIntro
-        kicker="Compliance"
-        title="Everything the system did, in order"
-        body="Immutable, searchable audit log across pipelines — what happened and why."
-      />
+      <PageIntro kicker="Compliance" title="Everything the system did, in order" />
 
       <Panel>
         <PanelHeader
           kicker="Global feed"
           title="Recent audit events"
-          body={
+          subtitle={
             primaryId
-              ? `Showing events for ${pipelines[0]?.jiraKey ?? primaryId}. Full cross-pipeline search ships with /api/audit.`
+              ? `Showing events for ${pipelines[0]?.jiraKey ?? primaryId}.`
               : "No pipelines yet."
           }
         />

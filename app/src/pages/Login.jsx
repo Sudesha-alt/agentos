@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { DEMO_CREDENTIAL_HINT } from "../entities/auth";
+import MarketingGridBackground from "../marketing/agent-team/components/MarketingGridBackground";
 import { useAuth } from "../shared/providers/useAuth";
 import { DATA_MODE } from "../shared/config/app";
 import "../marketing/agent-team/agentTeam.css";
@@ -37,17 +38,14 @@ export default function Login() {
   }
 
   return (
-    <div className="agent-team relative flex min-h-screen items-center justify-center px-5 py-12">
+    <div className="agent-team at-landing-root relative flex min-h-screen items-center justify-center px-5 py-12">
+      <MarketingGridBackground />
       <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-50" aria-hidden>
         <div className="absolute left-[5%] top-[10%] h-56 w-72 rounded-[48px] bg-[#A8C53A]/20 blur-3xl" />
         <div className="absolute right-[10%] bottom-[15%] h-48 w-64 rounded-[48px] bg-[#D9B8E8]/25 blur-3xl" />
       </div>
 
-      <div className="relative w-full max-w-md">
-        <div className="at-glass-badge mx-auto mb-6 flex w-fit items-center gap-2 px-4 py-2 text-[12px] font-medium text-[#2B2D33]">
-          <span className="text-[#A8C53A]">🔒</span> Secure workspace
-        </div>
-
+      <div className="relative z-[1] w-full max-w-md">
         <div className="at-card p-8 sm:p-10">
           <Link to="/" className="flex items-center justify-center gap-2">
             <span className="flex size-10 items-center justify-center rounded-2xl bg-[#2B2D33] font-bold text-white">

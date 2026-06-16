@@ -88,7 +88,6 @@ export default function PipelineDetail() {
         <PageIntro
           kicker={item.jiraKey}
           title={item.summary}
-          body="A single operational record of every stage, validation result, and human checkpoint in the orchestration flow."
           right={
             <div className="flex flex-wrap items-center gap-3">
               <StatusPill status={item.status} />
@@ -125,7 +124,6 @@ export default function PipelineDetail() {
           <PanelHeader
             kicker="Virin"
             title="Product package (read-only)"
-            body="PRD, system design, and task plan mirrored from PM workspace at pipeline start."
           />
           <div className="grid gap-4 px-5 py-4 sm:grid-cols-3 sm:px-6">
             <div className="rounded-app-sm border border-hairline bg-surface/30 p-4">
@@ -179,7 +177,6 @@ export default function PipelineDetail() {
           <PanelHeader
             kicker="MetaGPT"
             title="Pipeline artifacts"
-            body="Implementation plan, code summary, and test plan produced by Ananta and Neel (QA)."
           />
           {artifacts.length === 0 ? (
             <p className="px-5 py-8 text-[13px] text-ink-dim sm:px-6">
@@ -208,7 +205,6 @@ export default function PipelineDetail() {
           <PanelHeader
             kicker="Trace"
             title="Stages"
-            body="The sequence is fixed; the selected panel shows the exact output or validation decision at that checkpoint."
           />
           <div className="px-3 py-3">
             <StageTimeline

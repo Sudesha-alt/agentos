@@ -222,8 +222,7 @@ export default function CodebaseIntelligenceStatusWidget({
     <Panel>
       <PanelHeader
         kicker={AGENT_NAMES.ANANTA}
-        title="Layer readiness"
-        body="Indexing runs when you connect GitHub and select a repo, or when you fetch manually below."
+        title="Layer readiness"
         right={data ? headerRight : null}
       />
       {body}

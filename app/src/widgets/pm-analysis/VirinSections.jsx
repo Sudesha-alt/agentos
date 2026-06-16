@@ -30,7 +30,7 @@ export function VirinConversationPanel({ analysis, onAnswer, onConfirm, busy, pr
         <PanelHeader
           kicker="Gate · Stage 4"
           title="Confirm solution direction"
-          body={`${VIRIN_NAME} won't write the full PRD until you align on this approach.`}
+          subtitle={`${VIRIN_NAME} won't write the full PRD until you align on this approach.`}
         />
         <div className="space-y-5 px-5 py-5 sm:px-6">
           <blockquote className="border-l-4 border-indigo/40 pl-4">

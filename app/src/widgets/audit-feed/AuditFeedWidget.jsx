@@ -7,7 +7,6 @@ export default function AuditFeedWidget({ items }) {
       <PanelHeader
         kicker="Audit"
         title="Pipeline history"
-        body="Immutable operational context for every agent handoff, validation gate, and human intervention."
       />
       <div className="px-5 py-4 sm:px-6">
         <AuditTimeline items={items} />

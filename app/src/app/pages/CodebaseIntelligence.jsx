@@ -96,8 +96,7 @@ export default function CodebaseIntelligence() {
       <AgentPageWithChat domain="ananta" contextKey={branch}>
       <PageIntro
         kicker={AGENT_NAMES.ANANTA}
-        title={AGENT_NAMES.ANANTA}
-        body="Browse indexed files, run semantic search, and open the codebase map when you need the full visualization."
+        title={AGENT_NAMES.ANANTA}
       />
       <CodebaseIntelligenceStatusWidget
         branch={branch}

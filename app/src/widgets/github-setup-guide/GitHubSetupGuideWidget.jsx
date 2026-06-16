@@ -13,8 +13,7 @@ export default function GitHubSetupGuideWidget({
     <Panel>
       <PanelHeader
         kicker="Setup guide"
-        title="How to connect GitHub"
-        body="Follow these steps once per environment. Credentials are stored on the server after you connect."
+        title="How to connect GitHub"
         right={
           <button
             type="button"

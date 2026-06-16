@@ -32,7 +32,6 @@ export default function JiraSyncStatusPanel({ setupSync }) {
     <Panel>
       <PanelHeader
         title="Ticket sync"
-        subtitle="All tickets in configured projects are synced for browsing, agent workspaces, and RAG."
         right={
           running ? (
             <span className="font-mono text-[10px] uppercase text-indigo">Syncing…</span>

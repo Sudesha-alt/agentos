@@ -6,8 +6,7 @@ export default function CodebaseSearchPanel({ branch = "main" }) {
     <Panel>
       <PanelHeader
         kicker="Search & Ask"
-        title="Find code by meaning"
-        body="Semantic file search plus pattern tag matches. Switch to Ask for guided answers with file citations."
+        title="Find code by meaning"
       />
       <div className="px-5 py-5 sm:px-6">
         <CodebaseSearchCore branch={branch} />

@@ -38,7 +38,6 @@ export default function RoiCalculatorPage() {
             <PanelHeader
               kicker="Calculator"
               title="Estimated ROI by plan"
-              body="Defaults assume a 10-person team at $150/hr blended rate. Assumptions are documented in the panel."
             />
             <RoiCalculatorPanel initialPlanId="growth" publicMode />
           </Panel>

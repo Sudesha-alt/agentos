@@ -22,7 +22,7 @@ export default function CodebaseInsightsPanel({ branch = "main" }) {
         <PanelHeader
           kicker="Insights"
           title="Insights unavailable"
-          body={error instanceof Error ? error.message : "Could not load insights"}
+          subtitle={error instanceof Error ? error.message : "Could not load insights"}
         />
       </Panel>
     );
@@ -31,11 +31,7 @@ export default function CodebaseInsightsPanel({ branch = "main" }) {
   if (!data?.totals?.files) {
     return (
       <Panel>
-        <PanelHeader
-          kicker="Insights"
-          title="No indexed files yet"
-          body="Connect GitHub and run Fetch & index above. This view shows summaries and patterns — not full file contents."
-        />
+        <PanelHeader kicker="Insights" title="No indexed files yet" />
       </Panel>
     );
   }
@@ -46,7 +42,7 @@ export default function CodebaseInsightsPanel({ branch = "main" }) {
         <PanelHeader
           kicker="Overview"
           title="Codebase insights"
-          body={`${data.totals.files} indexed files · ${data.totals.withSummary} with AI summaries`}
+          subtitle={`${data.totals.files} indexed files · ${data.totals.withSummary} with AI summaries`}
         />
         <div className="grid gap-4 px-5 py-4 sm:grid-cols-2 lg:grid-cols-3 sm:px-6">
           <InsightCard label="Languages" items={data.languages.map((l) => `${l.language} (${l.count})`)} />
@@ -59,11 +55,7 @@ export default function CodebaseInsightsPanel({ branch = "main" }) {
       </Panel>
 
       <Panel>
-        <PanelHeader
-          kicker="File intelligence"
-          title="Recent summaries"
-          body="Per-file OpenAI summaries from indexing — lightweight list, not the full repo tree."
-        />
+        <PanelHeader kicker="File intelligence" title="Recent summaries" />
         <ul className="divide-y divide-hairline px-5 sm:px-6">
           {data.highlights.map((file) => (
             <li key={file.path} className="py-4 first:pt-2">

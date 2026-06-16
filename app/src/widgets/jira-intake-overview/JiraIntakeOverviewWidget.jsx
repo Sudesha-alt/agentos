@@ -82,8 +82,7 @@ export default function JiraIntakeOverviewWidget({ embedded = false }) {
     <Panel>
       <PanelHeader
         kicker="Jira pipeline"
-        title="AI Worker intake"
-        body="Column/status triggers decomposition; subtasks run one at a time in the FIFO queue."
+        title="AI Worker intake"
         right={
           <LabelPill
             label={queueBadge}

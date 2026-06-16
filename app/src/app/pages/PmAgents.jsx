@@ -197,7 +197,6 @@ export default function PmAgents() {
         <PageIntro
           kicker="Product"
           title={AGENT_NAMES.VIRIN}
-          body="Conversational discovery that classifies tickets, asks one question at a time, pressure-tests against your codebase, and writes a PRD only after you confirm the direction."
         />
         <ul className="flex flex-wrap gap-2 lg:justify-end">
           {PRINCIPLES.map((p) => (
@@ -216,15 +215,6 @@ export default function PmAgents() {
           <PanelHeader
             kicker="Setup"
             title="Configure company profile first"
-            body={`${AGENT_NAMES.VIRIN} validates every idea against your business context and revenue model. Add company details so discovery and PRD stages can judge fit.`}
-            right={
-              <Link
-                to="/app/settings/company"
-                className="rounded-full border border-indigo/30 bg-indigo/10 px-4 py-2 text-[12px] font-medium text-indigo hover:bg-indigo/15"
-              >
-                Set up company profile →
-              </Link>
-            }
           />
         </Panel>
       )}
@@ -234,7 +224,6 @@ export default function PmAgents() {
         <PanelHeader
           kicker="New session"
           title="Start with a Jira ticket"
-          body="Pick from synced issues or enter a key manually."
         />
         <div className="flex flex-col gap-4 px-5 py-4 sm:flex-row sm:items-end sm:px-6">
           <label className="min-w-0 flex-1">

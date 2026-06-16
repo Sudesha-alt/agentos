@@ -120,7 +120,7 @@ export default function PmPipelineDetailPanel({ pipelineId, onClose }) {
             <PanelHeader
               kicker="Action required"
               title="Human escalation flagged"
-              body={analysis.classification.escalationReason ?? "Review classification before proceeding."}
+              subtitle={analysis.classification.escalationReason ?? "Review classification before proceeding."}
             />
             <div className="px-5 py-3 sm:px-6">
               <Link

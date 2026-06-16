@@ -58,9 +58,9 @@ export function AuthProvider({ children }) {
   }, []);
 
   const logout = useCallback(async () => {
+    navigate("/", { replace: true });
     await authAdapter.logout();
     setSession(null);
-    navigate("/", { replace: true });
   }, [navigate]);
 
   const value = useMemo(

@@ -14,8 +14,7 @@ export default function JiraSetupGuide({
     <Panel>
       <PanelHeader
         kicker="Setup guide"
-        title="How to get credentials and connect Jira"
-        body="Follow these steps once per environment. Credentials are stored on the server after you connect."
+        title="How to get credentials and connect Jira"
         right={
           <button
             type="button"
