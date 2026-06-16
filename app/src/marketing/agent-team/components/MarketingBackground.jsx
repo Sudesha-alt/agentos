@@ -1,6 +1,5 @@
 /**
- * Cofounder-style hero background — mirrors cofounder.co source:
- * full-bleed pixel art image, right-aligned object-cover, aspect-ratio width.
+ * Lo-fi pixel-art hero — animated GIF with gradient overlay for copy.
  */
 export default function MarketingBackground() {
   return (
@@ -9,16 +8,23 @@ export default function MarketingBackground() {
       aria-hidden
     >
       <div className="at-hero-img-overlay absolute inset-0 z-[1]" />
-      <img
-        alt=""
-        src="/marketing/agentos-hero-pixel.gif"
-        width={3900}
-        height={2280}
-        decoding="async"
-        fetchPriority="high"
-        loading="eager"
-        className="at-hero-pixel-img absolute bottom-0 right-0 z-0 h-full max-w-none object-cover object-right-bottom"
-      />
+      <picture>
+        <source
+          media="(prefers-reduced-motion: reduce)"
+          srcSet="/marketing/cool-hero-poster.png"
+        />
+        <img
+          alt=""
+          src="/marketing/cool.gif"
+          width={3620}
+          height={1930}
+          decoding="async"
+          fetchPriority="high"
+          loading="eager"
+          className="at-hero-pixel-img at-hero-pixel-img-cool absolute bottom-0 z-0 h-full max-w-none object-cover"
+        />
+      </picture>
+      <div className="at-hero-pixel-ground" aria-hidden />
     </div>
   );
 }

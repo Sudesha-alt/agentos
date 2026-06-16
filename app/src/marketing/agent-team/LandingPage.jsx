@@ -24,37 +24,35 @@ export default function LandingPage() {
       <section
         id="hero"
         data-hero
-        className="at-pixel-bg-hero relative z-[1] min-h-[min(100dvh,900px)] w-full shrink-0 overflow-hidden [--hero-min-height:720px] md:[--hero-min-height:620px]"
+        className="at-pixel-bg-hero relative z-[1] min-h-[100dvh] w-full shrink-0 overflow-hidden [--hero-min-height:100dvh]"
       >
         <MarketingBackground />
 
-        <div className="at-hero-layout relative z-10 mx-auto w-full max-w-[1440px] px-5 pb-20 pt-[max(6rem,15dvh)] sm:px-8 lg:pb-24">
-          <div className="at-hero-copy-panel" data-hero-copy>
-            <div className="at-hero-stagger" style={{ "--stagger": 0 }}>
-              <h1 className="at-hero-title m-0 max-w-[18ch] text-left text-[32px] font-semibold leading-[1.1] sm:text-[38px] lg:text-[44px]">
-                {HERO.headline}
-              </h1>
-            </div>
+        <div className="at-hero-layout relative z-10 mx-auto w-full max-w-[1440px] px-6 pb-16 pt-[max(7rem,18dvh)] sm:px-10 lg:px-12 lg:pb-20">
+          <div className="at-hero-copy" data-hero-copy>
+            <h1 className="at-hero-title at-hero-stagger m-0 max-w-[20ch] text-left font-normal leading-[1.12] tracking-[-0.01em]" style={{ "--stagger": 0 }}>
+              {HERO.headline}
+            </h1>
             <p
-              className="at-hero-stagger mt-4 max-w-[480px] text-left text-[15px] leading-[150%] text-white/95 sm:text-[16px]"
+              className="at-hero-subhead at-hero-stagger mt-5 max-w-[42ch] text-left text-white/90"
               style={{ "--stagger": 1 }}
             >
               {HERO.subhead}
             </p>
             <div
-              className="at-hero-stagger mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center"
+              className="at-hero-stagger mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center"
               style={{ "--stagger": 2 }}
             >
               <Link
                 to={HERO.ctaHref}
                 state={{ mode: "signup" }}
-                className="inline-flex shrink-0 items-center justify-center rounded-full bg-white px-6 py-3 text-[14px] font-semibold text-[#2B2D33] shadow-md transition hover:bg-white/95 sm:px-7 sm:py-3.5 sm:text-[15px]"
+                className="at-hero-primary-btn inline-flex shrink-0 items-center justify-center rounded-lg bg-white px-5 py-2.5 text-[14px] font-semibold text-[#2B2D33] transition hover:bg-white/95"
               >
                 {HERO.cta}
               </Link>
               <a
                 href={HERO.secondaryHref}
-                className="at-hero-secondary-btn inline-flex shrink-0 items-center justify-center rounded-full px-5 py-3 text-[14px] font-medium text-white transition"
+                className="at-hero-secondary-btn inline-flex shrink-0 items-center justify-center rounded-lg px-5 py-2.5 text-[14px] font-medium text-white transition"
               >
                 {HERO.secondaryCta}
               </a>

@@ -142,12 +142,10 @@ export const CLIENT_METRICS = [
 ];
 
 export const HERO = {
-  badge: "Jira · GitHub · Bitbucket · Confluence · Supabase · Grafana",
-  headline: "The AI product team for your entire pipeline",
-  subhead:
-    "Virin, Ananta, and Neel work as teammates — from Jira intake through PRD, build, and QA gates.",
-  cta: "Get Started",
+  headline: "AgentOS lets you run an entire pipeline with agents",
+  subhead: "Discovery, engineering, and QA — from Jira to ship.",
+  cta: "Get started",
   ctaHref: "/login",
-  secondaryCta: "Meet the Agents",
+  secondaryCta: "Meet the agents",
   secondaryHref: "#agents",
 };
