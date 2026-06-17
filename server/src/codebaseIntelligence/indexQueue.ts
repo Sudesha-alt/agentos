@@ -3,7 +3,10 @@ import { getRepoContext } from "../git-integration/gitCredentialsStore";
 import { requireActiveOrganizationId } from "../organization/orgScope";
 import { prisma } from "../db/client";
 import { logger } from "../utils/logger";
-import { INCREMENTAL_INDEX_MAX_FILES } from "./retrievalConfig";
+import {
+  INCREMENTAL_INDEX_BATCH_SIZE,
+  INCREMENTAL_INDEX_MAX_FILES,
+} from "./retrievalConfig";
 import { isIndexRunInFlight } from "./webhookIndexHelpers";
 
 const prismaAny = prisma as any;
@@ -62,6 +65,70 @@ export async function enqueueFullIndex(
   return { runId: run.id, queued: false };
 }
 
+function chunkFileLists(
+  changedFiles: string[],
+  deletedFiles: string[],
+  batchSize: number
+): Array<{ changedFiles: string[]; deletedFiles: string[] }> {
+  const all = [
+    ...changedFiles.map((p) => ({ path: p, kind: "changed" as const })),
+    ...deletedFiles.map((p) => ({ path: p, kind: "deleted" as const })),
+  ];
+  const batches: Array<{ changedFiles: string[]; deletedFiles: string[] }> = [];
+  for (let i = 0; i < all.length; i += batchSize) {
+    const slice = all.slice(i, i + batchSize);
+    batches.push({
+      changedFiles: slice.filter((x) => x.kind === "changed").map((x) => x.path),
+      deletedFiles: slice.filter((x) => x.kind === "deleted").map((x) => x.path),
+    });
+  }
+  return batches.length ? batches : [{ changedFiles: [], deletedFiles: [] }];
+}
+
+async function startIncrementalBatchRun(input: {
+  branchName: string;
+  changedFiles: string[];
+  deletedFiles: string[];
+  commitSha: string;
+  triggerType: "webhook" | "pr_merge";
+  batchIndex: number;
+  batchTotal: number;
+  filesTotal: number;
+}): Promise<string> {
+  const { workspace: repoOwner, repoSlug: repoName } = getRepoContext();
+  const organizationId = requireActiveOrganizationId();
+
+  const run = await prismaAny.codebaseIndexRun.create({
+    data: {
+      organizationId,
+      repoOwner,
+      repoName,
+      branchName: input.branchName,
+      runType: input.batchTotal > 1 ? "incremental_batch" : "incremental",
+      status: "running",
+      triggerType: input.triggerType === "pr_merge" ? "pr_merge" : "webhook",
+      triggerSha: input.commitSha,
+      filesTotal: input.filesTotal,
+      filesProcessed: 0,
+    },
+  });
+
+  void runIncrementalIndex({
+    branchName: input.branchName,
+    changedFiles: input.changedFiles,
+    deletedFiles: input.deletedFiles,
+    commitSha: input.commitSha,
+    triggerType: "webhook",
+    runId: run.id,
+    batchIndex: input.batchIndex,
+    batchTotal: input.batchTotal,
+  }).catch((err) => {
+    logger.warn({ err, runId: run.id }, "incremental index batch failed");
+  });
+
+  return run.id;
+}
+
 export async function enqueueIncrementalIndexFromWebhook(input: {
   branchName: string;
   changedFiles: string[];
@@ -93,49 +160,63 @@ export async function enqueueIncrementalIndexFromWebhook(input: {
   }
 
   if (total > INCREMENTAL_INDEX_MAX_FILES) {
-    const { runId } = await enqueueFullIndex(input.branchName, triggerType, input.commitSha);
-    return { started: true, runId };
+    logger.warn(
+      { total, max: INCREMENTAL_INDEX_MAX_FILES },
+      "incremental file count exceeds max — capping to batched incremental"
+    );
   }
 
-  const { workspace: repoOwner, repoSlug: repoName } = getRepoContext();
-  const organizationId = requireActiveOrganizationId();
+  const batches = chunkFileLists(
+    input.changedFiles,
+    input.deletedFiles,
+    INCREMENTAL_INDEX_BATCH_SIZE
+  );
 
-  const run = await prismaAny.codebaseIndexRun.create({
-    data: {
-      organizationId,
-      repoOwner,
-      repoName,
+  let firstRunId: string | undefined;
+  for (let i = 0; i < batches.length; i++) {
+    const batch = batches[i]!;
+    if (batch.changedFiles.length + batch.deletedFiles.length === 0) continue;
+
+    if (i > 0) {
+      await waitForIndexSlot(input.branchName);
+    }
+
+    const runId = await startIncrementalBatchRun({
       branchName: input.branchName,
-      runType: "incremental",
-      status: "running",
+      changedFiles: batch.changedFiles,
+      deletedFiles: batch.deletedFiles,
+      commitSha: input.commitSha,
       triggerType,
-      triggerSha: input.commitSha,
-    },
-  });
-
-  void runIncrementalIndex({
-    branchName: input.branchName,
-    changedFiles: input.changedFiles,
-    deletedFiles: input.deletedFiles,
-    commitSha: input.commitSha,
-    triggerType: "webhook",
-    runId: run.id,
-  }).catch((err) => {
-    logger.warn({ err, runId: run.id }, "incremental index from webhook failed");
-  });
+      batchIndex: i,
+      batchTotal: batches.length,
+      filesTotal: total,
+    });
+    if (!firstRunId) firstRunId = runId;
+  }
 
   logger.info(
     {
-      runId: run.id,
+      runId: firstRunId,
       branchName: input.branchName,
       triggerSource: input.triggerSource,
       prNumber: input.prNumber,
       fileCount: total,
+      batchCount: batches.length,
     },
-    "started incremental codebase index from webhook"
+    "started batched incremental codebase index from webhook"
   );
 
-  return { started: true, runId: run.id };
+  return { started: true, runId: firstRunId };
+}
+
+async function waitForIndexSlot(branchName: string, maxWaitMs = 30 * 60 * 1000): Promise<void> {
+  const started = Date.now();
+  while (await isIndexRunInFlight(branchName)) {
+    if (Date.now() - started > maxWaitMs) {
+      throw new Error("Timed out waiting for index slot");
+    }
+    await new Promise((r) => setTimeout(r, 5000));
+  }
 }
 
 export async function getLatestIndexRun(input?: {

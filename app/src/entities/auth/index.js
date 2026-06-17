@@ -73,6 +73,20 @@ function readOnboardingCompleted(userId, email) {
   }
 }
 
+function buildMockOrganization(email) {
+  const domain = email.split("@")[1]?.toLowerCase() || "workspace.local";
+  const label = domain.split(".")[0] || "workspace";
+  const slug = label.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "workspace";
+  const orgId = `org_${slug}`;
+  return {
+    id: orgId,
+    name: label.charAt(0).toUpperCase() + label.slice(1),
+    domain,
+    slug,
+    role: "OWNER",
+  };
+}
+
 function buildMockSession(email, { isNewUser = false } = {}) {
   const localPart = email.split("@")[0] || "operator";
   const name = localPart
@@ -85,6 +99,7 @@ function buildMockSession(email, { isNewUser = false } = {}) {
   const onboardingCompleted = isNewUser
     ? false
     : readOnboardingCompleted(userId, email);
+  const organization = onboardingCompleted ? buildMockOrganization(email) : undefined;
 
   return AuthSessionSchema.parse({
     token: `mock_${Math.random().toString(36).slice(2)}`,
@@ -93,7 +108,13 @@ function buildMockSession(email, { isNewUser = false } = {}) {
       id: userId,
       email,
       name: name || "Workspace User",
+      organizationId: organization?.id,
+      organizationSlug: organization?.slug,
+      organizationName: organization?.name,
+      organizationDomain: organization?.domain,
+      organizationRole: organization?.role,
     },
+    organization,
     onboardingCompleted,
   });
 }

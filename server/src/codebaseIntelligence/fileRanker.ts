@@ -10,6 +10,7 @@ import {
 } from "./retrievalConfig";
 import { resolveRepoScope } from "./repoScope";
 import { detectPatternTags } from "./patternTags";
+import { getCodebaseThresholdOffset } from "../rag/retrievalLearning";
 
 const prismaAny = prisma as any;
 
@@ -132,9 +133,11 @@ export function classifyChangeScope(
     ticketText: string;
     indexed: boolean;
     patterns: string[];
+    workThreshold?: number;
   }
 ): ChangeScope {
   const { topModifyScore, ticketText, indexed, patterns } = opts;
+  const workThreshold = opts.workThreshold ?? FILE_WORK_THRESHOLD;
 
   if (
     hasContextOnlyPattern(patterns) &&
@@ -145,7 +148,7 @@ export function classifyChangeScope(
     return "context_only";
   }
 
-  if (hit.score < FILE_WORK_THRESHOLD) {
+  if (hit.score < workThreshold) {
     return "context_only";
   }
 
@@ -191,6 +194,7 @@ export async function searchWorkFiles(input: {
   query: string;
   branchName: string;
   ticketText?: string;
+  components?: string[];
   topN?: number;
 }): Promise<WorkFileHit[]> {
   const query = input.query.trim();
@@ -215,6 +219,8 @@ export async function searchWorkFiles(input: {
   const paths = aggregated.map((a) => a.path);
   const meta = await loadFileMetadata(paths, input.branchName);
   const ticketText = input.ticketText ?? query;
+  const workThreshold =
+    FILE_WORK_THRESHOLD + getCodebaseThresholdOffset(input.components ?? []);
 
   const withScope: AggregatedFileHit[] = aggregated.map((hit) => {
     const fileMeta = meta.get(hit.path);
@@ -230,7 +236,7 @@ export async function searchWorkFiles(input: {
   });
 
   const topModifyScore =
-    withScope.find((h) => h.indexed && h.score >= FILE_WORK_THRESHOLD)?.score ?? 0;
+    withScope.find((h) => h.indexed && h.score >= workThreshold)?.score ?? 0;
 
   for (const hit of withScope) {
     hit.changeScope = classifyChangeScope(hit, {
@@ -238,6 +244,7 @@ export async function searchWorkFiles(input: {
       ticketText,
       indexed: hit.indexed,
       patterns: hit.patterns,
+      workThreshold,
     });
   }
 

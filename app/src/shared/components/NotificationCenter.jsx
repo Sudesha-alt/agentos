@@ -3,12 +3,14 @@ import { Link } from "react-router-dom";
 import { usePipelineList } from "../../entities/pipeline";
 import { useActivityEvents } from "../../entities/workspace";
 import { deriveReviewQueueItems } from "../../shared/lib/pipelineCounts";
+import { useOrgPathBuilder } from "../providers/OrgRouteProvider";
 import { formatRelativeTime } from "../lib/format";
 
 /**
  * Top-bar notifications — review queue items plus recent pipeline activity.
  */
 export default function NotificationCenter() {
+  const orgPath = useOrgPathBuilder();
   const [open, setOpen] = useState(false);
   const panelRef = useRef(null);
   const { items: pipelines } = usePipelineList(undefined, { pollMs: 12_000 });
@@ -73,7 +75,7 @@ export default function NotificationCenter() {
                 </p>
                 {reviewItems.length > 0 ? (
                   <Link
-                    to="/app/pipelines?tab=review"
+                    to={`${orgPath("pipelines")}?tab=review`}
                     onClick={() => setOpen(false)}
                     className="text-[11px] font-medium text-indigo hover:underline"
                   >
@@ -117,8 +119,8 @@ export default function NotificationCenter() {
                       <Link
                         to={
                           event.pipelineId
-                            ? `/app/pipelines/${event.pipelineId}`
-                            : "/app/pipelines"
+                            ? orgPath("pipelines", event.pipelineId)
+                            : orgPath("pipelines")
                         }
                         onClick={() => setOpen(false)}
                         className="flex items-start gap-2 rounded-app-sm px-2 py-1.5 transition hover:bg-app-surface-muted"
@@ -148,7 +150,7 @@ export default function NotificationCenter() {
 
           <div className="border-t border-app-border px-4 py-2.5">
             <Link
-              to="/app/pipelines?tab=history"
+              to={`${orgPath("pipelines")}?tab=history`}
               onClick={() => setOpen(false)}
               className="text-xs font-medium text-app-ink-dim hover:text-app-ink"
             >

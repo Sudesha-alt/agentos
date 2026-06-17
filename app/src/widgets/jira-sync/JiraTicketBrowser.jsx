@@ -8,8 +8,10 @@ import Spinner from "../../app/components/Spinner";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import { formatRelativeTime } from "../../shared/lib/format";
 import { motionSafe, pageStagger, sectionFadeUp } from "../../lib/motion";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 
 export default function JiraTicketBrowser({ connected }) {
+  const orgPath = useOrgPathBuilder();
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const animatedRef = useRef(false);
@@ -109,13 +111,13 @@ export default function JiraTicketBrowser({ connected }) {
                   </td>
                   <td className="px-5 py-2.5">
                     <Link
-                      to={`/app/pm-agents?ticket=${encodeURIComponent(item.jiraKey)}`}
+                      to={`${orgPath("pm-agents")}?ticket=${encodeURIComponent(item.jiraKey)}`}
                       className="mr-3 text-[12px] text-indigo hover:underline"
                     >
                       Analyze
                     </Link>
                     <Link
-                      to="/app/pipelines"
+                      to={orgPath("pipelines")}
                       className="text-[12px] text-app-ink-mute hover:underline"
                     >
                       Pipelines

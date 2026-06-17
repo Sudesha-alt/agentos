@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 import { formatRelativeTime } from "../../shared/lib/format";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 
 export default function DashboardLiveActivity({ events, loading }) {
+  const orgPath = useOrgPathBuilder();
   return (
     <Panel className="h-full">
       <PanelHeader kicker="Live" title="Live activity" />
@@ -25,8 +27,8 @@ export default function DashboardLiveActivity({ events, loading }) {
                 <Link
                   to={
                     event.pipelineId
-                      ? `/app/pipelines/${event.pipelineId}`
-                      : "/app/pipelines"
+                      ? orgPath("pipelines", event.pipelineId)
+                      : orgPath("pipelines")
                   }
                   className="flex items-start gap-3 rounded-app-sm border border-app-border px-3 py-2.5 transition hover:bg-app-surface-muted"
                 >

@@ -1,4 +1,5 @@
 import type { TestRunResult } from "../testing/testRunner";
+import type { SecurityScanResult } from "../testing/securityScanner";
 
 export type QaRecommendation =
   | "approve"
@@ -27,6 +28,7 @@ export interface QaExecutionReport {
     covered: number;
     uncovered: string[];
   };
+  securityScan?: SecurityScanResult;
 }
 
 export function generateQaReport(input: {
@@ -36,6 +38,7 @@ export function generateQaReport(input: {
   overallRecommendation: QaRecommendation;
   summary: string;
   acceptanceCriteria: string[];
+  securityScan?: SecurityScanResult;
 }): QaExecutionReport {
   const testRun = normalizeTestRun(input.testResults);
   const failureItems = input.failureAnalysis?.items ?? [];
@@ -56,6 +59,7 @@ export function generateQaReport(input: {
       covered: covered.length,
       uncovered: input.acceptanceCriteria.filter((c) => !covered.includes(c)),
     },
+    securityScan: input.securityScan,
   };
 }
 

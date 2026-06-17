@@ -1,10 +1,10 @@
 import { NavLink, useLocation, useSearchParams } from "react-router-dom";
 import Logo from "../../components/Logo";
-import { APP_NAV_SECTIONS, AGENT_NAV, PIPELINE_SUB_NAV } from "../../shared/config/app";
 import { usePipelineList } from "../../entities/pipeline";
 import { derivePipelineCounts } from "../../shared/lib/pipelineCounts";
 import { useSidebarCollapsed } from "../../shared/hooks/useSidebarCollapsed";
 import { useNavExpanded } from "../../shared/hooks/useNavExpanded";
+import { useOrgNavigation } from "../../shared/routing/useOrgNavigation";
 import SidebarUserCard from "./SidebarUserCard";
 
 function navItemClass(active, collapsed, { isGroupHeader = false, childActive = false } = {}) {
@@ -34,24 +34,22 @@ function sectionLabelClass(collapsed) {
 }
 
 const NAV_ICONS = {
-  "/app": IconDashboard,
-  "/app/pipelines": IconPipeline,
-  "/app/pm-agents": IconProduct,
+  dashboard: IconDashboard,
+  pipelines: IconPipeline,
   virin: IconProduct,
   ananta: IconCodebase,
   neel: IconQa,
-  "/app/ananta": IconCodebase,
-  "/app/roadmap": IconRoadmap,
-  "/app/qa": IconQa,
-  "/app/costs": IconCosts,
-  "/app/audit": IconAudit,
-  "/app/settings": IconSettings,
+  roadmap: IconRoadmap,
+  costs: IconCosts,
+  audit: IconAudit,
+  settings: IconSettings,
 };
 
 export default function Sidebar() {
+  const { orgPath, sections, pipelineSubNav, agentNav, pathMatches } = useOrgNavigation();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const pipelineTab = location.pathname.startsWith("/app/pipelines")
+  const pipelineTab = pathMatches("pipelines")
     ? (searchParams.get("tab") ?? "active")
     : "active";
   const { collapsed, toggleCollapsed } = useSidebarCollapsed();
@@ -61,33 +59,18 @@ export default function Sidebar() {
 
   function agentIsActive(agent) {
     if (agent.id === "virin") {
-      return (
-        location.pathname.startsWith("/app/pm-agents") ||
-        location.pathname.startsWith("/app/roadmap")
-      );
+      return pathMatches("pm-agents") || pathMatches("roadmap");
     }
     if (agent.id === "ananta") {
-      return location.pathname.startsWith("/app/ananta");
+      return pathMatches("ananta");
     }
     if (agent.id === "neel") {
-      return location.pathname.startsWith("/app/qa");
+      return pathMatches("qa");
     }
     return false;
   }
 
-  function subIsActive(sub, agentId) {
-    if (sub.to === "/app/roadmap") {
-      return location.pathname === "/app/roadmap";
-    }
-    if (sub.to === "/app/pm-agents") {
-      return location.pathname === "/app/pm-agents";
-    }
-    if (sub.to === "/app/ananta") {
-      return location.pathname === "/app/ananta";
-    }
-    if (sub.to === "/app/qa") {
-      return location.pathname === "/app/qa";
-    }
+  function subIsActive(sub) {
     return location.pathname + location.search === sub.to;
   }
 
@@ -109,22 +92,22 @@ export default function Sidebar() {
 
       <div className={`shrink-0 py-3 ${collapsed ? "flex justify-center px-0" : "px-1"}`}>
         {collapsed ? (
-          <NavLink to="/app" aria-label="AgentOS home" className="inline-flex">
+          <NavLink to={orgPath()} aria-label="AgentOS home" className="inline-flex">
             <LogoMark />
           </NavLink>
         ) : (
-          <Logo variant="light" href="/app" />
+          <Logo variant="light" href={orgPath()} />
         )}
       </div>
 
       <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-0.5 py-1">
-        {APP_NAV_SECTIONS.map((section, sectionIndex) => (
+        {sections.map((section, sectionIndex) => (
           <div key={section.id} className={sectionIndex > 0 ? "mt-4" : ""}>
             <p className={sectionLabelClass(collapsed)}>{section.label}</p>
             <ul className="space-y-0.5">
               {section.items.map((item) => {
                 if ("end" in item && item.end) {
-                  const Icon = NAV_ICONS[item.to] ?? IconDashboard;
+                  const Icon = NAV_ICONS.dashboard ?? IconDashboard;
                   return (
                     <li key={item.to}>
                       <NavLink
@@ -151,11 +134,11 @@ export default function Sidebar() {
                   <li>
                     {collapsed ? (
                       <NavLink
-                        to="/app/pipelines"
+                        to={orgPath("pipelines")}
                         title="Pipelines"
                         className={({ isActive }) =>
                           navItemClass(
-                            isActive || location.pathname.startsWith("/app/pipelines"),
+                            isActive || pathMatches("pipelines"),
                             true
                           )
                         }
@@ -173,14 +156,14 @@ export default function Sidebar() {
                       onClick={() => !collapsed && toggle("pipelines")}
                       title={collapsed ? "Pipelines" : undefined}
                       className={navItemClass(
-                        location.pathname.startsWith("/app/pipelines"),
+                        pathMatches("pipelines"),
                         collapsed,
                         {
                           isGroupHeader: true,
                           childActive:
                             !collapsed &&
                             isExpanded("pipelines") &&
-                            location.pathname.startsWith("/app/pipelines"),
+                            pathMatches("pipelines"),
                         }
                       )}
                     >
@@ -206,7 +189,7 @@ export default function Sidebar() {
                   </li>
                   {!collapsed && isExpanded("pipelines") ? (
                     <ul className="mt-0.5 space-y-0.5">
-                      {PIPELINE_SUB_NAV.map((sub) => {
+                      {pipelineSubNav.map((sub) => {
                         const count =
                           sub.badgeKey === "active"
                             ? counts.active
@@ -214,8 +197,7 @@ export default function Sidebar() {
                               ? counts.review
                               : 0;
                         const isReview = sub.badgeKey === "review";
-                        const active =
-                          location.pathname === "/app/pipelines" && pipelineTab === sub.tab;
+                        const active = pathMatches("pipelines") && pipelineTab === sub.tab;
                         return (
                           <li key={sub.tab}>
                             <NavLink to={sub.to} className={subNavItemClass(active)}>
@@ -244,7 +226,7 @@ export default function Sidebar() {
               ) : null}
 
               {"agentGroup" in section && section.agentGroup
-                ? AGENT_NAV.map((agent) => {
+                ? agentNav.map((agent) => {
                     const Icon = NAV_ICONS[agent.id] ?? IconProduct;
                     const active = agentIsActive(agent);
                     const expanded = isExpanded(agent.id);

@@ -12,6 +12,7 @@ import {
   clientKeyFromRequest,
 } from "../../codebaseIntelligence/askRateLimit";
 import { searchCodebase } from "../../codebaseIntelligence/searchService";
+import { buildEnrichedCodebaseContext } from "../../codebaseIntelligence/enrichedContextService";
 import { visualizationCache } from "../../codebaseIntelligence/visualizationCache";
 import { visualizationService } from "../../codebaseIntelligence/visualizationService";
 import { getTour, generateTour } from "../../codebaseIntelligence/tourService";
@@ -164,8 +165,18 @@ router.get("/search", async (req, res, next) => {
   try {
     const query = String(req.query.q ?? "").trim();
     const branchName = String(req.query.branch ?? "main");
+    const enriched = req.query.enriched === "true" || req.query.enriched === "1";
     if (!query) {
       res.status(400).json({ error: "query_required" });
+      return;
+    }
+    if (enriched) {
+      const bundle = await buildEnrichedCodebaseContext({
+        query,
+        branchName,
+        fetchFreshContent: true,
+      });
+      res.json(bundle);
       return;
     }
     const data = await searchCodebase({ query, branchName });
@@ -177,9 +188,18 @@ router.get("/search", async (req, res, next) => {
 
 router.post("/search", async (req, res, next) => {
   try {
-    const { query, branchName = "main" } = req.body ?? {};
+    const { query, branchName = "main", enriched = false } = req.body ?? {};
     if (!query || typeof query !== "string") {
       res.status(400).json({ error: "query_required" });
+      return;
+    }
+    if (enriched) {
+      const bundle = await buildEnrichedCodebaseContext({
+        query,
+        branchName,
+        fetchFreshContent: true,
+      });
+      res.json(bundle);
       return;
     }
     const data = await searchCodebase({ query, branchName });

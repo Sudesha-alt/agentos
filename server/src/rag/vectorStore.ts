@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import type { VectorContentType } from "../types/pipeline";
+import { requireActiveOrganizationId } from "../organization/orgScope";
 import { logger } from "../utils/logger";
 
 function requiredEnv(name: string): string {
@@ -23,6 +24,7 @@ export interface VectorRecord {
   content: string;
   metadata: Record<string, unknown>;
   similarity?: number;
+  chunkIndex?: number;
 }
 
 export interface SearchOptions {
@@ -30,6 +32,7 @@ export interface SearchOptions {
   topK: number;
   similarityThreshold: number;
   excludeJiraKeys?: string[];
+  organizationId?: string;
 }
 
 interface SimilaritySearchRow {
@@ -40,6 +43,7 @@ interface SimilaritySearchRow {
   content: string;
   metadata: Record<string, unknown>;
   similarity: number;
+  chunk_index?: number;
 }
 
 interface VectorTableRow {
@@ -49,6 +53,15 @@ interface VectorTableRow {
   content_type: VectorContentType;
   content: string;
   metadata: Record<string, unknown>;
+  chunk_index?: number;
+}
+
+function resolveOrganizationId(explicit?: string): string | undefined {
+  try {
+    return explicit ?? requireActiveOrganizationId();
+  } catch {
+    return explicit;
+  }
 }
 
 export const vectorStore = {
@@ -59,7 +72,10 @@ export const vectorStore = {
     content: string;
     embedding: number[];
     metadata: Record<string, unknown>;
+    chunkIndex?: number;
+    organizationId?: string;
   }): Promise<void> {
+    const organizationId = resolveOrganizationId(record.organizationId);
     const { error } = await supabase.rpc("upsert_vector", {
       p_jira_ticket_id: record.jiraTicketId,
       p_jira_key: record.jiraKey,
@@ -67,6 +83,8 @@ export const vectorStore = {
       p_content: record.content,
       p_embedding: JSON.stringify(record.embedding),
       p_metadata: record.metadata,
+      p_chunk_index: record.chunkIndex ?? 0,
+      p_organization_id: organizationId ?? null,
     });
 
     if (error) {
@@ -75,9 +93,32 @@ export const vectorStore = {
     }
 
     logger.info(
-      { jiraKey: record.jiraKey, contentType: record.contentType },
+      { jiraKey: record.jiraKey, contentType: record.contentType, chunkIndex: record.chunkIndex ?? 0 },
       "vector stored"
     );
+  },
+
+  async deleteByJiraKeyAndContentType(
+    jiraKey: string,
+    contentType: VectorContentType,
+    organizationId?: string
+  ): Promise<void> {
+    const orgId = resolveOrganizationId(organizationId);
+    const { error } = await supabase.rpc("delete_vectors_for_ticket_type", {
+      p_jira_key: jiraKey,
+      p_content_type: contentType,
+      p_organization_id: orgId ?? null,
+    });
+    if (error) {
+      logger.warn({ err: error, jiraKey, contentType }, "vector chunk delete failed — falling back");
+      const q = supabase
+        .from("vector_store")
+        .delete()
+        .eq("jira_key", jiraKey)
+        .eq("content_type", contentType);
+      if (orgId) q.eq("organization_id", orgId);
+      await q;
+    }
   },
 
   async similaritySearch(
@@ -89,7 +130,10 @@ export const vectorStore = {
       topK,
       similarityThreshold,
       excludeJiraKeys = [],
+      organizationId,
     } = options;
+
+    const orgId = resolveOrganizationId(organizationId);
 
     const { data, error } = await supabase.rpc("similarity_search", {
       query_embedding: JSON.stringify(queryEmbedding),
@@ -97,6 +141,7 @@ export const vectorStore = {
       top_k: topK,
       similarity_threshold: similarityThreshold,
       exclude_keys: excludeJiraKeys,
+      p_organization_id: orgId ?? null,
     });
 
     if (error) {
@@ -112,6 +157,7 @@ export const vectorStore = {
       content: row.content,
       metadata: row.metadata,
       similarity: row.similarity,
+      chunkIndex: row.chunk_index ?? 0,
     }));
   },
 
@@ -140,6 +186,7 @@ export const vectorStore = {
       contentType: row.content_type,
       content: row.content,
       metadata: row.metadata,
+      chunkIndex: row.chunk_index ?? 0,
     }));
   },
 };

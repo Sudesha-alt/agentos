@@ -8,6 +8,7 @@ import { AgentPageWithChat } from "../../widgets/agent-chat/AgentPageWithChat";
 import { AgentPageHeader } from "../../widgets/agent-chat/AgentPageHeader";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
+import { useOrg } from "../../shared/providers/OrgRouteProvider";
 
 function resolvePipelineId(jiraKey, pipelineParam, engineeringRuns) {
   if (pipelineParam) return pipelineParam;
@@ -50,6 +51,7 @@ function buildTicketList(pmItems, engineeringRuns) {
 }
 
 export default function AnantaWorkspace() {
+  const { orgPath } = useOrg();
   const [searchParams, setSearchParams] = useSearchParams();
   const ticketFromUrl = searchParams.get("ticket")?.trim().toUpperCase() || "";
   const pipelineFromUrl = searchParams.get("pipeline")?.trim() || "";
@@ -163,7 +165,7 @@ export default function AnantaWorkspace() {
               </div>
               <div className="border-t border-app-border px-4 py-3">
                 <Link
-                  to="/app/pm-agents"
+                  to={orgPath("pm-agents")}
                   className="text-[12px] font-medium text-indigo hover:underline"
                 >
                   Open Virin →

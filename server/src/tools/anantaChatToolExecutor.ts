@@ -6,6 +6,7 @@ import {
   getArchitectureDoc,
   getRunbook,
 } from "../codebaseIntelligence/knowledgeService";
+import { buildEnrichedCodebaseContext } from "../codebaseIntelligence/enrichedContextService";
 import { searchCodebaseFiles } from "../codebaseIntelligence/searchService";
 import { codebaseQueryService } from "../codebaseIntelligence/queryService";
 import { logger } from "../utils/logger";
@@ -48,14 +49,26 @@ export async function executeAnantaChatToolCall(
         const query = stringValue(toolCall.input.query);
         metaQuery = query;
         const includeContext = toolCall.input.include_context === true;
-        const { workFiles, allFiles } = await searchCodebaseFiles({
-          query,
-          branchName: branch,
-          includeContext,
-          topN: numberValue(toolCall.input.top_k, 10),
-        });
-        resultsFound = includeContext ? allFiles.length : workFiles.length;
-        result = { workFiles, files: includeContext ? allFiles : workFiles };
+        const useEnriched = toolCall.input.enriched !== false;
+        if (useEnriched) {
+          const bundle = await buildEnrichedCodebaseContext({
+            query,
+            branchName: branch,
+            topN: numberValue(toolCall.input.top_k, 10),
+            fetchFreshContent: includeContext,
+          });
+          resultsFound = bundle.files.length;
+          result = bundle;
+        } else {
+          const { workFiles, allFiles } = await searchCodebaseFiles({
+            query,
+            branchName: branch,
+            includeContext,
+            topN: numberValue(toolCall.input.top_k, 10),
+          });
+          resultsFound = includeContext ? allFiles.length : workFiles.length;
+          result = { workFiles, files: includeContext ? allFiles : workFiles };
+        }
         break;
       }
       case "list_directory": {

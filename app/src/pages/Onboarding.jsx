@@ -13,6 +13,7 @@ import {
   saveOnboardingStep,
 } from "../entities/onboarding";
 import { useAuth } from "../shared/providers/useAuth";
+import { sessionHomePath } from "../shared/routing/orgPaths";
 import {
   createOrganization,
   fetchOrganizationsByDomain,
@@ -24,7 +25,7 @@ const STEPS = ["welcome", "stage", "team", "role", "company", "organization"];
 
 export default function Onboarding() {
   const navigate = useNavigate();
-  const { user, refresh } = useAuth();
+  const { user, organization, refresh } = useAuth();
   const [stepIndex, setStepIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
@@ -51,7 +52,7 @@ export default function Onboarding() {
         const { onboarding } = await fetchOnboarding();
         if (cancelled) return;
         if (onboarding?.completed && user?.organizationId) {
-          navigate("/app", { replace: true });
+          navigate(sessionHomePath({ organization, user }), { replace: true });
           return;
         }
         if (onboarding?.completed && !user?.organizationId) {
@@ -167,11 +168,12 @@ export default function Onboarding() {
         setNewOrgName(companyName.trim());
         setStepIndex(5);
       } else if (step === "organization") {
+        let orgSession = null;
         if (!user?.organizationId) {
           if (orgChoice === "join" && selectedOrgId) {
-            await joinOrganization(selectedOrgId);
+            orgSession = await joinOrganization(selectedOrgId);
           } else if (orgChoice === "create") {
-            await createOrganization(newOrgName.trim());
+            orgSession = await createOrganization(newOrgName.trim());
           } else {
             throw new Error("Choose a workspace to continue");
           }
@@ -203,8 +205,8 @@ export default function Onboarding() {
           competitors: [],
         });
         await completeOnboardingFlow();
-        await refresh();
-        navigate("/app", { replace: true });
+        const session = await refresh();
+        navigate(sessionHomePath(orgSession ?? session ?? { organization, user }), { replace: true });
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Something went wrong";

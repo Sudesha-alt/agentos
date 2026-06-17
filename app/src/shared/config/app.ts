@@ -1,4 +1,5 @@
 import type { PipelineStage, PipelineStatus, StageStatus } from "../../contracts";
+import { orgPath } from "../routing/orgPaths";
 
 export const DATA_MODES = {
   MOCK: "mock",
@@ -18,6 +19,20 @@ export const AGENT_NAMES = {
 
 export type AgentNavId = "virin" | "ananta" | "neel";
 
+/** Dashboard / health panel labels with role suffix. */
+export const AGENT_DASHBOARD_LABELS: Record<AgentNavId, string> = {
+  virin: `${AGENT_NAMES.VIRIN} (-PM)`,
+  ananta: `${AGENT_NAMES.ANANTA} (-Engg)`,
+  neel: `${AGENT_NAMES.NEEL} (-QA)`,
+};
+
+export function getAgentDashboardLabel(id: string): string {
+  if (id in AGENT_DASHBOARD_LABELS) {
+    return AGENT_DASHBOARD_LABELS[id as AgentNavId];
+  }
+  return id;
+}
+
 export type NavSubItem = {
   label: string;
   to: string;
@@ -25,104 +40,136 @@ export type NavSubItem = {
 };
 
 /** Three agent personas — sub-nav reveals on expand in sidebar. */
-export const AGENT_NAV: Array<{
+export function buildAgentNav(slug: string): Array<{
   id: AgentNavId;
   to: string;
   label: string;
   breadcrumb: string;
   subNav: NavSubItem[];
-}> = [
-  {
-    id: "virin",
-    to: "/app/pm-agents",
-    label: AGENT_NAMES.VIRIN,
-    breadcrumb: AGENT_NAMES.VIRIN,
-    subNav: [
-      { label: "Workspace", to: "/app/pm-agents" },
-      { label: "Roadmap", to: "/app/roadmap" },
-    ],
-  },
-  {
-    id: "ananta",
-    to: "/app/ananta",
-    label: AGENT_NAMES.ANANTA,
-    breadcrumb: AGENT_NAMES.ANANTA,
-    subNav: [{ label: "Workspace", to: "/app/ananta" }],
-  },
-  {
-    id: "neel",
-    to: "/app/qa",
-    label: AGENT_NAMES.NEEL,
-    breadcrumb: AGENT_NAMES.NEEL,
-    subNav: [],
-  },
-];
+}> {
+  return [
+    {
+      id: "virin",
+      to: orgPath(slug, "pm-agents"),
+      label: AGENT_NAMES.VIRIN,
+      breadcrumb: AGENT_NAMES.VIRIN,
+      subNav: [
+        { label: "Workspace", to: orgPath(slug, "pm-agents") },
+        { label: "Roadmap", to: orgPath(slug, "roadmap") },
+      ],
+    },
+    {
+      id: "ananta",
+      to: orgPath(slug, "ananta"),
+      label: AGENT_NAMES.ANANTA,
+      breadcrumb: AGENT_NAMES.ANANTA,
+      subNav: [{ label: "Workspace", to: orgPath(slug, "ananta") }],
+    },
+    {
+      id: "neel",
+      to: orgPath(slug, "qa"),
+      label: AGENT_NAMES.NEEL,
+      breadcrumb: AGENT_NAMES.NEEL,
+      subNav: [],
+    },
+  ];
+}
+
+/** @deprecated Use buildAgentNav(slug) */
+export const AGENT_NAV = buildAgentNav("app");
 
 /** @deprecated Ananta no longer has tabbed sub-nav */
-export const TECH_AGENT_SUB_NAV = AGENT_NAV.find((a) => a.id === "ananta")!.subNav;
+export const TECH_AGENT_SUB_NAV = buildAgentNav("app").find((a) => a.id === "ananta")!.subNav;
 
 /** Flat list for breadcrumbs and mobile nav. */
-export const APP_NAV = [
-  { to: "/app", label: "Dashboard", breadcrumb: "Dashboard", end: true },
-  { to: "/app/pipelines", label: "Pipelines", breadcrumb: "Pipelines" },
-  ...AGENT_NAV.map(({ to, label, breadcrumb }) => ({ to, label, breadcrumb })),
-  { to: "/app/costs", label: "Cost & ROI", breadcrumb: "Costs" },
-  { to: "/app/settings", label: "Configuration", breadcrumb: "Settings" },
-  { to: "/app/audit", label: "Audit Trail", breadcrumb: "Audit" },
-] as const;
+export function buildAppNav(slug: string) {
+  const agentNav = buildAgentNav(slug);
+  return [
+    { to: orgPath(slug), label: "Dashboard", breadcrumb: "Dashboard", end: true },
+    { to: orgPath(slug, "pipelines"), label: "Pipelines", breadcrumb: "Pipelines" },
+    ...agentNav.map(({ to, label, breadcrumb }) => ({ to, label, breadcrumb })),
+    { to: orgPath(slug, "costs"), label: "Cost & ROI", breadcrumb: "Costs" },
+    { to: orgPath(slug, "settings"), label: "Configuration", breadcrumb: "Settings" },
+    { to: orgPath(slug, "audit"), label: "Audit Trail", breadcrumb: "Audit" },
+  ];
+}
+
+/** @deprecated Use buildAppNav(slug) */
+export const APP_NAV = buildAppNav("app");
 
 export type PipelineNavTab = "active" | "review" | "history";
 
-export const PIPELINE_SUB_NAV: Array<{
+export function buildPipelineSubNav(slug: string): Array<{
   tab: PipelineNavTab;
   label: string;
   to: string;
   badgeKey: "active" | "review" | null;
-}> = [
-  { tab: "active", label: "Active", to: "/app/pipelines?tab=active", badgeKey: "active" },
-  {
-    tab: "review",
-    label: "Review Queue",
-    to: "/app/pipelines?tab=review",
-    badgeKey: "review",
-  },
-  { tab: "history", label: "History", to: "/app/pipelines?tab=history", badgeKey: null },
-];
+}> {
+  return [
+    {
+      tab: "active",
+      label: "Active",
+      to: `${orgPath(slug, "pipelines")}?tab=active`,
+      badgeKey: "active",
+    },
+    {
+      tab: "review",
+      label: "Review Queue",
+      to: `${orgPath(slug, "pipelines")}?tab=review`,
+      badgeKey: "review",
+    },
+    {
+      tab: "history",
+      label: "History",
+      to: `${orgPath(slug, "pipelines")}?tab=history`,
+      badgeKey: null,
+    },
+  ];
+}
+
+/** @deprecated Use buildPipelineSubNav(slug) */
+export const PIPELINE_SUB_NAV = buildPipelineSubNav("app");
 
 /** Sidebar groups — post-login landing UX. */
-export const APP_NAV_SECTIONS = [
-  {
-    id: "workspace",
-    label: "Workspace",
-    items: [{ to: "/app", label: "Dashboard", breadcrumb: "Dashboard", end: true }],
-    pipelineGroup: true,
-  },
-  {
-    id: "agents",
-    label: "Agents",
-    agentGroup: true,
-    items: AGENT_NAV.map(({ id, to, label, breadcrumb, subNav }) => ({
-      id,
-      to,
-      label,
-      breadcrumb,
-      subNav,
-    })),
-  },
-  {
-    id: "analytics",
-    label: "Analytics",
-    items: [{ to: "/app/costs", label: "Cost & ROI", breadcrumb: "Costs" }],
-  },
-  {
-    id: "settings",
-    label: "Settings",
-    items: [
-      { to: "/app/settings", label: "Configuration", breadcrumb: "Settings" },
-      { to: "/app/audit", label: "Audit Trail", breadcrumb: "Audit" },
-    ],
-  },
-] as const;
+export function buildAppNavSections(slug: string) {
+  const agentNav = buildAgentNav(slug);
+  return [
+    {
+      id: "workspace",
+      label: "Workspace",
+      items: [{ to: orgPath(slug), label: "Dashboard", breadcrumb: "Dashboard", end: true }],
+      pipelineGroup: true,
+    },
+    {
+      id: "agents",
+      label: "Agents",
+      agentGroup: true,
+      items: agentNav.map(({ id, to, label, breadcrumb, subNav }) => ({
+        id,
+        to,
+        label,
+        breadcrumb,
+        subNav,
+      })),
+    },
+    {
+      id: "analytics",
+      label: "Analytics",
+      items: [{ to: orgPath(slug, "costs"), label: "Cost & ROI", breadcrumb: "Costs" }],
+    },
+    {
+      id: "settings",
+      label: "Settings",
+      items: [
+        { to: orgPath(slug, "settings"), label: "Configuration", breadcrumb: "Settings" },
+        { to: orgPath(slug, "audit"), label: "Audit Trail", breadcrumb: "Audit" },
+      ],
+    },
+  ];
+}
+
+/** @deprecated Use buildAppNavSections(slug) */
+export const APP_NAV_SECTIONS = buildAppNavSections("app");
 
 export const STAGE_ORDER: PipelineStage[] = [
   "INGESTION",

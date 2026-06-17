@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { usePipelineList } from "../../entities/pipeline";
 import { useCostsDaily } from "../../entities/costs";
 import { useQaReports } from "../../entities/qa";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 import {
   derivePipelineCounts,
   deriveRecentCompletions,
@@ -20,47 +21,48 @@ import WeeklyTrendChart from "./WeeklyTrendChart";
 import RecentCompletionsPanel from "./RecentCompletionsPanel";
 import AgentHealthPanel from "./AgentHealthPanel";
 
-function buildStatusMetrics(counts, costToday = "—", passRate = "—") {
+function buildStatusMetrics(orgPath, counts, costToday = "—", passRate = "—") {
   return [
     {
       id: "running",
       label: "Running",
       value: String(counts.running),
       tone: "running",
-      href: "/app/pipelines?tab=active",
+      href: `${orgPath("pipelines")}?tab=active`,
     },
     {
       id: "review",
       label: "Need review",
       value: String(counts.review),
       tone: "review",
-      href: "/app/pipelines?tab=review",
+      href: `${orgPath("pipelines")}?tab=review`,
     },
     {
       id: "completed",
       label: "Completed",
       value: String(counts.completedToday),
       tone: "success",
-      href: "/app/pipelines?tab=history",
+      href: `${orgPath("pipelines")}?tab=history`,
     },
     {
       id: "cost",
       label: "Cost today",
       value: costToday,
       tone: "neutral",
-      href: "/app/costs",
+      href: orgPath("costs"),
     },
     {
       id: "pass_rate",
       label: "Pass rate",
       value: passRate,
       tone: "success",
-      href: "/app/qa",
+      href: orgPath("qa"),
     },
   ];
 }
 
 export default function LandingDashboardWidget() {
+  const orgPath = useOrgPathBuilder();
   const { items: pipelines, loading: pipelinesLoading } = usePipelineList(undefined, {
     pollMs: 10_000,
   });
@@ -73,8 +75,8 @@ export default function LandingDashboardWidget() {
   const costToday = useMemo(() => formatCostToday(costsDaily), [costsDaily]);
   const passRate = useMemo(() => derivePassRate(qaReports), [qaReports]);
   const statusMetrics = useMemo(
-    () => buildStatusMetrics(counts, costToday, passRate),
-    [counts, costToday, passRate]
+    () => buildStatusMetrics(orgPath, counts, costToday, passRate),
+    [orgPath, counts, costToday, passRate]
   );
   const metricsLoading = pipelinesLoading || costsLoading || qaLoading;
 

@@ -5,8 +5,10 @@ import EmptyState from "../components/EmptyState";
 import Spinner from "../components/Spinner";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
 import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
+import { useOrg } from "../../shared/providers/OrgRouteProvider";
 
 export default function JiraSearch() {
+  const { orgPath } = useOrg();
   const [keyword, setKeyword] = useState("");
   const [searchIn, setSearchIn] = useState("both");
   const [result, setResult] = useState(null);
@@ -38,7 +40,7 @@ export default function JiraSearch() {
         title="Board keyword search"
         right={
           <Link
-            to="/app/settings/integrations/jira"
+            to={orgPath("settings", "integrations", "jira")}
             className="rounded-full border border-app-border bg-app-surface px-3.5 py-1.5 text-[12px] text-app-ink-dim transition-colors hover:text-app-ink"
           >
             AI Worker queue

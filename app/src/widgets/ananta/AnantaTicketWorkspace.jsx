@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useEngineeringRun } from "../../entities/engineering-agent";
 import { AGENT_NAMES } from "../../shared/config/app";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 import { Panel } from "../../shared/ui/Panel";
 
 const SECTIONS = [
@@ -17,6 +18,7 @@ export default function AnantaTicketWorkspace({
   onClearSelection,
   handoffPending = false,
 }) {
+  const orgPath = useOrgPathBuilder();
   const { run, loading } = useEngineeringRun(pipelineId, { pollMs: 8_000 });
   const [section, setSection] = useState("plan");
   const [selectedFile, setSelectedFile] = useState(null);
@@ -48,7 +50,7 @@ export default function AnantaTicketWorkspace({
           {AGENT_NAMES.ANANTA} starts writing files.
         </p>
         <Link
-          to={`/app/pm-agents?ticket=${encodeURIComponent(jiraKey)}`}
+          to={`${orgPath("pm-agents")}?ticket=${encodeURIComponent(jiraKey)}`}
           className="mt-6 text-sm font-medium text-indigo hover:underline"
         >
           View handoff in Virin →
@@ -145,13 +147,13 @@ export default function AnantaTicketWorkspace({
               </a>
             ) : null}
             <Link
-              to={`/app/pipelines/${run.pipelineId}/prd`}
+              to={orgPath("pipelines", run.pipelineId, "prd")}
               className="rounded-full border border-app-border px-3 py-1.5 text-xs font-medium text-app-ink"
             >
               View PRD
             </Link>
             <Link
-              to="/app/qa"
+              to={orgPath("qa")}
               className="rounded-full border border-app-border px-3 py-1.5 text-xs font-medium text-app-ink"
             >
               View QA Report
@@ -322,7 +324,7 @@ function AnantaEmptyState() {
         Live file edits, diffs, and tool calls show in the editor as the agent works.
       </p>
       <Link
-        to="/app/pm-agents"
+        to={orgPath("pm-agents")}
         className="mt-6 rounded-full bg-indigo px-5 py-2.5 text-sm font-medium text-white"
       >
         Open Virin workspace

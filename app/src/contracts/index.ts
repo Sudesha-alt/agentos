@@ -149,6 +149,7 @@ export const AuthUserSchema = z.object({
   organizationId: z.string().optional(),
   organizationName: z.string().optional(),
   organizationDomain: z.string().optional(),
+  organizationSlug: z.string().optional(),
   organizationRole: z.enum(["OWNER", "ADMIN", "MEMBER"]).optional(),
 });
 
@@ -156,7 +157,7 @@ export const OrganizationSchema = z.object({
   id: z.string(),
   name: z.string(),
   domain: z.string(),
-  slug: z.string().optional(),
+  slug: z.string(),
   role: z.enum(["OWNER", "ADMIN", "MEMBER"]).optional(),
 });
 

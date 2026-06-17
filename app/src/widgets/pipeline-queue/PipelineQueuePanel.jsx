@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import LabelPill from "../../app/components/LabelPill";
 import EmptyState from "../../app/components/EmptyState";
 import { scanPipelineIntake } from "../../entities/pipeline-jira";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 
 function formatIntakeTrigger(intake) {
@@ -57,6 +58,7 @@ export function PipelineQueueSummary({ setup, className = "" }) {
 }
 
 export default function PipelineQueuePanel({ setup, showHeader = true, onRefreshSetup }) {
+  const orgPath = useOrgPathBuilder();
   const [scanning, setScanning] = useState(false);
   const [scanMessage, setScanMessage] = useState(null);
   const intake = setup?.intake;
@@ -174,7 +176,7 @@ export default function PipelineQueuePanel({ setup, showHeader = true, onRefresh
 
           <p className="text-xs text-white/45">
             Full run history:{" "}
-            <Link to="/app/pipelines" className="text-violet-300 underline">
+            <Link to={orgPath("pipelines")} className="text-violet-300 underline">
               Pipelines →
             </Link>
             . Refreshes every few seconds.

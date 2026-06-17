@@ -28,6 +28,10 @@ import {
 } from "../../pipeline/jira/connectPipelineJira";
 import { logger } from "../../utils/logger";
 import {
+  frontendBaseUrl,
+  frontendIntegrationUrl,
+} from "../../shared/frontendUrls";
+import {
   requireOrganizationUser,
   withOrganizationContext,
 } from "../orgRequestContext";
@@ -43,16 +47,26 @@ function publicApiBase(req: Request): string {
   return `${proto}://${host}`;
 }
 
-function frontendBaseUrl(): string {
-  const configured = process.env.FRONTEND_URL?.trim();
-  if (!configured) return "http://localhost:5173";
-  let base = configured.replace(/\/$/, "");
-  base = base.replace(/\/app(\/git)?$/i, "");
-  return base;
+async function resolveOrgSlug(
+  organizationId: string | undefined,
+  organizationSlug?: string
+): Promise<string | undefined> {
+  if (organizationSlug?.trim()) return organizationSlug.trim();
+  if (!organizationId) return undefined;
+  const { prisma } = await import("../../db/client");
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { slug: true },
+  });
+  return org?.slug;
 }
 
-function frontendJiraSettingsUrl(query = ""): string {
-  const base = frontendBaseUrl();
+function frontendJiraSettingsUrl(orgSlug?: string, query = ""): string {
+  if (orgSlug?.trim()) {
+    const url = frontendIntegrationUrl(orgSlug.trim(), "jira");
+    return query ? `${url}?${query}` : url;
+  }
+  const base = frontendBaseUrl() || "http://localhost:5173";
   const path = "/app/settings/integrations/jira";
   return query ? `${base}${path}?${query}` : `${base}${path}`;
 }
@@ -71,7 +85,8 @@ router.get("/start", async (req, res) => {
   }
 
   const redirectUri = atlassianOAuthRedirectUri(publicApiBase(req));
-  const state = createJiraOAuthState(user.organizationId, user.id);
+  const slug = await resolveOrgSlug(user.organizationId, user.organizationSlug);
+  const state = createJiraOAuthState(user.organizationId, user.id, slug);
   const url = buildAtlassianAuthorizeUrl(state, redirectUri);
 
   if (req.query.redirect === "1") {
@@ -84,21 +99,35 @@ router.get("/start", async (req, res) => {
 
 router.get("/callback", async (req, res) => {
   const oauthError = String(req.query.error ?? "");
+  const stateParam = String(req.query.state ?? "");
+  const earlyPayload = validateJiraOAuthState(stateParam);
+  const earlySlug = await resolveOrgSlug(
+    earlyPayload?.organizationId,
+    earlyPayload?.organizationSlug
+  );
+
   if (oauthError) {
     res.redirect(
-      frontendJiraSettingsUrl(`error=${encodeURIComponent(oauthError)}`)
+      frontendJiraSettingsUrl(
+        earlySlug,
+        `error=${encodeURIComponent(oauthError)}`
+      )
     );
     return;
   }
 
   const code = String(req.query.code ?? "");
-  const state = String(req.query.state ?? "");
-  const payload = validateJiraOAuthState(state);
+  const payload = earlyPayload;
 
   if (!code || !payload) {
-    res.redirect(frontendJiraSettingsUrl("error=invalid_state"));
+    res.redirect(frontendJiraSettingsUrl(earlySlug, "error=invalid_state"));
     return;
   }
+
+  const orgSlug = await resolveOrgSlug(
+    payload.organizationId,
+    payload.organizationSlug
+  );
 
   const redirectUri = atlassianOAuthRedirectUri(publicApiBase(req));
 
@@ -108,7 +137,7 @@ router.get("/callback", async (req, res) => {
     const site = pickJiraCloudResource(resources);
 
     if (!site) {
-      res.redirect(frontendJiraSettingsUrl("error=no_jira_site"));
+      res.redirect(frontendJiraSettingsUrl(orgSlug, "error=no_jira_site"));
       return;
     }
 
@@ -169,10 +198,10 @@ router.get("/callback", async (req, res) => {
       logger.warn({ err }, "jira oauth: post-connect webhook/sync skipped");
     }
 
-    res.redirect(frontendJiraSettingsUrl("connected=1"));
+    res.redirect(frontendJiraSettingsUrl(orgSlug, "connected=1"));
   } catch (err) {
     logger.error({ err }, "jira oauth callback failed");
-    res.redirect(frontendJiraSettingsUrl("error=connect_failed"));
+    res.redirect(frontendJiraSettingsUrl(orgSlug, "error=connect_failed"));
   }
 });
 

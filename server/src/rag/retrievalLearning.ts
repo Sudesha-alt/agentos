@@ -5,6 +5,8 @@ import { logger } from "../utils/logger";
 import type { RetrospectiveOutput } from "../agents/pm/types";
 
 const componentPatternBoosts = new Map<string, Set<string>>();
+const ticketThresholdOffsets = new Map<string, number>();
+const codebaseThresholdOffsets = new Map<string, number>();
 
 const PATTERN_KEYWORDS: Record<string, string[]> = {
   billing: ["billing", "config", "api-route"],
@@ -48,6 +50,39 @@ export function recordRetrospectiveLearning(
       "retrospective pattern recorded for retrieval boosts"
     );
   }
+
+  if (retrospective.fileDetectionAccuracy?.toLowerCase().includes("missed")) {
+    for (const component of ticketComponents) {
+      const prevTicket = ticketThresholdOffsets.get(component) ?? 0;
+      ticketThresholdOffsets.set(component, Math.min(prevTicket - 0.02, 0));
+      const prevCode = codebaseThresholdOffsets.get(component) ?? 0;
+      codebaseThresholdOffsets.set(component, Math.min(prevCode - 0.02, 0));
+    }
+  }
+  if (retrospective.fileDetectionAccuracy?.toLowerCase().includes("accurate")) {
+    for (const component of ticketComponents) {
+      const prevTicket = ticketThresholdOffsets.get(component) ?? 0;
+      ticketThresholdOffsets.set(component, Math.max(prevTicket + 0.01, 0));
+      const prevCode = codebaseThresholdOffsets.get(component) ?? 0;
+      codebaseThresholdOffsets.set(component, Math.max(prevCode + 0.01, 0));
+    }
+  }
+}
+
+export function getTicketThresholdOffset(components: string[]): number {
+  let offset = 0;
+  for (const component of components) {
+    offset += ticketThresholdOffsets.get(component) ?? 0;
+  }
+  return Math.max(-0.08, Math.min(0.08, offset));
+}
+
+export function getCodebaseThresholdOffset(components: string[]): number {
+  let offset = 0;
+  for (const component of components) {
+    offset += codebaseThresholdOffsets.get(component) ?? 0;
+  }
+  return Math.max(-0.08, Math.min(0.08, offset));
 }
 
 export function getBoostedPatternTags(components: string[]): string[] {

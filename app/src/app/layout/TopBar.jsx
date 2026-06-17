@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
 import NotificationCenter from "../../shared/components/NotificationCenter";
+import { useOrg } from "../../shared/providers/OrgRouteProvider";
 import { useCodebaseCommandPalette } from "../../widgets/codebase-search/useCodebaseCommandPalette";
 
 export default function TopBar() {
   const { openPalette } = useCodebaseCommandPalette();
+  const { orgPath } = useOrg();
 
   return (
     <header className="sticky top-0 z-20 flex h-[4.25rem] items-center gap-3 border-b border-app-border bg-app-surface px-4 sm:px-6 lg:px-8">
@@ -27,7 +29,7 @@ export default function TopBar() {
 
       <div className="ml-auto flex shrink-0 items-center gap-2">
         <Link
-          to="/app/settings"
+          to={orgPath("settings")}
           className="flex size-10 items-center justify-center rounded-lg border border-app-border bg-app-surface text-app-ink-dim transition-colors hover:border-app-ink/12 hover:text-app-ink md:hidden"
           aria-label="Settings"
         >

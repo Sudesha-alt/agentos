@@ -4,6 +4,7 @@ const STATE_TTL_MS = 15 * 60 * 1000;
 
 export type JiraOAuthStatePayload = {
   organizationId: string;
+  organizationSlug?: string;
   userId: string;
   nonce: string;
   ts: number;
@@ -20,10 +21,12 @@ function stateSecret(): string {
 
 export function createJiraOAuthState(
   organizationId: string,
-  userId: string
+  userId: string,
+  organizationSlug?: string
 ): string {
   const payload: JiraOAuthStatePayload = {
     organizationId,
+    organizationSlug: organizationSlug?.trim() || undefined,
     userId,
     nonce: crypto.randomBytes(16).toString("hex"),
     ts: Date.now(),

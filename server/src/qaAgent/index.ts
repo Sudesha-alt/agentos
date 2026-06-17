@@ -83,7 +83,21 @@ export async function runQaAgentic(
           durationMs: 0,
         },
       },
-      executionReport: artifacts.executionReport,
+      executionReport: artifacts.executionReport
+        ? {
+            ...artifacts.executionReport,
+            securityScan:
+              artifacts.securityScan ?? artifacts.executionReport.securityScan,
+          }
+        : artifacts.securityScan
+          ? {
+              generatedAt: new Date().toISOString(),
+              summary: "Security scan only",
+              overallRecommendation: "request_changes" as const,
+              criteriaCoverage: { total: 0, covered: 0, uncovered: [] },
+              securityScan: artifacts.securityScan,
+            }
+          : undefined,
       toolCallLog: loop.toolCallLog,
     };
   } finally {

@@ -1,17 +1,25 @@
 import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { useOrg } from "../../shared/providers/OrgRouteProvider";
+import { orgPathMatches } from "../../shared/routing/orgPaths";
 
 /**
- * Atlassian OAuth may land on /app/ with ?connected=1 or ?error=.
+ * Atlassian OAuth may land on org home with ?connected=1 or ?error=.
  * Forward to Jira integration settings.
  */
 export default function JiraOAuthRedirect() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { orgSlug, orgPath } = useOrg();
 
   useEffect(() => {
     const path = location.pathname.replace(/\/$/, "") || "/";
-    if (path === "/app/settings/integrations/jira") {
+    const integrationPath = orgPath("settings", "integrations", "jira");
+    if (
+      path === integrationPath ||
+      orgPathMatches(path, orgSlug, "settings", "integrations", "jira") ||
+      path === "/app/settings/integrations/jira"
+    ) {
       return;
     }
 
@@ -25,8 +33,8 @@ export default function JiraOAuthRedirect() {
 
     if (!hasJiraCallback) return;
 
-    navigate(`/app/settings/integrations/jira${location.search}`, { replace: true });
-  }, [location.pathname, location.search, navigate]);
+    navigate(`${integrationPath}${location.search}`, { replace: true });
+  }, [location.pathname, location.search, navigate, orgPath, orgSlug]);
 
   return null;
 }

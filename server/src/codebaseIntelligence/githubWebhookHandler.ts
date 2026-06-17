@@ -7,11 +7,15 @@ import {
   resolveOrganizationByGitWebhookSecret,
 } from "../organization/webhookResolver";
 import { enqueueCodebaseIndexFromPush } from "./pushWebhookHandler";
-import { listPullRequestChangedFiles } from "./webhookIndexHelpers";
+import {
+  listPullRequestChangedFiles,
+  resolveWebhookChangedFiles,
+} from "./webhookIndexHelpers";
 import { logger } from "../utils/logger";
 
 type PushWebhookPayload = {
   ref?: string;
+  before?: string;
   after?: string;
   compare?: string;
   sender?: { login?: string };
@@ -101,17 +105,35 @@ function parseBranch(ref?: string): string {
 async function processGithubPush(req: Request): Promise<void> {
   const payload = req.body as PushWebhookPayload;
   const branchName = parseBranch(payload.ref);
-  const repoOwner = payload.repository?.owner?.login ?? process.env.GITHUB_REPO_OWNER ?? "";
-  const repoName = payload.repository?.name ?? process.env.GITHUB_REPO_NAME ?? "";
+  const repoOwner = payload.repository?.owner?.login ?? "";
+  const repoName = payload.repository?.name ?? "";
+  if (!repoOwner || !repoName) {
+    logger.warn("github push webhook missing repository owner/name");
+    return;
+  }
   const headSha = payload.after ?? "";
+  const beforeSha = payload.before ?? "";
   const commits = payload.commits ?? [];
 
-  const changedFiles = Array.from(
+  let changedFiles = Array.from(
     new Set(commits.flatMap((commit) => [...(commit.added ?? []), ...(commit.modified ?? [])]))
   );
-  const deletedFiles = Array.from(
+  let deletedFiles = Array.from(
     new Set(commits.flatMap((commit) => commit.removed ?? []))
   );
+
+  const resolved = await resolveWebhookChangedFiles({
+    provider: "github",
+    owner: repoOwner,
+    repo: repoName,
+    beforeSha,
+    afterSha: headSha,
+    webhookChanged: changedFiles,
+    webhookDeleted: deletedFiles,
+    commitCount: commits.length,
+  });
+  changedFiles = resolved.changedFiles;
+  deletedFiles = resolved.deletedFiles;
 
   await enqueueCodebaseIndexFromPush({
     repoOwner,

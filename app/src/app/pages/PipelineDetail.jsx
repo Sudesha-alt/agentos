@@ -13,8 +13,10 @@ import AuditFeedWidget from "../../widgets/audit-feed/AuditFeedWidget";
 import TicketActivityWidget from "../../widgets/ticket-activity/TicketActivityWidget";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
 import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
+import { useOrg } from "../../shared/providers/OrgRouteProvider";
 
 export default function PipelineDetail() {
+  const { orgPath } = useOrg();
   const { id } = useParams();
   const { item, loading } = usePipelineDetail(id, { pollMs: 6000 });
   const { artifacts } = usePipelineArtifacts(id, { pollMs: 8000 });
@@ -65,7 +67,7 @@ export default function PipelineDetail() {
         </p>
         <h2 className="mt-2 text-lg text-ink">Pipeline doesn't exist</h2>
         <Link
-          to="/app/pipelines"
+          to={orgPath("pipelines")}
           className="mt-5 inline-flex items-center gap-2 text-sm text-ink-dim hover:text-ink transition-colors"
         >
           ← Back to pipelines
@@ -80,7 +82,7 @@ export default function PipelineDetail() {
     <AnimatedAppPage wide>
       <header className="flex flex-col gap-3">
         <Link
-          to="/app/pipelines"
+          to={orgPath("pipelines")}
           className="type-kicker transition-colors hover:text-app-ink"
         >
           ← pipelines

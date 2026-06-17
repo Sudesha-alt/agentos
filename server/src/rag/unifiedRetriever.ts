@@ -1,6 +1,4 @@
-import { codebaseQueryService } from "../codebaseIntelligence/queryService";
-import { searchWorkFiles } from "../codebaseIntelligence/fileRanker";
-import { CHUNK_FETCH_THRESHOLD, RETRIEVAL_CHUNK_TOP_K } from "../codebaseIntelligence/retrievalConfig";
+import { buildEnrichedCodebaseContext } from "../codebaseIntelligence/enrichedContextService";
 import { resolveRepoScope } from "../codebaseIntelligence/repoScope";
 import type { RetrievedContext, VectorContentType } from "../types/pipeline";
 import { logger } from "../utils/logger";
@@ -71,41 +69,29 @@ export const unifiedRetriever = {
 
     const boostedQuery = appendBoostedTerms(query, options.queryComponents ?? []);
 
-    const codebasePromise =
-      includeCodebase && !options.includeContext
-        ? searchWorkFiles({
-            query: boostedQuery,
-            branchName,
-            topN: options.codebase?.topK ?? 10,
-          })
-            .then((workFiles) =>
-              workFiles.map(
-                (wf): CodebaseSearchRow => ({
-                  file_path: wf.path,
-                  similarity: wf.score,
-                  chunk_content: wf.bestChunk,
-                  summary: wf.summary,
-                })
-              )
+    const codebasePromise = includeCodebase
+      ? buildEnrichedCodebaseContext({
+          query: boostedQuery,
+          branchName,
+          components: options.queryComponents ?? [],
+          topN: options.codebase?.topK ?? 10,
+          fetchFreshContent: options.includeContext === true,
+        })
+          .then((bundle) =>
+            bundle.files.map(
+              (f): CodebaseSearchRow => ({
+                file_path: f.path,
+                similarity: f.score,
+                chunk_content: f.contentPreview,
+                summary: f.summary ?? undefined,
+              })
             )
-            .catch((err) => {
-              logger.warn({ err }, "unified retriever work-file search failed");
-              return [] as CodebaseSearchRow[];
-            })
-        : includeCodebase
-          ? codebaseQueryService
-              .searchCodebaseSemantically({
-                query: boostedQuery,
-                branchName,
-                topK: options.codebase?.topK ?? RETRIEVAL_CHUNK_TOP_K,
-                similarityThreshold:
-                  options.codebase?.similarityThreshold ?? CHUNK_FETCH_THRESHOLD,
-              })
-              .catch((err) => {
-                logger.warn({ err }, "unified retriever codebase search failed");
-                return [] as CodebaseSearchRow[];
-              })
-          : Promise.resolve([] as CodebaseSearchRow[]);
+          )
+          .catch((err) => {
+            logger.warn({ err }, "unified retriever enriched context failed");
+            return [] as CodebaseSearchRow[];
+          })
+      : Promise.resolve([] as CodebaseSearchRow[]);
 
     const [ticketResults, codebaseRows] = await Promise.all([
       retriever.retrieve(boostedQuery, {

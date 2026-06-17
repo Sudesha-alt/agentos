@@ -154,8 +154,18 @@ export function loadPipelineJiraCredentialsFromStore(): PipelineJiraCredentials 
 
 export function getActivePipelineJiraCredentials(): PipelineJiraCredentials {
   const orgId = getActiveOrganizationId();
-  if (orgId && orgRuntimeCreds.has(orgId)) {
-    return orgRuntimeCreds.get(orgId)!;
+  if (orgId) {
+    if (orgRuntimeCreds.has(orgId)) {
+      return orgRuntimeCreds.get(orgId)!;
+    }
+    return {
+      baseUrl: "",
+      email: "",
+      apiToken: "",
+      webhookSecret: "",
+      projectKeys: [],
+      authMethod: "api_token",
+    };
   }
   if (runtimeCreds) return runtimeCreds;
   return loadPipelineJiraCredentialsFromStore();

@@ -3,17 +3,20 @@ import { useNavigate } from "react-router-dom";
 import Spinner from "../../app/components/Spinner";
 import { globalSearch } from "../../entities/global-search";
 import { formatAuditInline, formatRelativeTime } from "../../shared/lib/format";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 import { useDebouncedValue } from "../codebase-search/useDebouncedValue";
 
-const STATIC_PAGES = [
-  { label: "Ananta workspace", href: "/app/ananta", keywords: ["ananta", "engineering", "coding", "implementation"] },
-  { label: "Audit Trail", href: "/app/audit", keywords: ["audit", "compliance", "log", "trail"] },
-  { label: "Pipelines", href: "/app/pipelines", keywords: ["pipeline", "ticket", "queue", "review"] },
-  { label: "Codebase indexing", href: "/app/settings/codebase-index", keywords: ["codebase", "index", "embeddings", "vector"] },
-  { label: "GitHub integration", href: "/app/settings/integrations/github", keywords: ["github", "git", "repo", "repository"] },
-  { label: "Jira integration", href: "/app/settings/integrations/jira", keywords: ["jira", "ticket", "board"] },
-  { label: "Settings", href: "/app/settings", keywords: ["settings", "integrations", "billing", "plan"] },
-];
+function buildStaticPages(orgPath) {
+  return [
+    { label: "Ananta workspace", href: orgPath("ananta"), keywords: ["ananta", "engineering", "coding", "implementation"] },
+    { label: "Audit Trail", href: orgPath("audit"), keywords: ["audit", "compliance", "log", "trail"] },
+    { label: "Pipelines", href: orgPath("pipelines"), keywords: ["pipeline", "ticket", "queue", "review"] },
+    { label: "Codebase indexing", href: orgPath("settings", "codebase-index"), keywords: ["codebase", "index", "embeddings", "vector"] },
+    { label: "GitHub integration", href: orgPath("settings", "integrations", "github"), keywords: ["github", "git", "repo", "repository"] },
+    { label: "Jira integration", href: orgPath("settings", "integrations", "jira"), keywords: ["jira", "ticket", "board"] },
+    { label: "Settings", href: orgPath("settings"), keywords: ["settings", "integrations", "billing", "plan"] },
+  ];
+}
 
 function Section({ title, children, count }) {
   if (!children) return null;
@@ -57,6 +60,8 @@ export default function GlobalSearchCore({
   onNavigateAway,
 }) {
   const navigate = useNavigate();
+  const orgPath = useOrgPathBuilder();
+  const staticPages = useMemo(() => buildStaticPages(orgPath), [orgPath]);
   const [query, setQuery] = useState("");
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -66,11 +71,11 @@ export default function GlobalSearchCore({
   const pageMatches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    return STATIC_PAGES.filter((page) =>
+    return staticPages.filter((page) =>
       page.label.toLowerCase().includes(q) ||
       page.keywords.some((word) => word.includes(q) || q.includes(word))
     ).slice(0, 4);
-  }, [query]);
+  }, [query, staticPages]);
 
   useEffect(() => {
     const q = debouncedQuery.trim();

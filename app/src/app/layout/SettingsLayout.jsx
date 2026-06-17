@@ -1,16 +1,21 @@
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
-import { SETTINGS_NAV } from "../../shared/config/settingsNav";
+import { buildSettingsNav } from "../../shared/config/settingsNav";
+import { useOrg } from "../../shared/providers/OrgRouteProvider";
+import { orgPathMatches } from "../../shared/routing/orgPaths";
 
-function tabActive(item, pathname) {
+function tabActive(item, pathname, orgSlug) {
   if (pathname === item.to) return true;
-  if (item.id === "integrations" && pathname.startsWith("/app/settings/integrations")) {
+  if (item.id === "integrations" && orgPathMatches(pathname, orgSlug, "settings", "integrations")) {
     return true;
   }
-  if (item.id === "company" && pathname.startsWith("/app/settings/company")) {
+  if (item.id === "company" && orgPathMatches(pathname, orgSlug, "settings", "company")) {
     return true;
   }
-  if (item.id === "codebase-index" && pathname.startsWith("/app/settings/codebase-index")) {
+  if (
+    item.id === "codebase-index" &&
+    orgPathMatches(pathname, orgSlug, "settings", "codebase-index")
+  ) {
     return true;
   }
   return false;
@@ -18,14 +23,16 @@ function tabActive(item, pathname) {
 
 export default function SettingsLayout() {
   const location = useLocation();
+  const { orgSlug } = useOrg();
+  const settingsNav = buildSettingsNav(orgSlug);
 
   return (
     <AnimatedAppPage className="max-w-5xl">
       <header>
         <h1 className="text-lg font-semibold text-app-ink">Settings</h1>
         <nav className="mt-4 flex gap-1 overflow-x-auto border-b border-app-border">
-          {SETTINGS_NAV.map((item) => {
-            const active = tabActive(item, location.pathname);
+          {settingsNav.map((item) => {
+            const active = tabActive(item, location.pathname, orgSlug);
             return (
               <NavLink
                 key={item.id}

@@ -21,6 +21,7 @@ import JiraSyncStatusPanel from "../../widgets/jira-sync/JiraSyncStatusPanel";
 import JiraTicketBrowser from "../../widgets/jira-sync/JiraTicketBrowser";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import { SettingsPageShell } from "../layout/SettingsPageShell";
+import { useOrg } from "../../shared/providers/OrgRouteProvider";
 
 const OAUTH_ERROR_MESSAGES = {
   invalid_state: "OAuth session expired or was invalid. Try Connect with Atlassian again.",
@@ -30,6 +31,7 @@ const OAUTH_ERROR_MESSAGES = {
 };
 
 export default function JiraIntegration({ embedded = false }) {
+  const { orgPath } = useOrg();
   const {
     data: setup,
     error: setupError,
@@ -560,7 +562,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
           )}
           <p className="px-5 pb-4 text-xs text-app-ink-mute sm:px-6">
             Active pipelines:{" "}
-            <Link to="/app/pipelines" className="text-indigo underline">
+            <Link to={orgPath("pipelines")} className="text-indigo underline">
               View pipelines →
             </Link>
           </p>

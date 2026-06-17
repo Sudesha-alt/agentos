@@ -1,4 +1,5 @@
 import { prisma } from "../db/client";
+import { isReservedSlug, nameToSlug } from "../shared/reservedSlugs";
 import type { OrgRole } from "../generated/prisma/client";
 
 function displayNameFromEmail(email: string): string {
@@ -31,9 +32,15 @@ function domainToOrgName(domain: string): string {
 
 async function uniqueSlug(base: string): Promise<string> {
   let slug = base;
+  if (isReservedSlug(slug)) {
+    slug = `${slug}-org`;
+  }
   let suffix = 1;
   while (await prisma.organization.findUnique({ where: { slug } })) {
     slug = `${base}-${suffix}`;
+    if (isReservedSlug(slug)) {
+      slug = `${base}-${suffix}-org`;
+    }
     suffix += 1;
   }
   return slug;
@@ -86,7 +93,8 @@ export async function createOrganizationForUser(
   const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
   const domain = extractEmailDomain(email);
   const name = orgName?.trim() || domainToOrgName(domain);
-  const slug = await uniqueSlug(domainToSlug(domain));
+  const slugBase = orgName?.trim() ? nameToSlug(orgName) : domainToSlug(domain);
+  const slug = await uniqueSlug(slugBase);
 
   const organization = await prisma.organization.create({
     data: {

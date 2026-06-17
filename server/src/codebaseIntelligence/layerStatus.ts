@@ -8,6 +8,8 @@ import {
   indexRunProgress,
 } from "./indexQueue";
 import { getOversizedSkippedCount } from "./indexSkipStats";
+import { getJiraIssueStats } from "../jira-sync/issueRepository";
+import { getActivePipelineJiraCredentials } from "../pipeline/jira/credentialsStore";
 import { codebaseOrgWhere, resolveRepoScope } from "./repoScope";
 
 const prismaAny = prisma as any;
@@ -49,6 +51,12 @@ export type CodebaseLayerStatus = {
     openaiConfigured: boolean;
     llmProvider: string;
     fileIntelligenceAvailable: boolean;
+  };
+  jira: {
+    connected: boolean;
+    total: number;
+    embedded: number;
+    embedHealthPercent: number;
   };
   blockers: string[];
 };
@@ -197,6 +205,7 @@ export async function getCodebaseLayerStatus(
         llmProvider: llmProviderLabel(),
         fileIntelligenceAvailable: fileIntelligenceAvailable(),
       },
+      jira: { connected: false, total: 0, embedded: 0, embedHealthPercent: 0 },
       blockers,
     };
   }
@@ -208,7 +217,7 @@ export async function getCodebaseLayerStatus(
     defaultBranch: scope.defaultBranch,
   };
 
-  const [latestRun, lastCompleted, fileStats, embeddingCount, graph] = await Promise.all([
+  const [latestRun, lastCompleted, fileStats, embeddingCount, graph, jiraStats] = await Promise.all([
     getLatestIndexRun({
       repoOwner: scope.repoOwner,
       repoName: scope.repoName,
@@ -218,7 +227,17 @@ export async function getCodebaseLayerStatus(
     countIndexedFiles(scope.repoOwner, scope.repoName, branch),
     countEmbeddings(scope.repoOwner, scope.repoName, branch),
     getGraphStatus(scope.organizationId, scope.repoOwner, scope.repoName, branch),
+    getJiraIssueStats(scope.organizationId).catch(() => ({
+      total: 0,
+      embedded: 0,
+      deleted: 0,
+      byStatus: {},
+    })),
   ]);
+
+  const jiraConnected = Boolean(getActivePipelineJiraCredentials().baseUrl?.trim());
+  const jiraEmbedHealthPercent =
+    jiraStats.total > 0 ? Math.min(100, Math.round((jiraStats.embedded / jiraStats.total) * 100)) : 0;
 
   const progress = latestRun ? indexRunProgress(latestRun) : null;
   const indexStatus =
@@ -249,6 +268,10 @@ export async function getCodebaseLayerStatus(
   const lastTrigger = (lastCompleted?.triggerType as CodebaseLayerStatus["index"]["lastTrigger"]) ?? null;
   const lastPrNumber =
     lastTrigger === "pr_merge" ? getLastPrMergeForBranch(branch) : null;
+
+  if (jiraConnected && jiraStats.total > 0 && jiraStats.embedded === 0 && openaiConfigured) {
+    blockers.push("Jira issues synced but none embedded — run Jira sync or check OPENAI_API_KEY.");
+  }
 
   const ready =
     connected &&
@@ -285,6 +308,12 @@ export async function getCodebaseLayerStatus(
       openaiConfigured,
       llmProvider: llmProviderLabel(),
       fileIntelligenceAvailable: fileIntelligenceAvailable(),
+    },
+    jira: {
+      connected: jiraConnected,
+      total: jiraStats.total,
+      embedded: jiraStats.embedded,
+      embedHealthPercent: jiraEmbedHealthPercent,
     },
     blockers: [...new Set(blockers)],
   };

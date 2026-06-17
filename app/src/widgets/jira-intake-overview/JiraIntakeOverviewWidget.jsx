@@ -6,9 +6,11 @@ import {
 import LabelPill from "../../app/components/LabelPill";
 import Spinner from "../../app/components/Spinner";
 import { PipelineQueueSummary } from "../pipeline-queue/PipelineQueuePanel";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 
 export default function JiraIntakeOverviewWidget({ embedded = false }) {
+  const orgPath = useOrgPathBuilder();
   const { data: setup, error, loading } = usePipelineJiraSetup({ pollMs: 5000 });
   const intakeReady = Boolean(setup?.connected && setup?.intake?.aiWorkerColumnName);
   const { data: intake } = usePipelineIntakeTickets(intakeReady, { pollMs: 12000 });
@@ -40,11 +42,11 @@ export default function JiraIntakeOverviewWidget({ embedded = false }) {
           </p>
           <PipelineQueueSummary setup={setup} />
           <div className="flex flex-wrap gap-4 text-[13px]">
-            <Link to="/app/settings/integrations/jira" className="text-ink-dim transition-colors hover:text-indigo">
+            <Link to={orgPath("settings", "integrations", "jira")} className="text-ink-dim transition-colors hover:text-indigo">
               Jira pipeline setup →
             </Link>
             <Link
-              to="/app/jira-search"
+              to={orgPath("jira-search")}
               className="text-ink-dim transition-colors hover:text-indigo"
             >
               Search board →
@@ -82,7 +84,7 @@ export default function JiraIntakeOverviewWidget({ embedded = false }) {
     <Panel>
       <PanelHeader
         kicker="Jira pipeline"
-        title="AI Worker intake"
+        title="AI Worker intake"
         right={
           <LabelPill
             label={queueBadge}

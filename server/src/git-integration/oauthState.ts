@@ -15,13 +15,22 @@ function signPayload(signInput: string): string {
   return crypto.createHmac("sha256", stateSecret()).update(signInput).digest("base64url");
 }
 
-/** Signed OAuth state; optionally binds organizationId for multi-tenant install. */
-export function createOAuthState(organizationId?: string): string {
+/** Signed OAuth state; optionally binds organizationId and slug for multi-tenant install. */
+export function createOAuthState(
+  organizationId?: string,
+  organizationSlug?: string
+): string {
   const nonce = crypto.randomBytes(16).toString("hex");
   const ts = Date.now().toString();
-  const payload = organizationId?.trim()
-    ? Buffer.from(JSON.stringify({ organizationId: organizationId.trim() })).toString("base64url")
-    : "";
+  const payload =
+    organizationId?.trim()
+      ? Buffer.from(
+          JSON.stringify({
+            organizationId: organizationId.trim(),
+            organizationSlug: organizationSlug?.trim() || undefined,
+          })
+        ).toString("base64url")
+      : "";
   const signInput = payload ? `${nonce}.${ts}.${payload}` : `${nonce}.${ts}`;
   const sig = signPayload(signInput);
   const raw = payload ? `${nonce}.${ts}.${payload}.${sig}` : `${nonce}.${ts}.${sig}`;
@@ -31,6 +40,7 @@ export function createOAuthState(organizationId?: string): string {
 export type ParsedOAuthState = {
   valid: boolean;
   organizationId?: string;
+  organizationSlug?: string;
 };
 
 export function parseOAuthState(state: string | undefined | null): ParsedOAuthState {
@@ -62,18 +72,21 @@ export function parseOAuthState(state: string | undefined | null): ParsedOAuthSt
     }
 
     let organizationId: string | undefined;
+    let organizationSlug: string | undefined;
     if (payloadB64) {
       try {
         const parsed = JSON.parse(Buffer.from(payloadB64, "base64url").toString("utf8")) as {
           organizationId?: string;
+          organizationSlug?: string;
         };
         organizationId = parsed.organizationId?.trim() || undefined;
+        organizationSlug = parsed.organizationSlug?.trim() || undefined;
       } catch {
         return { valid: false };
       }
     }
 
-    return { valid: true, organizationId };
+    return { valid: true, organizationId, organizationSlug };
   } catch {
     return { valid: false };
   }

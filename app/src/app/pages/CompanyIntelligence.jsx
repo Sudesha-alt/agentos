@@ -10,6 +10,7 @@ import { AGENT_NAMES } from "../../shared/config/app";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
 import { TitleWithInfo } from "../../shared/ui/InfoTip";
 import { SettingsPageShell } from "../layout/SettingsPageShell";
+import { useOrg } from "../../shared/providers/OrgRouteProvider";
 
 function linesToArray(text) {
   return text
@@ -34,6 +35,7 @@ function Field({ label, info, children }) {
 }
 
 export default function CompanyIntelligence({ embedded = false }) {
+  const { orgPath } = useOrg();
   const { data, loading, refetch } = useCompanyProfile();
   const [form, setForm] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -230,7 +232,7 @@ export default function CompanyIntelligence({ embedded = false }) {
   return (
     <SettingsPageShell
       embedded={embedded}
-      backTo="/app/settings/plan"
+      backTo={orgPath("settings", "plan")}
       backLabel="← Settings"
       kicker="Business intelligence"
       title="Company profile"

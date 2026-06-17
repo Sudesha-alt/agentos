@@ -11,9 +11,9 @@ export async function shouldSkipTicketEmbed(
 ): Promise<boolean> {
   try {
     const existing = await vectorStore.getByJiraKey(jiraKey);
-    const ticketRow = existing.find((r) => r.contentType === "ticket");
-    if (!ticketRow) return false;
-    return ticketRow.metadata.contentHash === contentHash;
+    const ticketRows = existing.filter((r) => r.contentType === "ticket");
+    if (!ticketRows.length) return false;
+    return ticketRows.every((r) => r.metadata.contentHash === contentHash);
   } catch {
     return false;
   }

@@ -7,8 +7,10 @@ import {
   formatEstimatorMoney,
 } from "../../shared/billing/monthlyCostEstimate";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 
 export default function DashboardCostEstimator({ variant = "dashboard" }) {
+  const orgPath = useOrgPathBuilder();
   const isMarketing = variant === "marketing";
   const [planId, setPlanId] = useState("starter");
   const [businessScale, setBusinessScale] = useState(4);
@@ -25,7 +27,7 @@ export default function DashboardCostEstimator({ variant = "dashboard" }) {
       {!isMarketing ? (
         <PanelHeader
           kicker="Pricing"
-          title="Estimate your monthly cost"
+          title="Estimate your monthly cost"
         />
       ) : null}
 
@@ -174,7 +176,7 @@ export default function DashboardCostEstimator({ variant = "dashboard" }) {
                         to={
                           isMarketing || plan.id === "pilot"
                             ? "/login"
-                            : `/app/settings/plan?plan=${plan.id}`
+                            : `${orgPath("settings", "plan")}?plan=${plan.id}`
                         }
                         state={isMarketing || plan.id !== "pilot" ? { mode: "signup" } : undefined}
                         className="inline-flex rounded-full border border-app-border px-3 py-1.5 text-xs font-medium text-app-ink transition hover:border-indigo/40 hover:bg-indigo/5"
@@ -192,7 +194,7 @@ export default function DashboardCostEstimator({ variant = "dashboard" }) {
         <p className="text-center text-xs text-app-ink-mute">
           Need a detailed ROI model?{" "}
           <Link
-            to={isMarketing ? "/roi" : "/app/costs"}
+            to={isMarketing ? "/roi" : orgPath("costs")}
             className="font-medium text-indigo hover:underline"
           >
             {isMarketing ? "Open ROI calculator" : "Open Cost & ROI"}

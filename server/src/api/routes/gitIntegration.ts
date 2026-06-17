@@ -24,6 +24,10 @@ import { getLatestGithubInstallState } from "../../git-integration/githubInstall
 import { parseOAuthState, createOAuthState } from "../../git-integration/oauthState";
 import { getPublicOrganizationGitConfig } from "../../organization/gitConfigStore";
 import {
+  frontendBaseUrl,
+  frontendIntegrationUrl,
+} from "../../shared/frontendUrls";
+import {
   requireOrganizationUser,
   withOrganizationContext,
 } from "../orgRequestContext";
@@ -41,17 +45,26 @@ function publicApiBase(req: Request): string {
   return `${proto}://${host}`;
 }
 
-function frontendBaseUrl(): string {
-  const configured = process.env.FRONTEND_URL?.trim();
-  if (!configured) return "";
-  let base = configured.replace(/\/$/, "");
-  base = base.replace(/\/app(\/git)?$/i, "");
-  return base;
-}
-
-function frontendGitUrl(): string {
+function frontendGitUrl(orgSlug?: string): string {
+  if (orgSlug?.trim()) {
+    return frontendIntegrationUrl(orgSlug.trim(), "github");
+  }
   const base = frontendBaseUrl();
   return base ? `${base}/app/settings/integrations/github` : "";
+}
+
+async function resolveOrgSlug(
+  organizationId: string | undefined,
+  organizationSlug?: string
+): Promise<string | undefined> {
+  if (organizationSlug?.trim()) return organizationSlug.trim();
+  if (!organizationId) return undefined;
+  const { prisma } = await import("../../db/client");
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { slug: true },
+  });
+  return org?.slug;
 }
 
 router.get("/integration/setup", async (req, res, next) => {
@@ -60,6 +73,7 @@ router.get("/integration/setup", async (req, res, next) => {
     if (!user?.organizationId) return;
 
     await withOrganizationContext(user.organizationId, async () => {
+      const orgSlug = await resolveOrgSlug(user.organizationId, user.organizationSlug);
       await repairOrganizationGithubInstall(user.organizationId!);
       const git = await getPublicOrganizationGitConfig(user.organizationId!);
       const setupState = await resolveGitIntegrationSetupState(git, {
@@ -86,7 +100,7 @@ router.get("/integration/setup", async (req, res, next) => {
           ...githubApp,
           installUrl,
           callbackUrl,
-          setupUrl: frontendGitUrl() || undefined,
+          setupUrl: frontendGitUrl(orgSlug) || undefined,
           webhookUrl: `${base}/webhooks/github`,
         },
         webhooks: {
@@ -213,7 +227,8 @@ router.get("/oauth/github/install-url", async (req, res) => {
   const user = requireOrganizationUser(req, res);
   if (!user?.organizationId) return;
 
-  const url = githubAppInstallUrl(createOAuthState(user.organizationId));
+  const slug = await resolveOrgSlug(user.organizationId, user.organizationSlug);
+  const url = githubAppInstallUrl(createOAuthState(user.organizationId, slug));
   if (!url) {
     res.status(503).json({
       error: "github_app_not_configured",
@@ -240,8 +255,12 @@ router.get("/oauth/github/callback", async (req, res) => {
   const installationId = String(req.query.installation_id ?? "");
   const setupAction = String(req.query.setup_action ?? "");
   const state = String(req.query.state ?? "");
-  const frontend = frontendGitUrl();
   const parsedState = state ? parseOAuthState(state) : { valid: false as const };
+  const slug = await resolveOrgSlug(
+    parsedState.valid ? parsedState.organizationId : undefined,
+    parsedState.valid ? parsedState.organizationSlug : undefined
+  );
+  const frontend = frontendGitUrl(slug);
   const stateInvalid = Boolean(state && !parsedState.valid);
 
   if (stateInvalid) {

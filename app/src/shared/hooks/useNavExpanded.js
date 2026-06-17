@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState } from "react";
+import { appRelativePath } from "../routing/orgPaths";
 
 function autoExpandedFromPath(pathname) {
+  const relative = appRelativePath(pathname);
   const ids = [];
-  if (pathname.startsWith("/app/pipelines")) ids.push("pipelines");
-  if (pathname.startsWith("/app/pm-agents") || pathname.startsWith("/app/roadmap")) {
+  if (relative.startsWith("/pipelines")) ids.push("pipelines");
+  if (relative.startsWith("/pm-agents") || relative.startsWith("/roadmap")) {
     ids.push("virin");
   }
-  if (pathname.startsWith("/app/ananta")) ids.push("ananta");
-  if (pathname.startsWith("/app/qa")) ids.push("neel");
+  if (relative.startsWith("/ananta")) ids.push("ananta");
+  if (relative.startsWith("/qa")) ids.push("neel");
   return ids;
 }
 

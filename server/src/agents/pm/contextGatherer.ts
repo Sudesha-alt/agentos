@@ -1,12 +1,11 @@
 import { prisma } from "../../db/client";
 import {
-  formatWorkFilesList,
-  searchCodebaseWithExpandedQueries,
-} from "../../codebaseIntelligence/searchService";
-import { expandTicketQueries } from "../../codebaseIntelligence/queryExpander";
+  buildEnrichedCodebaseContext,
+} from "../../codebaseIntelligence/enrichedContextService";
 import { resolveRepoScope } from "../../codebaseIntelligence/repoScope";
 import { getJiraIssueByKey } from "../../jira-sync/issueRepository";
 import { getPipelineJiraClient } from "../../pipeline/jira/client";
+import { TICKET_RETRIEVAL_CONFIGS } from "../../codebaseIntelligence/retrievalConfig";
 import { retriever } from "../../rag/retriever";
 import { jiraTool } from "../../tools/jiraTool";
 import { logger } from "../../utils/logger";
@@ -200,29 +199,23 @@ async function buildCandidateFilesList(
       .filter(Boolean)
       .join(" ");
 
-    const queries = await expandTicketQueries({
-      summary: ticket.summary,
-      description: ticket.description,
-      components: ticket.components,
-    });
-
-    const workFiles = await searchCodebaseWithExpandedQueries({
-      queries,
+    const bundle = await buildEnrichedCodebaseContext({
+      query: [ticket.summary, ...ticket.components].join(" "),
       branchName,
       ticketText,
+      components: ticket.components,
       topN: 10,
     });
 
-    if (workFiles.length === 0) {
+    if (bundle.workFiles.length === 0) {
       return {
         list: "No candidate files to change (index may be empty or query too narrow)",
         paths: [],
       };
     }
 
-    const paths = workFiles.map((f) => f.path);
-    const list = formatWorkFilesList(workFiles);
-    return { list, paths };
+    const paths = bundle.workFiles.map((f) => f.path);
+    return { list: bundle.formatted, paths };
   } catch (err) {
     logger.warn({ err }, "pm context: codebase search failed");
     return { list: "Codebase search unavailable", paths: [] };
@@ -291,8 +284,8 @@ async function mergeImplementationContext(
       [ticket.summary, ...ticket.components].join(" "),
       {
         contentTypes: ["implementation"],
-        topK: 4,
-        similarityThreshold: 0.65,
+        topK: TICKET_RETRIEVAL_CONFIGS.IMPLEMENTATION_CONTEXT.topK,
+        similarityThreshold: TICKET_RETRIEVAL_CONFIGS.IMPLEMENTATION_CONTEXT.similarityThreshold,
         currentJiraKey: ticket.jiraKey,
         queryComponents: ticket.components,
       }

@@ -3,36 +3,39 @@ import { Link, Navigate, useParams } from "react-router-dom";
 import LabelPill from "../../../app/components/LabelPill";
 import { getIntegrationById } from "../../../shared/config/integrationsCatalog";
 import { useIntegrationsStatus } from "../../../shared/hooks/useIntegrationsStatus";
+import { useOrg } from "../../../shared/providers/OrgRouteProvider";
 import { Panel, PanelHeader } from "../../../shared/ui/Panel";
 
 const NOTIFY_KEY_PREFIX = "agentos.integrationNotify.";
 
 export default function SettingsIntegrationDetailPage() {
   const { integrationId } = useParams();
+  const { orgSlug, orgPath } = useOrg();
   const { integrations } = useIntegrationsStatus();
   const live = integrations.find((item) => item.id === integrationId);
 
   if (integrationId === "github") {
-    return <Navigate to="/app/settings/integrations/github" replace />;
+    return <Navigate to={orgPath("settings", "integrations", "github")} replace />;
   }
   if (integrationId === "jira") {
-    return <Navigate to="/app/settings/integrations/jira" replace />;
+    return <Navigate to={orgPath("settings", "integrations", "jira")} replace />;
   }
 
-  const integration = getIntegrationById(integrationId);
+  const integration = getIntegrationById(integrationId, orgSlug);
   if (!integration) {
-    return <Navigate to="/app/settings/integrations" replace />;
+    return <Navigate to={orgPath("settings", "integrations")} replace />;
   }
 
   return (
     <ComingSoonIntegration
       integration={integration}
       displayStatus={live?.displayStatus ?? "coming_soon"}
+      backHref={orgPath("settings", "integrations")}
     />
   );
 }
 
-function ComingSoonIntegration({ integration, displayStatus }) {
+function ComingSoonIntegration({ integration, displayStatus, backHref }) {
   const [notified, setNotified] = useState(() => {
     try {
       return localStorage.getItem(`${NOTIFY_KEY_PREFIX}${integration.id}`) === "true";
@@ -61,7 +64,7 @@ function ComingSoonIntegration({ integration, displayStatus }) {
   return (
     <div className="space-y-5">
       <Link
-        to="/app/settings/integrations"
+        to={backHref}
         className="inline-flex text-[13px] text-app-ink-dim transition hover:text-indigo"
       >
         ← Back to integrations

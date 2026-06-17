@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import { EASE } from "../../lib/motion";
 
@@ -12,6 +13,7 @@ export default function SettingsSectionsWidget({
   error,
   mode = "full",
 }) {
+  const orgPath = useOrgPathBuilder();
   const pipelineOnly = mode === "pipeline";
 
   return (
@@ -29,11 +31,11 @@ export default function SettingsSectionsWidget({
             />
             <div className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6">
               <IntegrationCard
-                to="/app/settings/integrations/jira"
+                to={orgPath("settings", "integrations", "jira")}
                 title="Jira integration"
               />
               <IntegrationCard
-                to="/app/settings/integrations/github"
+                to={orgPath("settings", "integrations", "github")}
                 title="GitHub integration"
               />
             </div>
@@ -54,7 +56,7 @@ export default function SettingsSectionsWidget({
             />
             <div className="px-5 py-4 sm:px-6">
               <Link
-                to="/app/settings/integrations/jira"
+                to={orgPath("settings", "integrations", "jira")}
                 className="text-[13px] font-medium text-indigo hover:underline"
               >
                 Open Jira settings →

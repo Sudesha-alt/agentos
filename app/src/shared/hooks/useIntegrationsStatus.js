@@ -2,9 +2,10 @@ import { useMemo } from "react";
 import { useGitIntegrationSummary } from "../../entities/git-integration";
 import { usePipelineJiraSetup } from "../../entities/pipeline-jira";
 import {
-  INTEGRATIONS_CATALOG,
+  buildIntegrationsCatalog,
   groupIntegrationsByCategory,
 } from "../config/integrationsCatalog";
+import { useOrgOptional } from "../providers/OrgRouteProvider";
 
 function resolveDisplayStatus(integration, live) {
   if (integration.catalogStatus === "coming_soon") {
@@ -22,6 +23,8 @@ function resolveDisplayStatus(integration, live) {
 }
 
 export function useIntegrationsStatus() {
+  const org = useOrgOptional();
+  const orgSlug = org?.orgSlug ?? "workspace";
   const { data: git, loading: gitLoading } = useGitIntegrationSummary({ pollMs: 12000 });
   const { data: jira, loading: jiraLoading } = usePipelineJiraSetup({ pollMs: 12000 });
 
@@ -38,11 +41,11 @@ export function useIntegrationsStatus() {
 
   const integrations = useMemo(
     () =>
-      INTEGRATIONS_CATALOG.map((item) => ({
+      buildIntegrationsCatalog(orgSlug).map((item) => ({
         ...item,
         displayStatus: resolveDisplayStatus(item, live),
       })),
-    [live]
+    [live, orgSlug]
   );
 
   const grouped = useMemo(() => groupIntegrationsByCategory(integrations), [integrations]);

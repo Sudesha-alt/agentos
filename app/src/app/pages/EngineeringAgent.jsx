@@ -3,8 +3,10 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { useEngineeringRuns } from "../../entities/engineering-agent";
 import EngineeringAgentWorkspace from "../../widgets/engineering-agent/EngineeringAgentWorkspace";
 import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
+import { useOrg } from "../../shared/providers/OrgRouteProvider";
 
 export default function EngineeringAgent() {
+  const { orgPath } = useOrg();
   const { pipelineId: routeId } = useParams();
   const navigate = useNavigate();
   const [selectedId, setSelectedId] = useState(routeId ?? null);
@@ -14,8 +16,8 @@ export default function EngineeringAgent() {
 
   function handleSelect(id) {
     setSelectedId(id);
-    if (id) navigate(`/app/engineering/${id}`);
-    else navigate("/app/engineering");
+    if (id) navigate(orgPath("engineering", id));
+    else navigate(orgPath("engineering"));
   }
 
   return (
@@ -46,7 +48,7 @@ export default function EngineeringAgent() {
           </ul>
           <p className="mt-3 text-xs text-app-ink-mute">
             Or open from{" "}
-            <Link to="/app/pipelines" className="text-indigo hover:underline">
+            <Link to={orgPath("pipelines")} className="text-indigo hover:underline">
               Pipelines
             </Link>
             .

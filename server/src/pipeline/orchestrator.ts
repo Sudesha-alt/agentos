@@ -17,7 +17,7 @@ import { completeTicketInJira } from "../jira/writeback/completeTicketInJira";
 import type { QaExecutionReport } from "../qa/report/reportGenerator";
 import type { GeneratedPRD } from "../prd/prdGenerator";
 import { orgIntelligence } from "../orgIntelligence";
-import { codebaseQueryService } from "../codebaseIntelligence/queryService";
+import { buildEnrichedCodebaseContext } from "../codebaseIntelligence/enrichedContextService";
 import { resolveRepoScope } from "../codebaseIntelligence/repoScope";
 import {
   DiscoveryPausedError,
@@ -41,6 +41,10 @@ import { logger } from "../utils/logger";
 import { validateImplementation } from "../validators/implementationValidator";
 import { validatePrd } from "../validators/prdValidator";
 import { validateQa } from "../validators/qaValidator";
+import {
+  evaluateSecurityGate,
+  mergeSecurityGateIntoValidation,
+} from "../validators/securityGate";
 import { buildEngineeringAgentContext } from "./contextBuilder";
 import { stateManager } from "./stateManager";
 
@@ -154,10 +158,20 @@ export class PipelineOrchestrator {
         },
       });
 
-      const qaValidation = await this.validateQaStage(
-        pipeline.id,
-        qaOutput,
-        productStage.agentOutput.parsed
+      const qaValidation = this.applySecurityGate(
+        await this.validateQaStage(
+          pipeline.id,
+          qaOutput,
+          productStage.agentOutput.parsed
+        ),
+        qaStage,
+        qaOutput.parsed,
+        [
+          normalizedTicket.summary,
+          normalizedTicket.description,
+          productStage.agentOutput.parsed.title,
+        ].join(" "),
+        canaryResult
       );
       await orgIntelligence.captureValidation({
         pipelineId: pipeline.id,
@@ -386,7 +400,17 @@ export class PipelineOrchestrator {
       if (qaValLog?.validationResult) {
         qaValidation = qaValLog.validationResult as unknown as ValidationResult;
       } else {
-        qaValidation = await this.validateQaStage(pipelineId, qaOutput, productStage.agentOutput.parsed);
+        qaValidation = this.applySecurityGate(
+          await this.validateQaStage(pipelineId, qaOutput, productStage.agentOutput.parsed),
+          qaStage,
+          qaOutput.parsed,
+          [
+            normalizedTicket.summary,
+            normalizedTicket.description,
+            productStage.agentOutput.parsed.title,
+          ].join(" "),
+          canaryResult
+        );
       }
       if (!(await this.continueOrPause(pipelineId, "QA_VALIDATION", qaValidation))) {
         await ticketRepo.setStatus(ticket.id, "AWAITING_HUMAN");
@@ -852,43 +876,32 @@ export class PipelineOrchestrator {
     const branch = scope?.defaultBranch ?? "main";
 
     try {
-      const [semanticMatches, featureFiles, recentChanges] = await Promise.all([
-        codebaseQueryService.searchCodebaseSemantically({
-          query: `${prd.title}\n${prd.problemStatement}\n${prd.acceptanceCriteria.join("\n")}`,
-          branchName: branch,
-          topK: 8,
-          similarityThreshold: 0.68,
-        }),
-        codebaseQueryService.getFilesTouchingFeature(prd.title, branch),
-        codebaseQueryService.getRecentChanges(branch, 10),
-      ]);
+      const query = `${prd.title}\n${prd.problemStatement}\n${prd.acceptanceCriteria.join("\n")}`;
+      const bundle = await buildEnrichedCodebaseContext({
+        query,
+        branchName: branch,
+        topN: 10,
+        fetchFreshContent: false,
+      });
 
-      const semanticLines = semanticMatches
-        .slice(0, 8)
-        .map((match: any) => {
-          const similarity = Number(match.similarity ?? 0).toFixed(3);
-          return `- ${match.file_path ?? "unknown"} (similarity ${similarity})`;
-        });
+      const semanticMatches = bundle.files.map((f) => ({
+        file_path: f.path,
+        similarity: f.score,
+        summary: f.summary,
+        contentSource: f.contentSource,
+      }));
 
-      const featureLines = featureFiles
-        .slice(0, 10)
-        .map((file: any) => `- ${file.filePath} :: ${file.summary ?? "no summary"}`);
+      const featureFiles = bundle.files.map((f) => ({
+        filePath: f.path,
+        summary: f.summary,
+        neighbors: f.neighbors,
+      }));
 
-      const changeLines = recentChanges
-        .slice(0, 8)
-        .map(
-          (change: any) =>
-            `- ${change.sha?.slice(0, 8) ?? "unknown"} ${change.message ?? ""} (${change.author ?? "unknown"})`
-        );
+      const recentChanges: unknown[] = [];
 
-      const snapshotText = [
+      const snapshotText = bundle.formatted || [
         `Branch: ${branch}`,
-        "Top semantic matches:",
-        ...(semanticLines.length ? semanticLines : ["- none"]),
-        "Likely feature files:",
-        ...(featureLines.length ? featureLines : ["- none"]),
-        "Recent branch changes:",
-        ...(changeLines.length ? changeLines : ["- none"]),
+        "No enriched codebase context available.",
       ].join("\n");
 
       return {
@@ -983,6 +996,36 @@ export class PipelineOrchestrator {
     });
     await stateManager.advance(pipelineId, "QA_VALIDATION");
     return result;
+  }
+
+  private applySecurityGate(
+    validation: ValidationResult,
+    qaStage: { executionReport?: QaExecutionReport },
+    qaOutput: QaOutput,
+    ticketText: string,
+    canaryResult: Awaited<ReturnType<typeof runCanaryCycle>>
+  ): ValidationResult {
+    const canaryCriticals =
+      canaryResult?.findings
+        .filter((f) => f.severity === "critical")
+        .map((f) => ({ title: f.title, description: f.description })) ?? [];
+
+    const gate = evaluateSecurityGate({
+      securityScan: qaStage.executionReport?.securityScan ?? null,
+      canaryCriticals,
+      canarySkipped: !canaryResult,
+      canarySkipReason: !canaryResult
+        ? "Canary cycle did not run (disabled or missing staging URL)."
+        : undefined,
+      qaOutput,
+      ticketText,
+    });
+
+    if (gate.blocked) {
+      logger.warn({ reasons: gate.reasons }, "QA security gate blocked pipeline");
+    }
+
+    return mergeSecurityGateIntoValidation(validation, gate);
   }
 
   private async validateQaStage(

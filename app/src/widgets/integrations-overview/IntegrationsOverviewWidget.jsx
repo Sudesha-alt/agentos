@@ -1,9 +1,11 @@
+import { Link } from "react-router-dom";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 import JiraIntakeOverviewWidget from "../jira-intake-overview/JiraIntakeOverviewWidget";
 import GitHubIntegrationOverviewWidget from "../github-integration-overview/GitHubIntegrationOverviewWidget";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
-import { Link } from "react-router-dom";
 
 export default function IntegrationsOverviewWidget() {
+  const orgPath = useOrgPathBuilder();
   return (
     <Panel>
       <PanelHeader
@@ -20,7 +22,7 @@ export default function IntegrationsOverviewWidget() {
       </div>
       <div className="border-t border-app-border px-5 py-3 sm:px-6">
         <Link
-          to="/app/settings/codebase-index"
+          to={orgPath("settings", "codebase-index")}
           className="text-[13px] font-medium text-indigo hover:underline"
         >
           Codebase indexing → Settings

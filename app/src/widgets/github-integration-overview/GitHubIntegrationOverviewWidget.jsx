@@ -3,9 +3,11 @@ import { useGitIntegrationSummary } from "../../entities/git-integration";
 import LabelPill from "../../app/components/LabelPill";
 import Spinner from "../../app/components/Spinner";
 import { AGENT_NAMES } from "../../shared/config/app";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 
 export default function GitHubIntegrationOverviewWidget({ embedded = false }) {
+  const orgPath = useOrgPathBuilder();
   const { data, error, loading } = useGitIntegrationSummary({ pollMs: 12000 });
 
   const connected = Boolean(data?.connected);
@@ -45,13 +47,13 @@ export default function GitHubIntegrationOverviewWidget({ embedded = false }) {
             ) : null}
             <div className="flex flex-wrap gap-4 text-[13px]">
               <Link
-                to="/app/settings/integrations/github"
+                to={orgPath("settings", "integrations", "github")}
                 className="text-ink-dim transition-colors hover:text-indigo"
               >
                 Open GitHub integration →
               </Link>
               <Link
-                to="/app/ananta"
+                to={orgPath("ananta")}
                 className="text-ink-dim transition-colors hover:text-indigo"
               >
                 {AGENT_NAMES.ANANTA} →

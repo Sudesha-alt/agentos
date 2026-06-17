@@ -8,6 +8,7 @@ export type SessionUser = {
   organizationId?: string;
   organizationName?: string;
   organizationDomain?: string;
+  organizationSlug?: string;
   organizationRole?: OrgRole;
 };
 
@@ -105,6 +106,7 @@ export function resolveUserFromAuthHeader(req: {
     organizationId: payload.organizationId,
     organizationName: payload.organizationName,
     organizationDomain: payload.organizationDomain,
+    organizationSlug: payload.organizationSlug,
     organizationRole: payload.organizationRole,
   };
 }
@@ -142,6 +144,7 @@ function sessionUserFromMembership(
     organizationId: membership.organization.id,
     organizationName: membership.organization.name,
     organizationDomain: membership.organization.domain,
+    organizationSlug: membership.organization.slug,
     organizationRole: membership.role,
   };
 }

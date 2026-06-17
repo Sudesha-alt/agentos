@@ -11,6 +11,7 @@ import onboardingRouter from "./api/routes/onboarding";
 import codebaseRouter from "./api/routes/codebase";
 import gitIntegrationRouter from "./api/routes/gitIntegration";
 import healthRouter from "./api/routes/health";
+import redirectsRouter from "./api/routes/redirects";
 import jiraOAuthRouter from "./api/routes/jiraOAuth";
 import jiraIntakeRouter from "./api/routes/jiraIntake";
 import jiraSyncRouter from "./api/routes/jiraSync";
@@ -88,6 +89,7 @@ export function createApp(): express.Express {
 
   app.use("/", healthRouter);
   app.use("/api", healthRouter);
+  app.use("/r", redirectsRouter);
   app.use("/api/auth", authRouter);
   app.use("/api/organization", organizationRouter);
   app.use("/api/onboarding", onboardingRouter);

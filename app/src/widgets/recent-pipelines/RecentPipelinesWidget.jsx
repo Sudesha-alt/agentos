@@ -1,10 +1,12 @@
 import { Link } from "react-router-dom";
 import StatusPill from "../../app/components/StatusPill";
 import Spinner from "../../app/components/Spinner";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import { formatStageLabel } from "../../shared/lib/format";
 
 export default function RecentPipelinesWidget({ items, loading }) {
+  const orgPath = useOrgPathBuilder();
   return (
     <Panel>
       <PanelHeader
@@ -12,7 +14,7 @@ export default function RecentPipelinesWidget({ items, loading }) {
         title="Pipelines"
         right={
           <Link
-            to="/app/pipelines"
+            to={orgPath("pipelines")}
             className="editorial-kicker text-ink-dim transition-colors hover:text-ink"
           >
             View all →

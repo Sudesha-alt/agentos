@@ -8,6 +8,7 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { authAdapter } from "../../entities/auth";
 import AppPageFallback from "../ui/AppPageFallback";
 import { AuthContext, useAuth } from "./useAuth";
+import { sessionHomePath, migrateAppPath } from "../routing/orgPaths";
 
 export function AuthProvider({ children }) {
   const navigate = useNavigate();
@@ -70,7 +71,9 @@ export function AuthProvider({ children }) {
       organization: session?.organization ?? null,
       loading,
       isAuthenticated: Boolean(session),
-      hasOrganization: Boolean(session?.user?.organizationId),
+      hasOrganization: Boolean(
+        session?.user?.organizationId ?? session?.organization?.id
+      ),
       login,
       signup,
       logout,
@@ -134,7 +137,7 @@ export function RequireAuth({ children }) {
 }
 
 export function PublicOnlyRoute({ children }) {
-  const { loading, isAuthenticated, onboardingCompleted } = useAuth();
+  const { loading, isAuthenticated, onboardingCompleted, session } = useAuth();
 
   if (loading) {
     return (
@@ -145,7 +148,10 @@ export function PublicOnlyRoute({ children }) {
   }
 
   if (isAuthenticated) {
-    return <Navigate to={onboardingCompleted ? "/app" : "/onboarding"} replace />;
+    const target = onboardingCompleted
+      ? sessionHomePath(session)
+      : "/onboarding";
+    return <Navigate to={target} replace />;
   }
 
   return children;

@@ -19,6 +19,7 @@ PHASE 2 — TEST STRATEGY
 
 PHASE 3 — TEST EXECUTION
 - run_tests (new_tests_only first, then regression_only or full_suite if time permits)
+- run_security_scan (mandatory — npm audit + security tests before reporting)
 - analyse_test_failures for every failure
 
 PHASE 4 — QA REPORT
@@ -29,6 +30,7 @@ Tool discipline:
 - Never skip read_existing_tests before write_test_file.
 - Never write placeholder assertions — every test must be real.
 - Always run_tests after writing tests when GITHUB_TOKEN is available.
+- Always run_security_scan after run_tests and before generate_qa_report.
 - If sandbox execution is unavailable, document that in testSummary and riskAreas.
 
 Final JSON output schema (return ONLY valid JSON after tool work is complete):

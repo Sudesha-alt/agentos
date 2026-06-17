@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 
 export default function JiraSetupGuide({
@@ -8,13 +9,14 @@ export default function JiraSetupGuide({
   baseUrl,
   defaultOpen = true,
 }) {
+  const orgPath = useOrgPathBuilder();
   const [open, setOpen] = useState(defaultOpen);
 
   return (
     <Panel>
       <PanelHeader
         kicker="Setup guide"
-        title="How to get credentials and connect Jira"
+        title="How to get credentials and connect Jira"
         right={
           <button
             type="button"
@@ -118,7 +120,7 @@ export default function JiraSetupGuide({
             <ol className="mt-2 list-decimal space-y-2 pl-5 text-[14px] text-ink-dim">
               <li>
                 Open{" "}
-                <Link to="/app/jira-search" className="text-indigo underline">
+                <Link to={orgPath("jira-search")} className="text-indigo underline">
                   Board search
                 </Link>{" "}
                 in this app (after base URL + token are set on the server or in the form).

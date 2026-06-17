@@ -125,6 +125,9 @@ function rowToCredentials(row: {
 }
 
 export function loadGitCredentialsFromStore(): StoredGitCredentials | null {
+  if (getActiveOrganizationId()) {
+    return null;
+  }
   const row = getDb()
     .prepare(
       `SELECT provider, workspace, repo_slug, username, token, webhook_secret,
@@ -209,8 +212,11 @@ export function activateOrganizationGitContext(organizationId: string | null): v
 
 function getActiveGitCredentialsInternal(): StoredGitCredentials | null {
   const orgId = getActiveOrganizationId();
-  if (orgId && orgRuntimeCreds.has(orgId)) {
-    return orgRuntimeCreds.get(orgId)!;
+  if (orgId) {
+    if (orgRuntimeCreds.has(orgId)) {
+      return orgRuntimeCreds.get(orgId)!;
+    }
+    return null;
   }
   return runtimeCreds ?? loadGitCredentialsFromStore();
 }
@@ -295,6 +301,7 @@ export function getPublicGitCredentials(): PublicGitCredentials {
 export function getGitWebhookSecret(provider: GitProviderId): string {
   const creds = getActiveGitCredentialsInternal();
   if (creds?.webhookSecret) return creds.webhookSecret;
+  if (getActiveOrganizationId()) return "";
   if (provider === "github") {
     return (
       process.env.GITHUB_APP_WEBHOOK_SECRET?.trim() ??

@@ -13,8 +13,10 @@ import PmStageRail from "./PmStageRail";
 import { jiraKeyFromPmPipelineId } from "./pipelineIds";
 import { PmAnalysisOutputs } from "./PmAnalysisSections";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 
 export default function PmPipelineDetailPanel({ pipelineId, onClose }) {
+  const orgPath = useOrgPathBuilder();
   const jiraKey = jiraKeyFromPmPipelineId(pipelineId);
   const [retroRunning, setRetroRunning] = useState(false);
 
@@ -124,7 +126,7 @@ export default function PmPipelineDetailPanel({ pipelineId, onClose }) {
             />
             <div className="px-5 py-3 sm:px-6">
               <Link
-                to="/app/pm-agents"
+                to={orgPath("pm-agents")}
                 className="font-mono text-[11px] text-indigo hover:underline"
               >
                 Open {AGENT_NAMES.VIRIN} →

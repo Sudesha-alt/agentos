@@ -15,7 +15,8 @@
     "prisma:deploy": "prisma migrate deploy",
     "test:discovery": "tsx scripts/testDiscovery.ts",
     "test:scoring": "tsx --test src/discovery/scoring.test.ts",
-    "test:roi": "tsx --test src/roi/estimatedRoi.test.ts"
+    "test:roi": "tsx --test src/roi/estimatedRoi.test.ts",
+    "test:chunker": "tsx --test src/codebaseIntelligence/astChunker.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/bedrock-sdk": "^0.29.2",
@@ -35,6 +36,22 @@
     "pg": "^8.16.0",
     "pino": "^9.5.0",
     "pino-pretty": "^11.3.0",
+    "tree-sitter": "^0.21.1",
+    "tree-sitter-c-sharp": "^0.23.5",
+    "tree-sitter-go": "^0.21.2",
+    "tree-sitter-graphql": "^1.0.0",
+    "tree-sitter-java": "^0.21.0",
+    "tree-sitter-javascript": "^0.21.4",
+    "tree-sitter-json": "^0.24.8",
+    "tree-sitter-kotlin": "^0.3.8",
+    "tree-sitter-php": "^0.21.0",
+    "tree-sitter-python": "^0.21.0",
+    "tree-sitter-ruby": "^0.21.0",
+    "tree-sitter-rust": "^0.21.0",
+    "tree-sitter-sql": "^0.1.0",
+    "tree-sitter-swift": "^0.7.1",
+    "tree-sitter-typescript": "^0.21.2",
+    "tree-sitter-yaml": "^0.5.0",
     "ws": "^8.21.0",
     "zod": "^3.23.8"
   },

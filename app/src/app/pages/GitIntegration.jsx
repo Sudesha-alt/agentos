@@ -16,8 +16,10 @@ import LabelPill from "../components/LabelPill";
 import Spinner from "../components/Spinner";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
 import { SettingsPageShell } from "../layout/SettingsPageShell";
+import { useOrg } from "../../shared/providers/OrgRouteProvider";
 
 export default function GitIntegration({ embedded = false }) {
+  const { orgPath } = useOrg();
   const { data: setup, error, loading, refetch } = useGitIntegrationSetup();
 
   if (loading && !setup) {
@@ -298,7 +300,7 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
       {connected ? (
         <p className="text-[13px] text-ink-dim">
           Full index status, embedding counts, and reindex controls live in{" "}
-          <Link to="/app/settings/codebase-index" className="font-medium text-indigo hover:underline">
+          <Link to={orgPath("settings", "codebase-index")} className="font-medium text-indigo hover:underline">
             Settings → Codebase indexing
           </Link>
           .

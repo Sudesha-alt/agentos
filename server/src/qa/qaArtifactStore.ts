@@ -11,6 +11,7 @@ export interface StagedTestFile {
 export interface QaPipelineArtifacts {
   stagedTestFiles: StagedTestFile[];
   lastTestRun?: TestRunResult;
+  securityScan?: import("./testing/securityScanner").SecurityScanResult;
   executionReport?: QaExecutionReport;
 }
 

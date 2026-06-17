@@ -9,6 +9,10 @@ import {
 } from "../qa/report/reportGenerator";
 import { getQaArtifacts } from "../qa/qaArtifactStore";
 import { testRunner, type TestRunResult } from "../qa/testing/testRunner";
+import {
+  runSecurityScanInSandbox,
+  type SecurityScanResult,
+} from "../qa/testing/securityScanner";
 import { logger } from "../utils/logger";
 import type { ToolCallInput, ToolCallResult } from "./executor";
 
@@ -223,6 +227,24 @@ export async function executeQaToolCall(
         break;
       }
 
+      case "run_security_scan": {
+        const branch = defaultBranch(stringValue(toolCall.input.branch_name));
+        const timeoutSeconds =
+          typeof toolCall.input.timeout_seconds === "number"
+            ? toolCall.input.timeout_seconds
+            : 120;
+        const artifacts = getQaArtifacts(pipelineId);
+        const scan = await runSecurityScanInSandbox({
+          branchName: branch,
+          timeoutSeconds,
+        });
+        artifacts.securityScan = scan;
+        result = scan;
+        resultsFound = scan.findings.length;
+        metaQuery = `security-scan:${branch}`;
+        break;
+      }
+
       case "analyse_test_failures": {
         const failures = Array.isArray(toolCall.input.failures)
           ? (toolCall.input.failures as Array<Record<string, unknown>>)
@@ -261,6 +283,7 @@ export async function executeQaToolCall(
           overallRecommendation: recommendation,
           summary,
           acceptanceCriteria: criteria,
+          securityScan: artifacts.securityScan,
         });
         artifacts.executionReport = report;
         result = report;

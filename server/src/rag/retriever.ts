@@ -1,10 +1,12 @@
 import type { PrdOutput } from "../types/agents";
 import type { RetrievedContext, VectorContentType } from "../types/pipeline";
-import { listJiraIssues } from "../jira-sync/issueRepository";
 import { logger } from "../utils/logger";
-import { embedder } from "./embedder";
-import type { VectorRecord } from "./vectorStore";
-import { vectorStore } from "./vectorStore";
+import { TICKET_RETRIEVAL_CONFIGS } from "../codebaseIntelligence/retrievalConfig";
+import {
+  retrieveSimilarTickets,
+  retrieveSimilarTicketsFormatted,
+  ticketHitsToRetrievalResults,
+} from "./ticketRetrievalService";
 
 export interface RetrievalConfig {
   contentTypes: readonly VectorContentType[];
@@ -22,23 +24,23 @@ export interface RetrievalResult extends RetrievedContext {
 export const RETRIEVAL_CONFIGS = {
   PRODUCT_AGENT: {
     contentTypes: ["ticket", "prd", "canary_finding", "org_intelligence", "company_intelligence"] as const,
-    topK: 6,
-    similarityThreshold: 0.75,
+    topK: TICKET_RETRIEVAL_CONFIGS.PRODUCT_AGENT.topK,
+    similarityThreshold: TICKET_RETRIEVAL_CONFIGS.PRODUCT_AGENT.similarityThreshold,
   },
   ENGINEERING_AGENT: {
     contentTypes: ["prd", "implementation", "canary_finding", "org_intelligence"] as const,
-    topK: 5,
-    similarityThreshold: 0.77,
+    topK: TICKET_RETRIEVAL_CONFIGS.ENGINEERING_AGENT.topK,
+    similarityThreshold: TICKET_RETRIEVAL_CONFIGS.ENGINEERING_AGENT.similarityThreshold,
   },
   QA_AGENT: {
     contentTypes: ["prd", "qa_report", "canary_finding", "org_intelligence"] as const,
-    topK: 5,
-    similarityThreshold: 0.75,
+    topK: TICKET_RETRIEVAL_CONFIGS.QA_AGENT.topK,
+    similarityThreshold: TICKET_RETRIEVAL_CONFIGS.QA_AGENT.similarityThreshold,
   },
   PM_AGENT: {
     contentTypes: ["ticket", "prd", "implementation", "canary_finding", "org_intelligence", "company_intelligence"] as const,
-    topK: 8,
-    similarityThreshold: 0.7,
+    topK: TICKET_RETRIEVAL_CONFIGS.PM_AGENT.topK,
+    similarityThreshold: TICKET_RETRIEVAL_CONFIGS.PM_AGENT.similarityThreshold,
   },
   COMPANY_CONTEXT: {
     contentTypes: [
@@ -55,16 +57,8 @@ export const RETRIEVAL_CONFIGS = {
   },
 };
 
-const MIN_RESULTS_DEFAULT = 2;
-const THRESHOLD_RETRY_DELTA = 0.08;
-
 export const retriever = {
-  async retrieve(
-    query: string,
-    config: RetrievalConfig
-  ): Promise<RetrievalResult[]> {
-    const minResults = config.minResults ?? MIN_RESULTS_DEFAULT;
-
+  async retrieve(query: string, config: RetrievalConfig): Promise<RetrievalResult[]> {
     logger.info(
       {
         contentTypes: config.contentTypes,
@@ -74,82 +68,41 @@ export const retriever = {
       "starting retrieval"
     );
 
-    let results = await this.searchVector(query, config);
-    let fallbackUsed = false;
+    const hits = await retrieveSimilarTickets({
+      summary: query,
+      description: "",
+      components: config.queryComponents ?? [],
+      currentJiraKey: config.currentJiraKey,
+      contentTypes: config.contentTypes,
+      topN: config.topK,
+    });
 
-    if (results.length < minResults) {
-      const relaxedThreshold = Math.max(
-        0.5,
-        config.similarityThreshold - THRESHOLD_RETRY_DELTA
-      );
-      logger.info(
-        { relaxedThreshold, found: results.length },
-        "retrieval retry with relaxed threshold"
-      );
-      results = await this.searchVector(query, {
-        ...config,
-        similarityThreshold: relaxedThreshold,
-      });
-    }
-
-    if (results.length < minResults) {
-      const keywordHits = await keywordFallback(query, config);
-      if (keywordHits.length > 0) {
-        results = [...results, ...keywordHits];
-        fallbackUsed = true;
-      }
-    }
-
-    const deduped = dedupeByJiraKey(results).slice(0, config.topK);
+    const results = ticketHitsToRetrievalResults(hits).slice(0, config.topK);
 
     logger.info(
       {
-        resultsFound: deduped.length,
-        topSimilarity: deduped[0]?.similarity ?? 0,
-        fallbackUsed,
+        resultsFound: results.length,
+        topSimilarity: results[0]?.similarity ?? 0,
       },
       "retrieval complete"
     );
 
-    return deduped;
-  },
-
-  async searchVector(
-    query: string,
-    config: RetrievalConfig
-  ): Promise<RetrievalResult[]> {
-    const queryEmbedding = await embedder.embed(query);
-
-    const results = await vectorStore.similaritySearch(queryEmbedding, {
-      contentTypes: [...config.contentTypes],
-      topK: config.topK * 2,
-      similarityThreshold: config.similarityThreshold,
-      excludeJiraKeys: [config.currentJiraKey],
-    });
-
-    const scored = applyPostRetrievalScoring(results, query, config.queryComponents);
-
-    return scored.map((r) => ({
-      jiraTicketId: r.jiraTicketId,
-      jiraKey: r.jiraKey,
-      contentType: r.contentType,
-      content: r.content,
-      similarity: r.similarity ?? 0,
-      metadata: r.metadata,
-      source: "vector" as const,
-    }));
+    return results;
   },
 
   async retrieveForProductAgent(
     ticket: { summary: string; description: string; components?: string[] },
     currentJiraKey: string
   ): Promise<RetrievalResult[]> {
-    const query = `${ticket.summary} ${ticket.description}`;
-    return this.retrieve(query, {
-      ...RETRIEVAL_CONFIGS.PRODUCT_AGENT,
+    const hits = await retrieveSimilarTickets({
+      summary: ticket.summary,
+      description: ticket.description,
+      components: ticket.components,
       currentJiraKey,
-      queryComponents: ticket.components,
+      contentTypes: RETRIEVAL_CONFIGS.PRODUCT_AGENT.contentTypes,
+      topN: RETRIEVAL_CONFIGS.PRODUCT_AGENT.topK,
     });
+    return ticketHitsToRetrievalResults(hits);
   },
 
   async retrieveForPmAgent(
@@ -160,25 +113,29 @@ export const retriever = {
     },
     currentJiraKey: string
   ): Promise<RetrievalResult[]> {
-    const query = [ticket.summary, ticket.description, ...(ticket.components ?? [])]
-      .filter(Boolean)
-      .join(" ");
-    return this.retrieve(query, {
-      ...RETRIEVAL_CONFIGS.PM_AGENT,
+    const hits = await retrieveSimilarTickets({
+      summary: ticket.summary,
+      description: ticket.description,
+      components: ticket.components,
       currentJiraKey,
-      queryComponents: ticket.components,
+      contentTypes: RETRIEVAL_CONFIGS.PM_AGENT.contentTypes,
+      topN: RETRIEVAL_CONFIGS.PM_AGENT.topK,
     });
+    return ticketHitsToRetrievalResults(hits);
   },
 
   async retrieveForEngineeringAgent(
     prd: Pick<PrdOutput, "title" | "problemStatement" | "proposedSolution">,
     currentJiraKey: string
   ): Promise<RetrievalResult[]> {
-    const query = `${prd.title} ${prd.problemStatement} ${prd.proposedSolution}`;
-    return this.retrieve(query, {
-      ...RETRIEVAL_CONFIGS.ENGINEERING_AGENT,
+    const hits = await retrieveSimilarTickets({
+      summary: `${prd.title} ${prd.problemStatement}`,
+      description: prd.proposedSolution,
       currentJiraKey,
+      contentTypes: RETRIEVAL_CONFIGS.ENGINEERING_AGENT.contentTypes,
+      topN: RETRIEVAL_CONFIGS.ENGINEERING_AGENT.topK,
     });
+    return ticketHitsToRetrievalResults(hits);
   },
 
   async retrieveForCompanyProfile(query: string): Promise<RetrievalResult[]> {
@@ -193,104 +150,15 @@ export const retriever = {
     prd: Pick<PrdOutput, "title" | "acceptanceCriteria">,
     currentJiraKey: string
   ): Promise<RetrievalResult[]> {
-    const query = `${prd.title} ${prd.acceptanceCriteria.join(" ")}`;
-    return this.retrieve(query, {
-      ...RETRIEVAL_CONFIGS.QA_AGENT,
+    const hits = await retrieveSimilarTickets({
+      summary: prd.title,
+      description: prd.acceptanceCriteria.join(" "),
       currentJiraKey,
+      contentTypes: RETRIEVAL_CONFIGS.QA_AGENT.contentTypes,
+      topN: RETRIEVAL_CONFIGS.QA_AGENT.topK,
     });
+    return ticketHitsToRetrievalResults(hits);
   },
 };
 
-async function keywordFallback(
-  query: string,
-  config: RetrievalConfig
-): Promise<RetrievalResult[]> {
-  const terms = query
-    .split(/\s+/)
-    .map((t) => t.trim())
-    .filter((t) => t.length > 3)
-    .slice(0, 3);
-  if (terms.length === 0) return [];
-
-  try {
-    const { items } = await listJiraIssues({
-      q: terms[0],
-      limit: config.topK,
-    });
-
-    return items
-      .filter((i) => i.jiraKey !== config.currentJiraKey)
-      .map((i) => ({
-        jiraTicketId: i.jiraTicketId,
-        jiraKey: i.jiraKey,
-        contentType: "ticket" as VectorContentType,
-        content: `TICKET: ${i.summary}\nDESCRIPTION: ${i.description.slice(0, 500)}`,
-        similarity: 0.55,
-        metadata: { source: "keyword_fallback", status: i.status },
-        source: "keyword_fallback" as const,
-      }));
-  } catch (err) {
-    logger.warn({ err }, "keyword fallback retrieval failed");
-    return [];
-  }
-}
-
-function dedupeByJiraKey(results: RetrievalResult[]): RetrievalResult[] {
-  const best = new Map<string, RetrievalResult>();
-  for (const r of results) {
-    const key = `${r.jiraKey}:${r.contentType}`;
-    const existing = best.get(key);
-    if (!existing || r.similarity > existing.similarity) {
-      best.set(key, r);
-    }
-  }
-  return [...best.values()].sort((a, b) => b.similarity - a.similarity);
-}
-
-function applyPostRetrievalScoring(
-  results: VectorRecord[],
-  query: string,
-  queryComponents?: string[]
-): VectorRecord[] {
-  const queryLower = query.toLowerCase();
-
-  return results
-    .map((result) => {
-      let score = result.similarity ?? 0;
-
-      if (result.contentType === "prd") score += 0.02;
-      if (result.contentType === "implementation") score += 0.015;
-
-      const age = getAgeInDays(result.metadata.embeddedAt);
-      if (age < 30) score += 0.02;
-      else if (age < 90) score += 0.01;
-
-      const metaComponents = result.metadata.components;
-      if (queryComponents?.length && Array.isArray(metaComponents)) {
-        const overlap = queryComponents.some((c) =>
-          (metaComponents as string[]).some(
-            (mc) => mc.toLowerCase() === c.toLowerCase()
-          )
-        );
-        if (overlap) score += 0.03;
-      }
-
-      const contentLower = result.content.toLowerCase();
-      if (queryComponents?.some((c) => contentLower.includes(c.toLowerCase()))) {
-        score += 0.02;
-      }
-      if (queryLower.split(/\s+/).some((w) => w.length > 4 && contentLower.includes(w))) {
-        score += 0.01;
-      }
-
-      return { ...result, similarity: Math.min(score, 1.0) };
-    })
-    .sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0));
-}
-
-function getAgeInDays(value: unknown): number {
-  if (typeof value !== "string") return Number.POSITIVE_INFINITY;
-  const then = new Date(value).getTime();
-  if (Number.isNaN(then)) return Number.POSITIVE_INFINITY;
-  return (Date.now() - then) / (1000 * 60 * 60 * 24);
-}
+export { retrieveSimilarTicketsFormatted, retrieveSimilarTickets };

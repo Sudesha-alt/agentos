@@ -8,6 +8,8 @@ import {
 } from "../llm/openaiClient";
 import { gitClient } from "../integrations/gitProvider";
 import { getRepoContext } from "../git-integration/gitCredentialsStore";
+import { getGitCredentials } from "../git-integration/gitCredentialsStore";
+import { fetchFilesAtRef } from "../integrations/git/githubGraphqlClient";
 import { requireActiveOrganizationId } from "../organization/orgScope";
 import { logger } from "../utils/logger";
 import { withRetry } from "../utils/retry";
@@ -16,7 +18,8 @@ import { visualizationCache } from "./visualizationCache";
 import { generateKnowledge } from "./knowledgeService";
 import { generateTour } from "./tourService";
 import { recordOversizedSkipped } from "./indexSkipStats";
-import { MAX_HEADER_ONLY_FILE_SIZE } from "./retrievalConfig";
+import { MAX_HEADER_ONLY_FILE_SIZE, CODEBASE_EMBEDDING_INPUT_MAX_CHARS } from "./retrievalConfig";
+import { buildEmbeddingChunks } from "./astChunker";
 import type { LayoutFileInput } from "./layoutComputer";
 
 function repoIds() {
@@ -252,16 +255,27 @@ export async function runIncrementalIndex(input: {
   commitSha: string;
   triggerType: "webhook" | "manual";
   runId?: string;
+  batchIndex?: number;
+  batchTotal?: number;
 }): Promise<IndexRunResult> {
   const { repoOwner, repoName } = assertRepoContext();
   const startedAt = Date.now();
   const prismaAny = prisma as any;
 
+  const pathsToIndex = input.changedFiles.filter((path) => !shouldSkip(path));
+  const totalWork = pathsToIndex.length + input.deletedFiles.length;
+
   let runId = input.runId;
   if (runId) {
     await prismaAny.codebaseIndexRun.update({
       where: { id: runId },
-      data: { status: "running", triggerSha: input.commitSha, triggerType: input.triggerType },
+      data: {
+        status: "running",
+        triggerSha: input.commitSha,
+        triggerType: input.triggerType,
+        filesTotal: totalWork,
+        filesProcessed: 0,
+      },
     });
   } else {
     const run = await prismaAny.codebaseIndexRun.create({
@@ -273,6 +287,8 @@ export async function runIncrementalIndex(input: {
         status: "running",
         triggerType: input.triggerType,
         triggerSha: input.commitSha,
+        filesTotal: totalWork,
+        filesProcessed: 0,
       },
     });
     runId = run.id;
@@ -280,21 +296,36 @@ export async function runIncrementalIndex(input: {
 
   let filesIndexed = 0;
   let filesUpdated = 0;
+  let filesSkipped = 0;
   let filesDeleted = 0;
+  let filesProcessed = 0;
+
+  const prefetched = await prefetchChangedFiles(pathsToIndex, input.branchName);
 
   try {
-    for (const filePath of input.changedFiles.filter((path) => !shouldSkip(path))) {
-      const result = await indexFile(filePath, input.branchName).catch((err) => {
+    for (const filePath of pathsToIndex) {
+      const prefetchedFile = prefetched.get(filePath);
+      const result = await indexFile(filePath, input.branchName, prefetchedFile).catch((err) => {
         logger.warn({ filePath, err }, "incremental index file failed");
         return "unchanged" as const;
       });
       if (result === "indexed") filesIndexed += 1;
       else if (result === "updated") filesUpdated += 1;
+      else filesSkipped += 1;
+      filesProcessed += 1;
+
+      if (filesProcessed % 3 === 0 || filesProcessed === totalWork) {
+        await prismaAny.codebaseIndexRun.update({
+          where: { id: runId },
+          data: { filesProcessed, filesIndexed, filesUpdated, filesDeleted },
+        });
+      }
     }
 
     for (const filePath of input.deletedFiles) {
       await removeFileFromIndex(filePath, input.branchName);
       filesDeleted += 1;
+      filesProcessed += 1;
     }
 
     await prismaAny.codebaseIndexRun.update({
@@ -304,18 +335,35 @@ export async function runIncrementalIndex(input: {
         filesIndexed,
         filesUpdated,
         filesDeleted,
+        filesProcessed: totalWork,
         completedAt: new Date(),
       },
     });
 
-    await visualizationCache.refresh(input.branchName).catch((err) => {
-      logger.warn({ err, branchName: input.branchName }, "viz refresh after incremental index failed");
-    });
+    if ((input.batchIndex ?? 0) === (input.batchTotal ?? 1) - 1) {
+      await visualizationCache.refresh(input.branchName).catch((err) => {
+        logger.warn({ err, branchName: input.branchName }, "viz refresh after incremental index failed");
+      });
+    }
+
+    logger.info(
+      {
+        runId,
+        branchName: input.branchName,
+        filesIndexed,
+        filesUpdated,
+        filesSkipped,
+        filesDeleted,
+        batchIndex: input.batchIndex,
+        batchTotal: input.batchTotal,
+      },
+      "incremental index completed"
+    );
 
     return {
       filesIndexed,
       filesUpdated,
-      filesSkipped: 0,
+      filesSkipped,
       filesDeleted,
       durationMs: Date.now() - startedAt,
     };
@@ -331,11 +379,48 @@ export async function runIncrementalIndex(input: {
   }
 }
 
+async function prefetchChangedFiles(
+  paths: string[],
+  branchName: string
+): Promise<Map<string, { path: string; sha: string; size: number; content: string }>> {
+  const map = new Map<string, { path: string; sha: string; size: number; content: string }>();
+  if (paths.length < 2) return map;
+
+  try {
+    const creds = getGitCredentials();
+    if (creds.provider !== "github") return map;
+
+    const ctx = getRepoContext();
+    const blobs = await fetchFilesAtRef({
+      owner: ctx.workspace,
+      repo: ctx.repoSlug,
+      ref: branchName,
+      paths,
+    });
+
+    for (const [path, blob] of blobs) {
+      map.set(path, {
+        path,
+        sha: blob.oid,
+        size: blob.byteSize,
+        content: blob.content,
+      });
+    }
+  } catch (err) {
+    logger.debug({ err }, "GraphQL prefetch skipped — falling back to REST");
+  }
+
+  return map;
+}
+
 async function indexFile(
   filePath: string,
-  branchName: string
+  branchName: string,
+  prefetched?: { path: string; sha: string; size: number; content: string }
 ): Promise<"indexed" | "updated" | "unchanged"> {
-  const file = await gitClient.getFileContent(filePath, branchName);
+  const file =
+    prefetched ??
+    (await gitClient.getFileContent(filePath, branchName));
   if (file.size > MAX_FILE_SIZE) {
     if (file.size <= MAX_HEADER_ONLY_FILE_SIZE) {
       return indexFileHeaderOnly(filePath, branchName, file);
@@ -565,7 +650,7 @@ async function updateFileEmbeddings(
   }
 
   const { repoOwner, repoName } = repoIds();
-  const chunks = buildEmbeddingTexts(filePath, content, intelligence).slice(0, 16);
+  const chunks = buildEmbeddingChunks(filePath, content, intelligence);
   const rows = [];
 
   for (let i = 0; i < chunks.length; i += 1) {
@@ -577,7 +662,7 @@ async function updateFileEmbeddings(
       () =>
         getOpenAIClient().embeddings.create({
           model: EMBEDDING_MODEL,
-          input: chunk.slice(0, 8_000),
+          input: chunk.text.slice(0, CODEBASE_EMBEDDING_INPUT_MAX_CHARS),
         }),
       {
         maxAttempts: 3,
@@ -593,7 +678,7 @@ async function updateFileEmbeddings(
       repoName: repoName,
       branchName,
       chunkIndex: i,
-      chunkContent: chunk,
+      chunkContent: chunk.text,
       embedding: embeddingResponse.data[0].embedding,
       metadata: {
         filePath,
@@ -602,8 +687,14 @@ async function updateFileEmbeddings(
         patterns: intelligence.patterns,
         chunkIndex: i,
         totalChunks: chunks.length,
+        spanType: chunk.metadata.spanType,
+        symbolName: chunk.metadata.symbolName,
+        startLine: chunk.metadata.startLine,
+        endLine: chunk.metadata.endLine,
+        chunkStrategy: chunk.metadata.chunkStrategy,
+        isHeader: chunk.metadata.isHeader,
       },
-      contentHash: sha256(chunk),
+      contentHash: sha256(chunk.text),
     });
   }
 
@@ -621,30 +712,6 @@ async function updateFileEmbeddings(
       "embedding write failed — file metadata still indexed; check codebase_embeddings table in Supabase"
     );
   }
-}
-
-function buildEmbeddingTexts(
-  filePath: string,
-  content: string,
-  intelligence: {
-    summary: string | null;
-    exports: Array<{ name: string; type: string }>;
-    patterns: string[];
-  }
-): string[] {
-  const header = [
-    `FILE: ${filePath}`,
-    `SUMMARY: ${intelligence.summary ?? "N/A"}`,
-    `EXPORTS: ${intelligence.exports.map((item) => item.name).join(", ") || "none"}`,
-    `PATTERNS: ${intelligence.patterns.join(", ") || "none"}`,
-  ].join("\n");
-
-  const chunkSize = 1800;
-  const chunks = [header];
-  for (let i = 0; i < content.length; i += chunkSize) {
-    chunks.push(`FILE: ${filePath}\nCHUNK ${Math.floor(i / chunkSize)}\n${content.slice(i, i + chunkSize)}`);
-  }
-  return chunks;
 }
 
 async function markDeletedFiles(activeFilePaths: string[], branchName: string): Promise<number> {
@@ -677,9 +744,34 @@ async function removeFileFromIndex(filePath: string, branchName: string): Promis
   await codebaseVectorStore.deleteFile(repoOwner, repoName, branchName, filePath);
 }
 
+function parseIncludeGlobs(): string[] | null {
+  const raw = process.env.CODEBASE_INDEX_INCLUDE_GLOBS?.trim();
+  if (!raw) return null;
+  const globs = raw.split(",").map((g) => g.trim()).filter(Boolean);
+  return globs.length ? globs : null;
+}
+
+function globToRegExp(glob: string): RegExp {
+  const normalized = glob.replace(/\\/g, "/").replace(/^\.\//, "");
+  const pattern = normalized
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*\*/g, "§§")
+    .replace(/\*/g, "[^/]*")
+    .replace(/§§/g, ".*");
+  return new RegExp(`^${pattern}$`);
+}
+
+function matchesIncludeGlob(path: string, globs: string[]): boolean {
+  const normalized = path.replace(/\\/g, "/");
+  return globs.some((glob) => globToRegExp(glob).test(normalized));
+}
+
 function shouldSkip(path: string): boolean {
-  return SKIP_PATTERNS.some((pattern) => path.includes(pattern)) ||
-    SKIP_SUFFIXES.some((suffix) => path.endsWith(suffix));
+  if (SKIP_PATTERNS.some((pattern) => path.includes(pattern))) return true;
+  if (SKIP_SUFFIXES.some((suffix) => path.endsWith(suffix))) return true;
+  const includeGlobs = parseIncludeGlobs();
+  if (includeGlobs && !matchesIncludeGlob(path, includeGlobs)) return true;
+  return false;
 }
 
 function sha256(input: string): string {

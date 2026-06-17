@@ -1,12 +1,14 @@
+import { getAgentDashboardLabel } from "../../shared/config/app";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import { formatRelativeTime } from "../../shared/lib/format";
+import { AgentChatAvatar } from "../agent-chat/AgentChatAvatar";
 
 export default function AgentHealthPanel({ agents, loading }) {
   return (
     <Panel className="h-full">
       <PanelHeader
         kicker="Calibration"
-        title="Agent health"
+        title="Agent health"
       />
       <div className="grid gap-3 px-5 py-4 sm:grid-cols-1 sm:px-6">
         {loading && !agents?.length
@@ -21,8 +23,13 @@ export default function AgentHealthPanel({ agents, loading }) {
                 key={agent.id}
                 className="rounded-app-sm border border-app-border bg-app-surface px-4 py-3"
               >
-                <p className="text-sm font-semibold text-app-ink">{agent.name}</p>
-                <p className="mt-2 text-xs text-app-ink-dim">{agent.primaryMetric}</p>
+                <div className="flex items-center gap-3">
+                  <AgentChatAvatar domain={agent.id} size={40} />
+                  <p className="text-sm font-semibold text-app-ink">
+                    {getAgentDashboardLabel(agent.id) || agent.name}
+                  </p>
+                </div>
+                <p className="mt-3 text-xs text-app-ink-dim">{agent.primaryMetric}</p>
                 <p className="mt-1 text-lg font-medium text-app-ink">{agent.primaryValue}</p>
                 <p className="mt-2 text-xs text-app-ink-mute">{agent.secondaryMetric}</p>
                 <div className="mt-3 flex items-center justify-between text-xs">

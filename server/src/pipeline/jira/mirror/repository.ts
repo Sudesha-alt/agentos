@@ -1,36 +1,19 @@
 import { prisma } from "../../../db/client";
-import { embedder } from "../../../rag/embedder";
-import { vectorStore } from "../../../rag/vectorStore";
+import { embedTicketFields } from "../../../rag/ticketEmbedService";
+import { ticketFieldsFromFetched } from "../../../rag/ticketEmbeddingText";
+import type { FetchedJiraIssue } from "../../../jira-sync/issueFetcher";
 import { logger } from "../../../utils/logger";
 import { requireActiveOrganizationId } from "../../../organization/orgScope";
 import type { FetchedMirrorIssue } from "./issueFetcher";
 
-export function buildMirrorEmbeddingText(
+export async function embedMirroredIssue(
   issue: FetchedMirrorIssue,
   gitContext?: string
-): string {
-  const parts = [
-    `TICKET: ${issue.summary}`,
-    `KEY: ${issue.jiraKey}`,
-    `TYPE: ${issue.issueType}`,
-    `STATUS: ${issue.status}`,
-    issue.priority ? `PRIORITY: ${issue.priority}` : "",
-    issue.components.length
-      ? `COMPONENTS: ${issue.components.join(", ")}`
-      : "",
-    issue.labels.length ? `LABELS: ${issue.labels.join(", ")}` : "",
-    issue.resolution ? `RESOLUTION: ${issue.resolution}` : "",
-    `DESCRIPTION: ${issue.description}`,
-  ];
-
-  if (issue.commentsText) {
-    parts.push(`COMMENTS / FIX NOTES:\n${issue.commentsText}`);
-  }
-  if (gitContext) {
-    parts.push(gitContext);
-  }
-
-  return parts.filter(Boolean).join("\n");
+): Promise<void> {
+  const git = gitContext ?? (await fetchGitContext(issue.jiraKey));
+  const fields = ticketFieldsFromFetched(issue as FetchedJiraIssue, git || undefined);
+  await embedTicketFields(issue.jiraTicketId, fields);
+  logger.info({ jiraKey: issue.jiraKey }, "mirrored ticket embedded");
 }
 
 async function fetchGitContext(jiraKey: string): Promise<string> {
@@ -51,35 +34,6 @@ async function fetchGitContext(jiraKey: string): Promise<string> {
   } catch {
     return "";
   }
-}
-
-export async function embedMirroredIssue(
-  issue: FetchedMirrorIssue,
-  gitContext?: string
-): Promise<void> {
-  const git = gitContext ?? (await fetchGitContext(issue.jiraKey));
-  const text = buildMirrorEmbeddingText(issue, git || undefined);
-
-  const embedding = await embedder.embed(text);
-
-  await vectorStore.upsert({
-    jiraTicketId: issue.jiraTicketId,
-    jiraKey: issue.jiraKey,
-    contentType: "ticket",
-    content: text,
-    embedding,
-    metadata: {
-      source: "jira_mirror",
-      summary: issue.summary,
-      issueType: issue.issueType,
-      status: issue.status,
-      priority: issue.priority,
-      components: issue.components,
-      embeddedAt: new Date().toISOString(),
-    },
-  });
-
-  logger.info({ jiraKey: issue.jiraKey }, "mirrored ticket embedded");
 }
 
 export async function upsertMirrorRecord(
@@ -148,7 +102,9 @@ export async function getMirrorStats(organizationId?: string): Promise<{
   const org = organizationId ?? requireActiveOrganizationId();
   const [total, embedded, rows] = await Promise.all([
     prisma.jiraMirror.count({ where: { organizationId: org } }),
-    prisma.jiraMirror.count({ where: { organizationId: org, embeddedAt: { not: null } } }),
+    prisma.jiraMirror.count({
+      where: { organizationId: org, embeddedAt: { not: null } },
+    }),
     prisma.jiraMirror.groupBy({
       by: ["status"],
       where: { organizationId: org },

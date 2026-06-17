@@ -5,16 +5,19 @@ import { useCodebaseLayerStatus } from "../../../entities/codebase";
 import CodebaseIntelligenceStatusWidget from "../../../widgets/codebase-intelligence-status/CodebaseIntelligenceStatusWidget";
 import IndexProgressBar from "../../../widgets/index-progress/IndexProgressBar";
 import { Panel, PanelHeader } from "../../../shared/ui/Panel";
+import { useOrg } from "../../../shared/providers/OrgRouteProvider";
 
 const VECTOR_CONFIG = [
   { label: "Embedding provider", value: "OpenAI" },
   { label: "Embedding model", value: "text-embedding-3-small (1536 dimensions)" },
-  { label: "Vector store", value: "Supabase pgvector · codebase_embeddings" },
-  { label: "Chunk size", value: "~1,800 characters per chunk" },
+  { label: "Vector store", value: "Supabase pgvector · codebase_embeddings + vector_store" },
+  { label: "Chunk strategy", value: "tree-sitter AST (function/class boundaries)" },
+  { label: "Chunk budget", value: "~2,048 tokens / ~8,192 chars (CODEBASE_CHUNK_MAX_TOKENS)" },
   { label: "Max chunks per file", value: "16" },
 ];
 
 export default function SettingsCodebaseIndexPage() {
+  const { orgPath } = useOrg();
   const { data: setup } = useGitIntegrationSetup({ pollMs: 30000 });
   const gitBranch = setup?.git?.defaultBranch ?? "main";
   const { data: layerStatus } = useCodebaseLayerStatus({ branch: gitBranch, pollMs: 12000 });
@@ -31,7 +34,7 @@ export default function SettingsCodebaseIndexPage() {
           semantic code search — this is not shown in the Ananta workspace UI.
         </p>
         <p className="mt-2 text-[13px] text-app-ink-dim">
-          <Link to="/app/settings/integrations/github" className="text-indigo hover:underline">
+          <Link to={orgPath("settings", "integrations", "github")} className="text-indigo hover:underline">
             GitHub integration →
           </Link>
           {" · "}
@@ -80,8 +83,18 @@ export default function SettingsCodebaseIndexPage() {
             </li>
             {layerStatus?.counts?.filesIndexed ? (
               <li className="text-app-ink-dim">
-                Index health: {layerStatus.counts.indexHealthPercent ?? 0}% (
+                Codebase index health: {layerStatus.counts.indexHealthPercent ?? 0}% (
                 {layerStatus.counts.embeddings} embeddings / {layerStatus.counts.filesIndexed} files)
+              </li>
+            ) : null}
+            {layerStatus?.jira?.connected ? (
+              <li
+                className={
+                  (layerStatus.jira.embedded ?? 0) > 0 ? "text-success" : "text-app-ink-dim"
+                }
+              >
+                Jira embed health: {layerStatus.jira.embedHealthPercent ?? 0}% (
+                {layerStatus.jira.embedded ?? 0} / {layerStatus.jira.total ?? 0} issues)
               </li>
             ) : null}
             {layerStatus?.index?.lastTrigger ? (

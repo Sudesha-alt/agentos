@@ -62,6 +62,24 @@ export interface TechAgentHandoff {
       changeScope: string;
       matchReasons: string[];
     }>;
+    similarTickets?: Array<{
+      jiraKey: string;
+      contentType: string;
+      score: number;
+      matchReasons: string[];
+    }>;
+    prdSnippets?: Array<{
+      jiraKey: string;
+      score: number;
+      snippet: string;
+    }>;
+    graphNeighbors?: string[];
+    enrichedFiles?: Array<{
+      path: string;
+      score: number;
+      contentSource: string;
+      neighbors: string[];
+    }>;
   };
 }
 

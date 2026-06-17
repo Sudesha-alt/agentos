@@ -153,6 +153,22 @@ Analyse test failures for severity, root cause (test vs implementation), and rem
     },
   },
   {
+    name: "run_security_scan",
+    description: `
+Run mandatory static vulnerability checks in the sandbox: npm/pnpm audit,
+optional package.json security script, and security-tagged tests.
+Always call this after run_tests and before generate_qa_report.
+    `.trim(),
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        branch_name: { type: "string" },
+        timeout_seconds: { type: "number" },
+      },
+      required: ["branch_name"],
+    },
+  },
+  {
     name: "generate_qa_report",
     description: `
 Generate the final QA report after tests have run and failures analysed.

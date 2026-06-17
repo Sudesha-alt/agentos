@@ -7,6 +7,7 @@ import {
   useCodebaseLayerStatus,
 } from "../../entities/codebase";
 import { AGENT_NAMES } from "../../shared/config/app";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 
 function formatRelativeTime(iso) {
@@ -50,6 +51,7 @@ export default function CodebaseIntelligenceStatusWidget({
   showReindex = true,
   onIndexStarted,
 }) {
+  const orgPath = useOrgPathBuilder();
   const { data, error, loading, refetch } = useCodebaseLayerStatus({
     branch,
     pollMs: 8000,
@@ -156,7 +158,7 @@ export default function CodebaseIntelligenceStatusWidget({
           <div className="flex flex-wrap items-center gap-3 text-[13px]">
             {!data?.connected ? (
               <Link
-                to="/app/settings/integrations/github"
+                to={orgPath("settings", "integrations", "github")}
                 className="inline-flex rounded-full bg-indigo px-6 py-2.5 font-mono text-[11px] uppercase tracking-[0.16em] text-white transition-opacity hover:opacity-90"
               >
                 Connect GitHub
@@ -222,7 +224,7 @@ export default function CodebaseIntelligenceStatusWidget({
     <Panel>
       <PanelHeader
         kicker={AGENT_NAMES.ANANTA}
-        title="Layer readiness"
+        title="Layer readiness"
         right={data ? headerRight : null}
       />
       {body}

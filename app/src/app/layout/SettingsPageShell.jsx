@@ -2,10 +2,11 @@ import { Link } from "react-router-dom";
 import { PageIntro } from "../../shared/ui/Panel";
 import { TitleWithInfo } from "../../shared/ui/InfoTip";
 import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 
 export function SettingsPageShell({
   embedded = false,
-  backTo = "/app/settings/integrations",
+  backTo,
   backLabel = "← Integrations",
   kicker,
   title,
@@ -14,11 +15,13 @@ export function SettingsPageShell({
   className = "",
   children,
 }) {
+  const orgPath = useOrgPathBuilder();
+  const resolvedBack = backTo ?? orgPath("settings", "integrations");
   if (embedded) {
     return (
       <div className={`space-y-6 ${className}`}>
         <Link
-          to={backTo}
+          to={resolvedBack}
           className="inline-flex items-center gap-1 text-sm font-medium text-app-ink-dim transition hover:text-indigo"
         >
           {backLabel}

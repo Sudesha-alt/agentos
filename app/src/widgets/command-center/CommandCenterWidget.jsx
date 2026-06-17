@@ -2,9 +2,11 @@ import { Link } from "react-router-dom";
 import MetricStrip from "../../shared/components/MetricStrip";
 import LiveActivityFeed from "../../shared/components/LiveActivityFeed";
 import { useMetricsSummary, useActivityEvents, useCycleTrend } from "../../entities/workspace";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 
 export default function CommandCenterWidget() {
+  const orgPath = useOrgPathBuilder();
   const { data: metricsData, loading: metricsLoading } = useMetricsSummary({
     pollMs: 8000,
   });
@@ -21,7 +23,7 @@ export default function CommandCenterWidget() {
         <Panel>
           <PanelHeader
             kicker="Live"
-            title="What is happening right now"
+            title="What is happening right now"
           />
           <div className="max-h-[420px] overflow-y-auto px-5 py-4 sm:px-6">
             <LiveActivityFeed events={eventsData?.events} loading={eventsLoading} />
@@ -31,12 +33,12 @@ export default function CommandCenterWidget() {
         <Panel>
           <PanelHeader
             kicker="Trend"
-            title="Cycle time per feature"
+            title="Cycle time per feature"
           />
           <div className="px-5 py-6 sm:px-6">
             <CycleTrendChart points={trendData?.points ?? []} />
             <Link
-              to="/app/costs"
+              to={orgPath("costs")}
               className="mt-6 inline-flex text-sm font-medium text-app-ink-dim hover:text-app-ink"
             >
               View cost intelligence →

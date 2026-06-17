@@ -4,6 +4,7 @@ import { DEMO_CREDENTIAL_HINT } from "../entities/auth";
 import MarketingGridBackground from "../marketing/agent-team/components/MarketingGridBackground";
 import { useAuth } from "../shared/providers/useAuth";
 import { DATA_MODE } from "../shared/config/app";
+import { sessionHomePath, migrateAppPath } from "../shared/routing/orgPaths";
 import "../marketing/agent-team/agentTeam.css";
 
 export default function Login() {
@@ -17,7 +18,10 @@ export default function Login() {
   const [error, setError] = useState("");
 
   const destination = useMemo(() => {
-    return typeof location.state?.from === "string" ? location.state.from : "/app";
+    if (typeof location.state?.from === "string" && location.state.from !== "/app") {
+      return location.state.from;
+    }
+    return "/app";
   }, [location.state]);
 
   async function onSubmit(event) {
@@ -28,7 +32,17 @@ export default function Login() {
       const session = isSignup
         ? await signup({ email, password })
         : await login({ email, password });
-      const target = session.onboardingCompleted === false ? "/onboarding" : destination;
+      if (session.onboardingCompleted === false) {
+        navigate("/onboarding", { replace: true });
+        return;
+      }
+      const slug = session.organization?.slug ?? session.user?.organizationSlug;
+      const target =
+        slug && destination.startsWith("/app")
+          ? migrateAppPath(slug, destination)
+          : slug
+            ? sessionHomePath(session)
+            : destination;
       navigate(target, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-in failed.");

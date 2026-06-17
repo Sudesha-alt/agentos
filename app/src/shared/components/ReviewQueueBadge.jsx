@@ -1,14 +1,16 @@
 import { Link } from "react-router-dom";
+import { useOrgPathBuilder } from "../providers/OrgRouteProvider";
 
 /**
  * Global review-queue indicator — visible from every screen.
  */
 export default function ReviewQueueBadge({ count, className = "" }) {
+  const orgPath = useOrgPathBuilder();
   if (!count) return null;
 
   return (
     <Link
-      to="/app/pipelines?tab=review"
+      to={`${orgPath("pipelines")}?tab=review`}
       className={`inline-flex items-center gap-2 rounded-full border border-danger/30 bg-danger/10 px-3 py-1.5 text-xs font-medium text-danger transition-colors hover:bg-danger/15 ${className}`}
       title={`${count} pipeline${count === 1 ? "" : "s"} need review`}
     >

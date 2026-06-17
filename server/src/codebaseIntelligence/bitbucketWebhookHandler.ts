@@ -3,10 +3,12 @@ import type { Request, Response } from "express";
 import { getGitWebhookSecret } from "../git-integration/gitCredentialsStore";
 import { getRepoContext } from "../git-integration/gitCredentialsStore";
 import { enqueueCodebaseIndexFromPush } from "./pushWebhookHandler";
+import { resolveWebhookChangedFiles } from "./webhookIndexHelpers";
 
 type BitbucketPushPayload = {
   push?: {
     changes?: Array<{
+      old?: { name?: string; target?: { hash?: string } };
       new?: { name?: string; target?: { hash?: string } };
       commits?: Array<{
         hash?: string;
@@ -54,6 +56,7 @@ export async function handleBitbucketWebhook(
   const change = payload.push?.changes?.[0];
   const branchName = change?.new?.name ?? "main";
   const headSha = change?.new?.target?.hash ?? "";
+  const beforeSha = change?.old?.target?.hash ?? "";
   const ctx = getRepoContext();
 
   const commits =
@@ -67,16 +70,34 @@ export async function handleBitbucketWebhook(
       removed: [] as string[],
     })) ?? [];
 
+  const { changedFiles, deletedFiles } = await resolveWebhookChangedFiles({
+    provider: "bitbucket",
+    owner: ctx.workspace,
+    repo: ctx.repoSlug,
+    workspace: ctx.workspace,
+    repoSlug: ctx.repoSlug,
+    beforeSha,
+    afterSha: headSha,
+    webhookChanged: [],
+    webhookDeleted: [],
+    commitCount: commits.length,
+  });
+
   await enqueueCodebaseIndexFromPush({
     repoOwner: ctx.workspace,
     repoName: ctx.repoSlug,
     branchName,
     headSha,
     pushedBy: payload.actor?.display_name ?? "unknown",
-    changedFiles: [],
-    deletedFiles: [],
+    changedFiles,
+    deletedFiles,
     commits,
   });
 
-  res.status(202).json({ ok: true, note: "bitbucket push queued; file lists may be empty until full index" });
+  res.status(202).json({
+    ok: true,
+    queued: true,
+    changedCount: changedFiles.length,
+    deletedCount: deletedFiles.length,
+  });
 }

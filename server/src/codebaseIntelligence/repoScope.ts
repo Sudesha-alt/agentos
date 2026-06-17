@@ -42,18 +42,6 @@ export function resolveRepoScope(): RepoScope | null {
     /* fall through */
   }
 
-  const repoOwner = process.env.GITHUB_REPO_OWNER?.trim() ?? "";
-  const repoName = process.env.GITHUB_REPO_NAME?.trim() ?? "";
-  if (repoOwner && repoName) {
-    return {
-      repoOwner,
-      repoName,
-      defaultBranch: process.env.GITHUB_DEFAULT_BRANCH?.trim() ?? "main",
-      connected: false,
-      organizationId,
-    };
-  }
-
   return null;
 }
 

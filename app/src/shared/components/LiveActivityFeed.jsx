@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { useOrgPathBuilder } from "../providers/OrgRouteProvider";
 import { formatRelativeTime } from "../lib/format";
 
 const EVENT_TONES = {
@@ -9,6 +10,7 @@ const EVENT_TONES = {
 };
 
 export default function LiveActivityFeed({ events, loading }) {
+  const orgPath = useOrgPathBuilder();
   if (loading && (!events || events.length === 0)) {
     return (
       <div className="space-y-3">
@@ -35,7 +37,11 @@ export default function LiveActivityFeed({ events, loading }) {
       {events.map((event) => (
         <li key={event.id}>
           <Link
-            to={event.pipelineId ? `/app/pipelines?selected=${event.pipelineId}` : "/app/pipelines"}
+            to={
+              event.pipelineId
+                ? `${orgPath("pipelines")}?selected=${event.pipelineId}`
+                : orgPath("pipelines")
+            }
             className={`block rounded-app-sm border border-app-border border-l-[3px] px-4 py-3 transition-colors hover:bg-app-surface-muted ${
               EVENT_TONES[event.tone] ?? EVENT_TONES.progress
             }`}
