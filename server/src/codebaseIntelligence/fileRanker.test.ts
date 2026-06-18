@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 import {
   aggregateChunksToFiles,
   classifyChangeScope,
@@ -26,10 +27,10 @@ describe("aggregateChunksToFiles", () => {
       "billing checkout"
     );
 
-    expect(aggregated).toHaveLength(1);
-    expect(aggregated[0]?.path).toBe("server/src/billing/checkout.ts");
-    expect(aggregated[0]?.score).toBeGreaterThan(0.7);
-    expect(aggregated[0]?.bestChunk).toBe("header chunk");
+    assert.equal(aggregated.length, 1);
+    assert.equal(aggregated[0]?.path, "server/src/billing/checkout.ts");
+    assert.ok((aggregated[0]?.score ?? 0) > 0.7);
+    assert.equal(aggregated[0]?.bestChunk, "header chunk");
   });
 });
 
@@ -55,7 +56,7 @@ describe("classifyChangeScope", () => {
         patterns: ["test"],
       }
     );
-    expect(scope).toBe("context_only");
+    assert.equal(scope, "context_only");
   });
 
   it("labels unindexed high-score path as create_new", () => {
@@ -68,7 +69,7 @@ describe("classifyChangeScope", () => {
         patterns: [],
       }
     );
-    expect(scope).toBe("create_new");
+    assert.equal(scope, "create_new");
   });
 
   it("labels indexed hit as modify", () => {
@@ -78,7 +79,7 @@ describe("classifyChangeScope", () => {
       indexed: true,
       patterns: [],
     });
-    expect(scope).toBe("modify");
+    assert.equal(scope, "modify");
   });
 });
 
@@ -88,8 +89,8 @@ describe("expandQueryRules", () => {
       summary: "Fix auth session timeout",
       components: ["Billing"],
     });
-    expect(phrases.some((p) => /auth/i.test(p))).toBe(true);
-    expect(phrases.some((p) => /Billing/i.test(p))).toBe(true);
+    assert.ok(phrases.some((p) => /auth/i.test(p)));
+    assert.ok(phrases.some((p) => /Billing/i.test(p)));
   });
 });
 
@@ -99,7 +100,7 @@ describe("mergeWorkFileResults", () => {
       [{ path: "a.ts", changeScope: "modify", score: 0.7, matchReasons: ["semantic"] }],
       [{ path: "a.ts", changeScope: "modify", score: 0.85, matchReasons: ["keyword_path"] }],
     ]);
-    expect(merged[0]?.score).toBe(0.85);
-    expect(merged[0]?.matchReasons).toContain("keyword_path");
+    assert.equal(merged[0]?.score, 0.85);
+    assert.ok(merged[0]?.matchReasons.includes("keyword_path"));
   });
 });

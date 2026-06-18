@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
 import {
   frontendBaseUrl,
   frontendIntegrationUrl,
@@ -9,13 +10,15 @@ describe("frontendIntegrationUrl", () => {
     const prev = process.env.FRONTEND_URL;
     process.env.FRONTEND_URL = "https://app.example.com/app";
     try {
-      expect(frontendIntegrationUrl("acme", "github")).toBe(
+      assert.equal(
+        frontendIntegrationUrl("acme", "github"),
         "https://app.example.com/acme/settings/integrations/github"
       );
-      expect(frontendIntegrationUrl("acme", "jira")).toBe(
+      assert.equal(
+        frontendIntegrationUrl("acme", "jira"),
         "https://app.example.com/acme/settings/integrations/jira"
       );
-      expect(frontendBaseUrl()).toBe("https://app.example.com");
+      assert.equal(frontendBaseUrl(), "https://app.example.com");
     } finally {
       if (prev === undefined) delete process.env.FRONTEND_URL;
       else process.env.FRONTEND_URL = prev;
