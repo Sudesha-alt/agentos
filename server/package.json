@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "powershell -ExecutionPolicy Bypass -File scripts/start-dev.ps1",
     "dev:tsx": "tsx watch src/server.ts",
-    "build": "prisma generate && tsc -p tsconfig.json && node -e \"require('fs').cpSync('src/jira-intake/db','dist/jira-intake/db',{recursive:true})\"",
+    "build": "npx prisma generate && tsc -p tsconfig.json && node -e \"require('fs').cpSync('src/jira-intake/db','dist/jira-intake/db',{recursive:true})\"",
     "postinstall": "prisma generate",
     "start": "node dist/server.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
