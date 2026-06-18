@@ -3,6 +3,7 @@ import { retry } from "../../utils/retry";
 import type {
   GitFileContent,
   GitProviderClient,
+  GitPushFile,
   GitRepoContext,
   GitTreeItem,
 } from "./types";
@@ -24,6 +25,46 @@ export function createGithubProvider(
       });
       if (!res.ok) {
         throw new Error(`GitHub API ${res.status}: ${await res.text()}`);
+      }
+      return (await res.json()) as T;
+    });
+  }
+
+  async function githubPost<T>(path: string, body: unknown): Promise<T> {
+    return retry(async () => {
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}${path}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "Content-Type": "application/json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        throw new Error(`GitHub API POST ${res.status}: ${await res.text()}`);
+      }
+      return (await res.json()) as T;
+    });
+  }
+
+  async function githubPatch<T>(path: string, body: unknown): Promise<T> {
+    return retry(async () => {
+      const token = await getToken();
+      const res = await fetch(`${API_BASE}${path}`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "Content-Type": "application/json",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        throw new Error(`GitHub API PATCH ${res.status}: ${await res.text()}`);
       }
       return (await res.json()) as T;
     });
@@ -84,6 +125,69 @@ export function createGithubProvider(
     async cloneUrl(ctx) {
       const token = await getToken();
       return `https://x-access-token:${encodeURIComponent(token)}@github.com/${ctx.workspace}/${ctx.repoSlug}.git`;
+    },
+
+    async pushFilesToBranch(ctx, targetBranch, sourceBranch, files, commitMessage) {
+      // Get the source branch tip SHA to use as the base commit
+      const refData = await githubFetch<{ object: { sha: string } }>(
+        `/repos/${ctx.workspace}/${ctx.repoSlug}/git/ref/heads/${encodeURIComponent(sourceBranch)}`
+      );
+      const baseSha = refData.object.sha;
+
+      // Ensure the target branch exists; create it from source if not
+      let targetSha: string;
+      try {
+        const targetRef = await githubFetch<{ object: { sha: string } }>(
+          `/repos/${ctx.workspace}/${ctx.repoSlug}/git/ref/heads/${encodeURIComponent(targetBranch)}`
+        );
+        targetSha = targetRef.object.sha;
+      } catch {
+        // Branch doesn't exist — create it from source
+        const created = await githubPost<{ object: { sha: string } }>(
+          `/repos/${ctx.workspace}/${ctx.repoSlug}/git/refs`,
+          { ref: `refs/heads/${targetBranch}`, sha: baseSha }
+        );
+        targetSha = created.object.sha;
+      }
+
+      // Create blobs for each file
+      const treeItems = await Promise.all(
+        files.map(async (file: GitPushFile) => {
+          const blob = await githubPost<{ sha: string }>(
+            `/repos/${ctx.workspace}/${ctx.repoSlug}/git/blobs`,
+            { content: Buffer.from(file.content).toString("base64"), encoding: "base64" }
+          );
+          return {
+            path: file.filePath,
+            mode: "100644" as const,
+            type: "blob" as const,
+            sha: blob.sha,
+          };
+        })
+      );
+
+      // Create a new tree on top of the target branch's current tree
+      const baseCommit = await githubFetch<{ tree: { sha: string } }>(
+        `/repos/${ctx.workspace}/${ctx.repoSlug}/git/commits/${targetSha}`
+      );
+      const newTree = await githubPost<{ sha: string }>(
+        `/repos/${ctx.workspace}/${ctx.repoSlug}/git/trees`,
+        { base_tree: baseCommit.tree.sha, tree: treeItems }
+      );
+
+      // Create the commit
+      const newCommit = await githubPost<{ sha: string }>(
+        `/repos/${ctx.workspace}/${ctx.repoSlug}/git/commits`,
+        { message: commitMessage, tree: newTree.sha, parents: [targetSha] }
+      );
+
+      // Fast-forward the target branch ref
+      await githubPatch(
+        `/repos/${ctx.workspace}/${ctx.repoSlug}/git/refs/heads/${encodeURIComponent(targetBranch)}`,
+        { sha: newCommit.sha }
+      );
+
+      return { sha: newCommit.sha };
     },
   };
 }

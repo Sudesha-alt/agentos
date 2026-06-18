@@ -21,6 +21,11 @@ export interface GitRepoContext {
   defaultBranch: string;
 }
 
+export interface GitPushFile {
+  filePath: string;
+  content: string;
+}
+
 export interface GitProviderClient {
   readonly provider: GitProviderId;
   testConnection(ctx: GitRepoContext): Promise<{ fullName: string; defaultBranch?: string }>;
@@ -31,4 +36,11 @@ export interface GitProviderClient {
     branchName: string
   ): Promise<GitFileContent>;
   cloneUrl(ctx: GitRepoContext): string | Promise<string>;
+  pushFilesToBranch(
+    ctx: GitRepoContext,
+    targetBranch: string,
+    sourceBranch: string,
+    files: GitPushFile[],
+    commitMessage: string
+  ): Promise<{ sha: string }>;
 }

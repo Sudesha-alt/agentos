@@ -121,5 +121,9 @@ export function createBitbucketProvider(
     cloneUrl(ctx) {
       return `https://${encodeURIComponent(username)}:${encodeURIComponent(appPassword)}@bitbucket.org/${ctx.workspace}/${ctx.repoSlug}.git`;
     },
+
+    async pushFilesToBranch() {
+      throw new Error("pushFilesToBranch is not supported for Bitbucket — use GitHub.");
+    },
   };
 }

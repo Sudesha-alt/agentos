@@ -12,6 +12,7 @@ import {
 } from "../engineering/sandboxCompile";
 import { publishPipelineArtifact, mirrorPmContextArtifacts } from "./artifacts";
 import { resolveCodingBranchName } from "../engineeringCodingAgent/inputBuilder";
+import { gitClient } from "../integrations/gitProvider";
 import { runQaAgentic } from "../qaAgent";
 import { completeTicketInJira } from "../jira/writeback/completeTicketInJira";
 import type { QaExecutionReport } from "../qa/report/reportGenerator";
@@ -417,6 +418,14 @@ export class PipelineOrchestrator {
         return;
       }
 
+      if (canaryResult?.findings.length) {
+        await auditRepo.log(pipelineId, "CANARY_FINDINGS", {
+          runId: canaryResult.runId,
+          count: canaryResult.findings.length,
+          critical: canaryResult.findings.filter((f) => f.severity === "critical").length,
+        });
+      }
+
       await indexer.indexQaReport(
         normalizedTicket.jiraTicketId,
         normalizedTicket.jiraKey,
@@ -440,6 +449,16 @@ export class PipelineOrchestrator {
           qa: qaValidation,
         },
         canaryCriticals,
+      });
+
+      await orgIntelligence.capturePipelineComplete({
+        pipelineId,
+        jiraKey: normalizedTicket.jiraKey,
+        components: normalizedTicket.components ?? [],
+        prd: productStage.agentOutput.parsed,
+        implementation: implementationOutput.parsed,
+        qa: qaOutput.parsed,
+        validations: { prd: prdValidation, implementation: implementationValidation, qa: qaValidation },
       });
 
       await auditRepo.log(pipelineId, "JIRA_WRITEBACK_COMPLETED", {
@@ -725,7 +744,7 @@ export class PipelineOrchestrator {
       title: "Implementation plan",
       payload: output.parsed as unknown as Record<string, unknown>,
     });
-    await stateManager.advance(pipelineId, "IMPLEMENTATION_VALIDATION");
+    // State advance intentionally deferred — caller must advance after coding agent completes.
     return output;
   }
 
@@ -787,6 +806,42 @@ export class PipelineOrchestrator {
       );
     }
 
+    const finalStaged = getCodingArtifacts(pipelineId).stagedFiles;
+    if (finalStaged.length > 0) {
+      const targetBranch = process.env.ENGINEERING_TARGET_BRANCH ?? "work/agentos";
+      const lastCompileSucceeded = (() => {
+        // Track whether the final compile attempt passed (set earlier in the loop)
+        // We re-read from the artifact store; if we got here the loop exited cleanly.
+        // compileFeedback being set means the last non-final attempt failed but we
+        // still push on max-attempts exhaustion — prefix the message to signal this.
+        return compileFeedback === undefined;
+      })();
+      const commitPrefix = lastCompileSucceeded ? "" : "[compile-warnings] ";
+      try {
+        const pushResult = await gitClient.pushFilesToBranch(
+          targetBranch,
+          branchName,
+          finalStaged.map((f) => ({ filePath: f.filePath, content: f.content })),
+          `${commitPrefix}[${ticket.jiraKey}] ${codingResult?.codingSummary ?? "Engineering agent changes"}`
+        );
+        await auditRepo.log(pipelineId, "ENGINEERING_PUSHED_TO_BRANCH", {
+          jiraKey: ticket.jiraKey,
+          targetBranch,
+          filesCount: finalStaged.length,
+          commitSha: pushResult.sha,
+        });
+        logger.info(
+          { pipelineId, targetBranch, files: finalStaged.length, sha: pushResult.sha },
+          "engineering staged files pushed to branch"
+        );
+      } catch (err) {
+        logger.warn(
+          { pipelineId, err },
+          "failed to push staged files to branch — continuing pipeline"
+        );
+      }
+    }
+
     clearCodingArtifacts(pipelineId);
 
     if (!codingResult) {
@@ -836,6 +891,7 @@ export class PipelineOrchestrator {
       toolCalls: codingResult.toolCallLog.length,
     });
 
+    await stateManager.advance(pipelineId, "IMPLEMENTATION_VALIDATION");
     return output;
   }
 

@@ -8,7 +8,7 @@ import { createBitbucketProvider } from "./git/bitbucketProvider";
 import { createGithubProvider } from "./git/githubProvider";
 import type { GitFileContent, GitProviderClient, GitTreeItem } from "./git/types";
 
-export type { GitFileContent, GitTreeItem, GitProviderId } from "./git/types";
+export type { GitFileContent, GitTreeItem, GitProviderId, GitPushFile } from "./git/types";
 
 function clientFor(creds: StoredGitCredentials): GitProviderClient {
   if (creds.provider === "bitbucket") {
@@ -41,5 +41,15 @@ export const gitClient = {
     const creds = getGitCredentials();
     const ctx = getRepoContext();
     return clientFor(creds).cloneUrl(ctx);
+  },
+
+  async pushFilesToBranch(
+    targetBranch: string,
+    sourceBranch: string,
+    files: import("./git/types").GitPushFile[],
+    commitMessage: string
+  ): Promise<{ sha: string }> {
+    const ctx = getRepoContext();
+    return getGitClient().pushFilesToBranch(ctx, targetBranch, sourceBranch, files, commitMessage);
   },
 };
