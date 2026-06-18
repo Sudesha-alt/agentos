@@ -222,6 +222,7 @@ router.put("/completion-settings", (req, res) => {
       : undefined,
     attachPrdComment: req.body?.attachPrdComment,
     attachQaComment: req.body?.attachQaComment,
+    attachEngineeringComment: req.body?.attachEngineeringComment,
     attachRcaComment: req.body?.attachRcaComment,
     updateDescription: req.body?.updateDescription,
     attachJsonArtifact: req.body?.attachJsonArtifact,

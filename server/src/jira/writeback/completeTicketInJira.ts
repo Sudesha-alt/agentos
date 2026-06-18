@@ -2,12 +2,14 @@ import { attachPRDToJira } from "../../prd/prdAttacher";
 import { formatPRDComment } from "../../prd/prdFormatter";
 import type { GeneratedPRD } from "../../prd/prdGenerator";
 import { attachQaReportToJira } from "../../qa/report/reportAttacher";
+import type { QaExecutionReport } from "../../qa/report/reportGenerator";
 import type { ImplementationOutput, PrdOutput, QaOutput } from "../../types/agents";
 import type { ValidationResult } from "../../types/pipeline";
 import { getPipelineJiraClient } from "../../pipeline/jira/client";
 import { getPipelineCompletionSettings } from "../../pipeline/jira/intakeConfig";
 import { logger } from "../../utils/logger";
 import { formatPrdDescriptionSummary, formatRcaComment } from "./rcaFormatter";
+import { writeEngineeringToTicket } from "./stageWriteback";
 
 export interface PipelineCompletionPayload {
   prd: PrdOutput;
@@ -26,6 +28,7 @@ export interface PipelineCompletionPayload {
 export interface JiraCompletionResult {
   prdAttached: boolean;
   qaAttached: boolean;
+  engineeringAttached: boolean;
   rcaAttached: boolean;
   descriptionUpdated: boolean;
   jsonAttached: boolean;
@@ -44,6 +47,7 @@ export async function completeTicketInJira(
   const result: JiraCompletionResult = {
     prdAttached: false,
     qaAttached: false,
+    engineeringAttached: false,
     rcaAttached: false,
     descriptionUpdated: false,
     jsonAttached: false,
@@ -72,18 +76,28 @@ export async function completeTicketInJira(
     }
   }
 
-  if (settings.attachQaComment && payload.executionReport) {
+  if (settings.attachQaComment) {
     try {
       await attachQaReportToJira(
         jiraKey,
         payload.qa,
-        payload.executionReport as unknown as Parameters<typeof attachQaReportToJira>[2]
+        payload.executionReport as unknown as QaExecutionReport | undefined
       );
       result.qaAttached = true;
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       result.errors.push(`QA comment: ${msg}`);
       logger.warn({ err, jiraKey }, "JIRA_WRITEBACK qa failed");
+    }
+  }
+
+  if (settings.attachEngineeringComment) {
+    try {
+      result.engineeringAttached = await writeEngineeringToTicket(jiraKey, payload.implementation);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      result.errors.push(`Engineering comment: ${msg}`);
+      logger.warn({ err, jiraKey }, "JIRA_WRITEBACK engineering failed");
     }
   }
 

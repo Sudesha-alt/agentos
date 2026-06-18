@@ -15,6 +15,12 @@ import { resolveCodingBranchName } from "../engineeringCodingAgent/inputBuilder"
 import { gitClient } from "../integrations/gitProvider";
 import { runQaAgentic } from "../qaAgent";
 import { completeTicketInJira } from "../jira/writeback/completeTicketInJira";
+import {
+  writeEngineeringToTicket,
+  writeGitPushToTicket,
+  writePrdToTicket,
+  writeQaToTicket,
+} from "../jira/writeback/stageWriteback";
 import type { QaExecutionReport } from "../qa/report/reportGenerator";
 import type { GeneratedPRD } from "../prd/prdGenerator";
 import { orgIntelligence } from "../orgIntelligence";
@@ -90,24 +96,30 @@ export class PipelineOrchestrator {
         await ticketRepo.setStatus(ticket.id, "AWAITING_HUMAN");
         return;
       }
+      await writePrdToTicket(
+        normalizedTicket.jiraKey,
+        productStage.agentOutput.parsed,
+        this.extractGeneratedPrd(productStage.enrichedPrdDocument, productStage.agentOutput)
+      );
       await indexer.indexPrd(
         normalizedTicket.jiraTicketId,
         normalizedTicket.jiraKey,
         productStage.agentOutput.parsed
       );
 
-      let implementationOutput = await this.runEngineeringAgent(
+      const engStage = await this.runEngineeringAgent(
         pipeline.id,
         normalizedTicket.jiraKey,
         productStage.agentOutput.parsed,
         productStage.enrichedPrdDocument
       );
-      implementationOutput = await this.runEngineeringCodingAgent(
+      let implementationOutput = await this.runEngineeringCodingAgent(
         pipeline.id,
         normalizedTicket,
         productStage.agentOutput.parsed,
-        implementationOutput,
-        productStage.enrichedPrdDocument
+        engStage.output,
+        productStage.enrichedPrdDocument,
+        engStage.stageLogId
       );
       const implementationValidation = await this.validateImplementationStage(
         pipeline.id,
@@ -145,6 +157,11 @@ export class PipelineOrchestrator {
         implementationOutput.parsed
       );
       const qaOutput = qaStage.agentOutput;
+      await writeQaToTicket(
+        normalizedTicket.jiraKey,
+        qaOutput.parsed,
+        qaStage.executionReport
+      );
 
       const canaryResult = await runCanaryCycle({
         pipelineId: pipeline.id,
@@ -295,6 +312,11 @@ export class PipelineOrchestrator {
         await ticketRepo.setStatus(ticket.id, "AWAITING_HUMAN");
         return;
       }
+      await writePrdToTicket(
+        normalizedTicket.jiraKey,
+        productStage.agentOutput.parsed,
+        this.extractGeneratedPrd(productStage.enrichedPrdDocument, productStage.agentOutput)
+      );
       if (!completedStages.has("PRD_VALIDATION")) {
         await indexer.indexPrd(
           normalizedTicket.jiraTicketId,
@@ -305,7 +327,7 @@ export class PipelineOrchestrator {
 
       let implementationOutput: AgentOutput<ImplementationOutput>;
       if (!completedStages.has("ENGINEERING_AGENT")) {
-        implementationOutput = await this.runEngineeringAgent(
+        const engStage = await this.runEngineeringAgent(
           pipelineId,
           normalizedTicket.jiraKey,
           productStage.agentOutput.parsed,
@@ -315,16 +337,29 @@ export class PipelineOrchestrator {
           pipelineId,
           normalizedTicket,
           productStage.agentOutput.parsed,
-          implementationOutput,
-          productStage.enrichedPrdDocument
+          engStage.output,
+          productStage.enrichedPrdDocument,
+          engStage.stageLogId
         );
       } else {
         const engLog = await pipelineRepo.getStageOutput(pipelineId, "ENGINEERING_AGENT");
+        const parsed = engLog?.output as unknown as ImplementationOutput;
         implementationOutput = {
           raw: JSON.stringify(engLog?.output),
-          parsed: engLog?.output as unknown as ImplementationOutput,
+          parsed,
           metadata: { inputTokens: 0, outputTokens: 0, costUsd: 0, durationMs: 0 },
         };
+        const needsCoding = !parsed.codingSummary && !(parsed.codeChanges?.length);
+        if (needsCoding) {
+          implementationOutput = await this.runEngineeringCodingAgent(
+            pipelineId,
+            normalizedTicket,
+            productStage.agentOutput.parsed,
+            implementationOutput,
+            productStage.enrichedPrdDocument,
+            null
+          );
+        }
       }
 
       let implementationValidation: ValidationResult;
@@ -382,6 +417,11 @@ export class PipelineOrchestrator {
         };
       }
       const qaOutput = qaStage.agentOutput;
+      await writeQaToTicket(
+        normalizedTicket.jiraKey,
+        qaOutput.parsed,
+        qaStage.executionReport
+      );
 
       const canaryResult = await runCanaryCycle({
         pipelineId,
@@ -692,7 +732,7 @@ export class PipelineOrchestrator {
     jiraKey: string,
     prd: PrdOutput,
     enrichedPrdDocument: Record<string, unknown>
-  ): Promise<AgentOutput<ImplementationOutput>> {
+  ): Promise<{ output: AgentOutput<ImplementationOutput>; stageLogId: string }> {
     const query = `${prd.title} ${prd.problemStatement} ${prd.proposedSolution}`;
     const scope = resolveRepoScope();
     const branch = scope?.defaultBranch ?? "main";
@@ -729,13 +769,6 @@ export class PipelineOrchestrator {
       pipelineId,
       JSON.stringify(input, null, 2)
     );
-    await pipelineRepo.completeStage({
-      stageLogId: stageLog.id,
-      output: output.parsed as unknown as Prisma.InputJsonValue,
-      confidenceScore: output.parsed.confidenceScore,
-      tokenCount: output.metadata.inputTokens + output.metadata.outputTokens,
-      costUsd: output.metadata.costUsd,
-    });
     publishPipelineArtifact({
       pipelineId,
       jiraKey,
@@ -744,8 +777,8 @@ export class PipelineOrchestrator {
       title: "Implementation plan",
       payload: output.parsed as unknown as Record<string, unknown>,
     });
-    // State advance intentionally deferred — caller must advance after coding agent completes.
-    return output;
+    // Stage log completed after coding agent finishes (see runEngineeringCodingAgent).
+    return { output, stageLogId: stageLog.id };
   }
 
   private async runEngineeringCodingAgent(
@@ -753,7 +786,8 @@ export class PipelineOrchestrator {
     ticket: NormalizedTicket,
     prd: PrdOutput,
     implementationOutput: AgentOutput<ImplementationOutput>,
-    enrichedPrdDocument: Record<string, unknown>
+    enrichedPrdDocument: Record<string, unknown>,
+    stageLogId: string | null
   ): Promise<AgentOutput<ImplementationOutput>> {
     await auditRepo.log(pipelineId, "ENGINEERING_CODING_STARTED", {
       jiraKey: ticket.jiraKey,
@@ -807,18 +841,13 @@ export class PipelineOrchestrator {
     }
 
     const finalStaged = getCodingArtifacts(pipelineId).stagedFiles;
+    let pushResult: { sha: string } | undefined;
     if (finalStaged.length > 0) {
       const targetBranch = process.env.ENGINEERING_TARGET_BRANCH ?? "work/agentos";
-      const lastCompileSucceeded = (() => {
-        // Track whether the final compile attempt passed (set earlier in the loop)
-        // We re-read from the artifact store; if we got here the loop exited cleanly.
-        // compileFeedback being set means the last non-final attempt failed but we
-        // still push on max-attempts exhaustion — prefix the message to signal this.
-        return compileFeedback === undefined;
-      })();
+      const lastCompileSucceeded = compileFeedback === undefined;
       const commitPrefix = lastCompileSucceeded ? "" : "[compile-warnings] ";
       try {
-        const pushResult = await gitClient.pushFilesToBranch(
+        pushResult = await gitClient.pushFilesToBranch(
           targetBranch,
           branchName,
           finalStaged.map((f) => ({ filePath: f.filePath, content: f.content })),
@@ -834,6 +863,11 @@ export class PipelineOrchestrator {
           { pipelineId, targetBranch, files: finalStaged.length, sha: pushResult.sha },
           "engineering staged files pushed to branch"
         );
+        await writeGitPushToTicket(ticket.jiraKey, {
+          targetBranch,
+          commitSha: pushResult.sha,
+          sourceBranch: branchName,
+        });
       } catch (err) {
         logger.warn(
           { pipelineId, err },
@@ -890,6 +924,23 @@ export class PipelineOrchestrator {
       filesChanged: codingResult.codeChanges.length,
       toolCalls: codingResult.toolCallLog.length,
     });
+
+    await writeEngineeringToTicket(ticket.jiraKey, merged);
+
+    if (stageLogId) {
+      await pipelineRepo.completeStage({
+        stageLogId,
+        output: merged as unknown as Prisma.InputJsonValue,
+        confidenceScore: merged.confidenceScore,
+        tokenCount:
+          implementationOutput.metadata.inputTokens +
+          codingResult.metadata.inputTokens +
+          implementationOutput.metadata.outputTokens +
+          codingResult.metadata.outputTokens,
+        costUsd:
+          implementationOutput.metadata.costUsd + codingResult.metadata.costUsd,
+      });
+    }
 
     await stateManager.advance(pipelineId, "IMPLEMENTATION_VALIDATION");
     return output;

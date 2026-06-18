@@ -4,6 +4,7 @@ export interface PipelineCompletionSettings {
   completionStatusName: string;
   attachPrdComment: boolean;
   attachQaComment: boolean;
+  attachEngineeringComment: boolean;
   attachRcaComment: boolean;
   updateDescription: boolean;
   attachJsonArtifact: boolean;
@@ -21,6 +22,7 @@ const DEFAULT_COMPLETION: PipelineCompletionSettings = {
     process.env.PIPELINE_COMPLETION_STATUS?.trim() || "Done",
   attachPrdComment: true,
   attachQaComment: true,
+  attachEngineeringComment: true,
   attachRcaComment: true,
   updateDescription: true,
   attachJsonArtifact: false,
