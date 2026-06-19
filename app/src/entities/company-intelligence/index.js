@@ -67,7 +67,7 @@ const restAdapter = {
   async fetchFromWeb({ website, companyName, profile }) {
     const data = await fetchJson(apiPath("/api/company-intelligence/fetch-from-web"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({
         website,
         companyName,
@@ -79,7 +79,7 @@ const restAdapter = {
   async fetchCompetitors({ website, companyName, productSummary, profile }) {
     const data = await fetchJson(apiPath("/api/company-intelligence/fetch-competitors"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders() },
       body: JSON.stringify({
         website,
         companyName,

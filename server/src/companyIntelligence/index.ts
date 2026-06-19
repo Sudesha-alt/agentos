@@ -5,8 +5,9 @@ import { discoverCompetitorsFromWeb } from "./competitorFetcher";
 import { generateBusinessContext } from "./generator";
 import { EMPTY_PROFILE, getCompanyProfile, saveCompanyProfile } from "./store";
 import type { CompanyIdeaValidation, CompanyProfile, CompanyProfileInput } from "./types";
-import { enrichCompanyFieldsFromWeb, mergeWebFieldsIntoProfile } from "./webEnricher";
+import { enrichCompanyFieldsFromWeb, enrichCompanyFieldsFromWebFallback, mergeWebFieldsIntoProfile } from "./webEnricher";
 import { fetchCompanyWebContext } from "./webFetcher";
+import { isOpenAIConfigured } from "../llm/openaiClient";
 
 export type { CompanyProfile, CompanyProfileInput, CompanyIdeaValidation, BusinessFit } from "./types";
 export { EMPTY_PROFILE } from "./store";
@@ -147,9 +148,28 @@ export const companyIntelligence = {
   }> {
     const bundle = await fetchCompanyWebContext(input.website);
     const current = input.mergeWithProfile ?? (await getCompanyProfile());
-    const { fields, usage, model } = await enrichCompanyFieldsFromWeb(bundle, {
-      companyName: input.companyName ?? current.companyName,
-    });
+    const hints = { companyName: input.companyName ?? current.companyName };
+
+    let fields;
+    let costUsd = 0;
+    let model = "metadata_fallback";
+
+    if (isOpenAIConfigured()) {
+      try {
+        const enriched = await enrichCompanyFieldsFromWeb(bundle, hints);
+        fields = enriched.fields;
+        costUsd = enriched.usage.costUsd;
+        model = enriched.model;
+      } catch (err) {
+        logger.warn({ err, website: input.website }, "LLM web enrich failed — using metadata fallback");
+        fields = enrichCompanyFieldsFromWebFallback(bundle, hints);
+        model = "metadata_fallback";
+      }
+    } else {
+      logger.info({ website: input.website }, "OPENAI_API_KEY not set — using metadata fallback for web enrich");
+      fields = enrichCompanyFieldsFromWebFallback(bundle, hints);
+    }
+
     const suggested = mergeWebFieldsIntoProfile(current, fields);
 
     return {
@@ -157,7 +177,7 @@ export const companyIntelligence = {
       sources: bundle.sources,
       technologies: bundle.technologies,
       confidenceNotes: fields.confidenceNotes,
-      costUsd: usage.costUsd,
+      costUsd,
       model,
     };
   },

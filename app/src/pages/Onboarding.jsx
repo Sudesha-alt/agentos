@@ -210,9 +210,12 @@ export default function Onboarding() {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Something went wrong";
-      if (message.includes("401") || message.toLowerCase().includes("unauthorized")) {
+      if (message.includes("401") || message.toLowerCase().includes("unauthorized") || message.toLowerCase().includes("session expired")) {
         setError("Your session expired. Please sign in again to continue setup.");
         setTimeout(() => navigate("/login", { replace: true }), 1500);
+      } else if (message.toLowerCase().includes("already belong")) {
+        setError(message);
+        await refresh();
       } else {
         setError(message);
       }
