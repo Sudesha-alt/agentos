@@ -44,10 +44,11 @@ In **app/.env** for local dev you can omit `VITE_API_URL` (Vite proxies `/api` a
    Start: `npm start`  
    Health check path: `/healthz`
 3. Add env from `server/.env.example` (Jira, Supabase, Redis, models, etc.)
-4. Set **`CORS_ORIGIN`** to your Vercel URL, e.g. `https://agentos-orcin.vercel.app`
-5. Optional: add **Background Worker** with root `server`, start `npm run worker`
+4. Set **`CORS_ORIGIN`** and **`FRONTEND_URL`** to your Vercel URL, e.g. `https://agentos-blue.vercel.app`
+5. Set **`PUBLIC_API_URL`** to your Render URL, e.g. `https://agentos-sc05.onrender.com`
+6. Optional: add **Background Worker** with root `server`, start `npm run worker`
 
-Copy your Render URL, e.g. `https://agentos-api.onrender.com`.
+Copy your Render URL, e.g. `https://agentos-sc05.onrender.com`.
 
 ### 2. Vercel (app)
 
@@ -59,7 +60,7 @@ Copy your Render URL, e.g. `https://agentos-api.onrender.com`.
 
 | Name | Value |
 |------|--------|
-| `VITE_API_URL` | `https://agentos-api.onrender.com` (your Render URL) |
+| `VITE_API_URL` | `https://agentos-sc05.onrender.com` (your Render URL) |
 | `VITE_API_MODE` | `rest` |
 
 4. Redeploy after changing env vars.

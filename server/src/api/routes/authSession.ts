@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import type { OrgRole } from "../../generated/prisma/client";
+import { logger } from "../../utils/logger";
 
 export type SessionUser = {
   id: string;
@@ -24,6 +25,19 @@ function authSecret(): string {
     process.env.SESSION_SECRET?.trim() ||
     "agentos-dev-auth-secret-change-in-production"
   );
+}
+
+const DEV_AUTH_SECRET = "agentos-dev-auth-secret-change-in-production";
+
+/** Warn when production uses the default JWT secret (invalidates tokens on every deploy). */
+export function validateAuthConfig(): void {
+  const secret = authSecret();
+  if (process.env.NODE_ENV === "production" && secret === DEV_AUTH_SECRET) {
+    logger.warn(
+      "AUTH_JWT_SECRET is not set — using insecure default. Set AUTH_JWT_SECRET on Render " +
+        "and VITE_API_MODE=rest + VITE_API_URL on the frontend."
+    );
+  }
 }
 
 function encodeBase64Url(value: string): string {

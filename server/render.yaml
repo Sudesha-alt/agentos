@@ -16,3 +16,11 @@ services:
         value: production
       - key: PORT
         value: "10000"
+      - key: AUTH_JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        value: https://agentos-blue.vercel.app
+      - key: FRONTEND_URL
+        value: https://agentos-blue.vercel.app
+      - key: PUBLIC_API_URL
+        value: https://agentos-sc05.onrender.com

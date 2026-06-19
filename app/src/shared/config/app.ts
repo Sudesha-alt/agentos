@@ -6,10 +6,16 @@ export const DATA_MODES = {
   REST: "rest",
 } as const;
 
-export const DATA_MODE =
-  import.meta.env.VITE_API_MODE === DATA_MODES.REST
-    ? DATA_MODES.REST
-    : DATA_MODES.MOCK;
+/** Use REST when explicitly set, or when VITE_API_URL is configured (production). */
+function resolveDataMode(): (typeof DATA_MODES)[keyof typeof DATA_MODES] {
+  const explicit = import.meta.env.VITE_API_MODE as string | undefined;
+  if (explicit === DATA_MODES.MOCK) return DATA_MODES.MOCK;
+  if (explicit === DATA_MODES.REST) return DATA_MODES.REST;
+  if (import.meta.env.VITE_API_URL?.trim()) return DATA_MODES.REST;
+  return DATA_MODES.MOCK;
+}
+
+export const DATA_MODE = resolveDataMode();
 
 export const AGENT_NAMES = {
   VIRIN: "Virin",

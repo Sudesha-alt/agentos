@@ -20,14 +20,14 @@ npm run dev
 
 | Deploy | Root directory | Env |
 |--------|----------------|-----|
-| **Vercel** | `app` | `VITE_API_URL=https://<render-host>`, `VITE_API_MODE=rest` |
-| **Render** | `server` | `server/.env` + `CORS_ORIGIN=https://<vercel-host>` |
+| **Vercel** | `app` | `VITE_API_URL=https://agentos-sc05.onrender.com`, `VITE_API_MODE=rest` |
+| **Render** | `server` | `CORS_ORIGIN=https://agentos-blue.vercel.app`, `FRONTEND_URL=https://agentos-blue.vercel.app`, `PUBLIC_API_URL=https://agentos-sc05.onrender.com` |
 
 Pipelines need Postgres, Redis, and model keys on Render. Jira intake pages only need Jira vars + SQLite path (`SQLITE_PATH`).
 
 ## Webhook URL
 
-`https://<render-host>/webhooks/jira`
+`https://agentos-sc05.onrender.com/webhooks/jira`
 
 - `issue_created` → agent pipeline (needs worker + Redis)  
 - other events (e.g. `issue_updated`) → AI Worker SQLite queue  
