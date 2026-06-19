@@ -10,6 +10,22 @@ import { setActiveOrganizationId } from "../../organization/context";
 
 const router = Router();
 
+function mapCompanyRouteError(err: unknown): unknown {
+  if (err instanceof ValidationError) return err;
+  if (err instanceof Error) {
+    const msg = err.message;
+    if (
+      msg.includes("Website URL is required") ||
+      msg.includes("Could not fetch readable content") ||
+      msg.includes("Only http and https") ||
+      msg.includes("Enter a valid website URL")
+    ) {
+      return new ValidationError(msg);
+    }
+  }
+  return err;
+}
+
 function resolveOrganizationId(req: Request): string | undefined {
   const user = resolveUserFromAuthHeader(req);
   return user?.organizationId;
@@ -129,7 +145,7 @@ router.post("/fetch-from-web", async (req, res, next) => {
     });
     res.json(result);
   } catch (err) {
-    next(err);
+    next(mapCompanyRouteError(err));
   }
 });
 

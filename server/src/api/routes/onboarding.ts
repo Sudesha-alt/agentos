@@ -12,7 +12,7 @@ const router = Router();
 router.get("/", async (req, res) => {
   const user = resolveUserFromAuthHeader(req);
   if (!user) {
-    res.status(401).json({ error: "unauthorized" });
+    res.status(401).json({ error: "unauthorized", message: "Your session expired. Please sign in again." });
     return;
   }
   const record = await getOnboarding(user.id);
@@ -34,7 +34,7 @@ router.get("/", async (req, res) => {
 router.put("/", async (req, res) => {
   const user = resolveUserFromAuthHeader(req);
   if (!user) {
-    res.status(401).json({ error: "unauthorized" });
+    res.status(401).json({ error: "unauthorized", message: "Your session expired. Please sign in again." });
     return;
   }
   try {
@@ -50,15 +50,16 @@ router.put("/", async (req, res) => {
       role: req.body?.role ?? undefined,
     });
     res.json({ onboarding: record });
-  } catch {
-    res.status(404).json({ error: "onboarding_not_found" });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not save onboarding step";
+    res.status(500).json({ error: "onboarding_update_failed", message });
   }
 });
 
 router.post("/complete", async (req, res) => {
   const user = resolveUserFromAuthHeader(req);
   if (!user) {
-    res.status(401).json({ error: "unauthorized" });
+    res.status(401).json({ error: "unauthorized", message: "Your session expired. Please sign in again." });
     return;
   }
   try {
@@ -67,10 +68,16 @@ router.post("/complete", async (req, res) => {
       email: user.email,
       name: user.name,
     });
+    const existing = await getOnboarding(user.id);
+    if (existing?.completed) {
+      res.json({ onboarding: existing, alreadyCompleted: true });
+      return;
+    }
     const record = await completeOnboarding(user.id);
     res.json({ onboarding: record });
-  } catch {
-    res.status(404).json({ error: "onboarding_not_found" });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not complete onboarding";
+    res.status(500).json({ error: "onboarding_complete_failed", message });
   }
 });
 

@@ -6,7 +6,7 @@ import {
 } from "../../contracts";
 import { apiPath } from "../../shared/config/apiBase";
 import { DATA_MODE } from "../../shared/config/app";
-import { fetchJson } from "../../shared/lib/fetchJson";
+import { fetchJson, formatApiError } from "../../shared/lib/fetchJson";
 
 export const AUTH_SESSION_STORAGE_KEY = "agentos.auth.session";
 const REGISTERED_EMAILS_KEY = "agentos.auth.registeredEmails";
@@ -142,7 +142,7 @@ function authJsonFetch(path, init = {}) {
       }
     }
     if (!res.ok) {
-      throw new Error(body.message || `Request failed (${res.status})`);
+      throw new Error(formatApiError(text, res.status));
     }
     return body;
   });

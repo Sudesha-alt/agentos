@@ -102,3 +102,42 @@ export function mergeWebFieldsIntoProfile(
     nonGoals: fields.nonGoals.length ? fields.nonGoals : current.nonGoals,
   };
 }
+
+/** Heuristic extraction when OpenAI is unavailable or LLM enrichment fails. */
+export function enrichCompanyFieldsFromWebFallback(
+  bundle: WebFetchBundle,
+  hints: { companyName?: string }
+): WebEnrichedCompanyFields {
+  const text = bundle.combinedText;
+
+  const titleMatch = text.match(/Title:\s*(.+)/i);
+  const ogDescMatch = text.match(/og:description:\s*(.+)/i);
+  const descMatch = text.match(/description:\s*(.+)/i);
+  const bodyMatch = text.match(/Body excerpt:\s*(.+)/i);
+
+  const productSummary =
+    ogDescMatch?.[1]?.trim() ||
+    descMatch?.[1]?.trim() ||
+    bodyMatch?.[1]?.trim().slice(0, 400) ||
+    "";
+
+  const host = new URL(bundle.website).hostname.replace(/^www\./, "");
+  const brandFromHost = host.split(".")[0] ?? "Company";
+  const companyName =
+    hints.companyName?.trim() ||
+    titleMatch?.[1]?.trim().replace(/\s*[|\-–—].*$/, "").trim() ||
+    brandFromHost.charAt(0).toUpperCase() + brandFromHost.slice(1);
+
+  return {
+    companyName,
+    website: bundle.website,
+    productSummary,
+    icp: "",
+    revenueModel: "",
+    pricingSummary: "",
+    strategicGoals: [],
+    nonGoals: [],
+    confidenceNotes:
+      "Extracted from public page metadata only (LLM enrichment unavailable). Review and edit fields before continuing.",
+  };
+}
