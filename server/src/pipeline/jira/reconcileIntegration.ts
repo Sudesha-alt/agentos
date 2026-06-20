@@ -13,7 +13,6 @@ function shouldPurgeJiraIntegration(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   return (
     msg.includes("Jira OAuth tokens are missing") ||
-    msg.includes("Pipeline Jira not configured") ||
     msg.includes("invalid_grant") ||
     /Pipeline Jira API (401|403)/.test(msg) ||
     /Unauthorized|scope does not match/i.test(msg)
@@ -41,7 +40,8 @@ export async function reconcileOrganizationJiraIntegration(
   }
 
   const last = lastReconcileAt.get(organizationId) ?? 0;
-  if (!options?.force && Date.now() - last < RECONCILE_INTERVAL_MS) {
+  const staleCheck = options?.force || Date.now() - last >= RECONCILE_INTERVAL_MS;
+  if (!staleCheck) {
     return { purged: false };
   }
   lastReconcileAt.set(organizationId, Date.now());

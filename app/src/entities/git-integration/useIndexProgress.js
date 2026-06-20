@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiPath } from "../../shared/config/apiBase";
+import { authHeaders } from "../../shared/lib/authHeaders";
 
 function parseSseChunk(buffer, onEvent) {
   const parts = buffer.split("\n\n");
@@ -49,7 +50,7 @@ export function useIndexProgress({ runId, branch, enabled = true } = {}) {
     async function pollStatus() {
       while (!cancelled) {
         try {
-          const res = await fetch(statusUrl, { credentials: "include" });
+          const res = await fetch(statusUrl, { headers: authHeaders() });
           if (!res.ok) throw new Error(`status ${res.status}`);
           const data = await res.json();
           if (cancelled) return;
@@ -78,8 +79,7 @@ export function useIndexProgress({ runId, branch, enabled = true } = {}) {
     async function connectSse() {
       try {
         const res = await fetch(sseUrl, {
-          credentials: "include",
-          headers: { Accept: "text/event-stream" },
+          headers: { ...authHeaders(), Accept: "text/event-stream" },
         });
         if (!res.ok || !res.body) {
           await pollStatus();
@@ -127,7 +127,7 @@ export async function fetchIndexStatus({ runId, branch } = {}) {
   const qs = params.toString();
   const res = await fetch(
     apiPath("/git-integration", `/index/status${qs ? `?${qs}` : ""}`),
-    { credentials: "include" }
+    { headers: authHeaders() }
   );
   if (!res.ok) throw new Error(`Index status ${res.status}`);
   return res.json();

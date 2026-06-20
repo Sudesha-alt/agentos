@@ -151,7 +151,23 @@ export async function purgeOrganizationGitIntegration(
   organizationId: string
 ): Promise<void> {
   const config = await loadOrganizationGitConfig(organizationId);
-  const installationId = config?.installationId ?? null;
+  const {
+    getGithubInstallForOrganization,
+    removeGithubInstallation,
+  } = await import("../git-integration/githubInstallationStore");
+
+  const pgInstall = await getGithubInstallForOrganization(organizationId);
+  const installationIds = new Set<string>();
+  if (config?.installationId) installationIds.add(config.installationId);
+  if (pgInstall?.installationId) installationIds.add(pgInstall.installationId);
+
+  const linkedInstalls = await prisma.githubInstallation.findMany({
+    where: { organizationId },
+    select: { installationId: true },
+  });
+  for (const row of linkedInstalls) {
+    installationIds.add(row.installationId);
+  }
 
   await clearOrganizationGitConfig(organizationId);
 
@@ -162,10 +178,7 @@ export async function purgeOrganizationGitIntegration(
   clearOrganizationGitRuntime(organizationId);
   activateOrganizationGitContext(null);
 
-  if (installationId) {
-    const { removeGithubInstallation } = await import(
-      "../git-integration/githubInstallationStore"
-    );
+  for (const installationId of installationIds) {
     await removeGithubInstallation(installationId);
   }
 }

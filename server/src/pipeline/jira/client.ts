@@ -11,16 +11,25 @@ export async function resolveJiraApiBaseAndAuth(): Promise<{
   apiBase: string;
   authorization: string;
 }> {
+  const orgId = getActiveOrganizationId();
+  if (orgId) {
+    const { warmOrganizationJiraCredentials, activateOrganizationJiraContext } =
+      await import("./credentialsStore");
+    await warmOrganizationJiraCredentials(orgId);
+    activateOrganizationJiraContext(orgId);
+  }
+
   validatePipelineJiraConfig();
   const creds = getActivePipelineJiraCredentials();
 
   if (creds.authMethod === "oauth") {
-    await ensureFreshJiraOAuthToken();
+    await ensureFreshJiraOAuthToken(orgId ?? undefined);
     let fresh = getActivePipelineJiraCredentials();
-    if ((!fresh.cloudId || !fresh.accessToken) && getActiveOrganizationId()) {
-      const orgId = getActiveOrganizationId()!;
-      const { warmOrganizationJiraCredentials } = await import("./credentialsStore");
+    if ((!fresh.cloudId || !fresh.accessToken) && orgId) {
+      const { warmOrganizationJiraCredentials, activateOrganizationJiraContext } =
+        await import("./credentialsStore");
       await warmOrganizationJiraCredentials(orgId);
+      activateOrganizationJiraContext(orgId);
       fresh = getActivePipelineJiraCredentials();
     }
     if (!fresh.cloudId || !fresh.accessToken) {

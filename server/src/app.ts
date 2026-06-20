@@ -54,6 +54,9 @@ export function createApp(): express.Express {
     if (origin && (allowed.includes("*") || allowed.includes(origin))) {
       res.setHeader("Access-Control-Allow-Origin", origin);
       res.setHeader("Vary", "Origin");
+      if (!allowed.includes("*")) {
+        res.setHeader("Access-Control-Allow-Credentials", "true");
+      }
     } else if (allowed.includes("*")) {
       res.setHeader("Access-Control-Allow-Origin", "*");
     }

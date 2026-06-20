@@ -76,11 +76,8 @@ router.get("/setup", async (req, res) => {
   const user = requireOrganizationUser(req, res);
   if (!user?.organizationId) return;
 
-  await reconcileOrganizationJiraIntegration(user.organizationId);
-
   await withOrganizationContext(user.organizationId, async () => {
     const jira = await getPublicOrganizationJiraConfig(user.organizationId!);
-    const intake = getPipelineIntakeMapping();
     let pipelineReady = false;
     try {
       validatePipelineJiraConfig();
@@ -88,7 +85,27 @@ router.get("/setup", async (req, res) => {
     } catch {
       pipelineReady = false;
     }
-    const connected = pipelineReady || jira.configured;
+
+    if (jira.configured && !pipelineReady) {
+      await reconcileOrganizationJiraIntegration(user.organizationId!, {
+        force: true,
+      });
+      try {
+        validatePipelineJiraConfig();
+        pipelineReady = true;
+      } catch {
+        pipelineReady = false;
+      }
+    } else {
+      await reconcileOrganizationJiraIntegration(user.organizationId!);
+    }
+
+    const jiraAfter = pipelineReady
+      ? jira
+      : await getPublicOrganizationJiraConfig(user.organizationId!);
+    const connected = pipelineReady;
+    const needsReconnect = Boolean(jiraAfter.configured && !pipelineReady);
+    const intake = getPipelineIntakeMapping();
 
     res.json({
       publicApiBase: pipelineJiraPublicBase(req),
@@ -100,7 +117,7 @@ router.get("/setup", async (req, res) => {
       queue: getPipelineQueueState(user.organizationId!),
       mirror: getPipelineJiraMirrorConfig(),
       mirrorJql: pipelineReady
-        ? buildMirrorBackfillJql(jira.projectKeys)
+        ? buildMirrorBackfillJql(jiraAfter.projectKeys)
         : null,
       sync: {
         config: getJiraSyncConfig(),
@@ -108,9 +125,10 @@ router.get("/setup", async (req, res) => {
         latestRun: pipelineReady ? await getLatestSyncRun(user.organizationId) : null,
         stats: pipelineReady ? await getJiraIssueStats(user.organizationId) : null,
       },
-      jira,
+      jira: jiraAfter,
       connected,
       pipelineReady,
+      needsReconnect,
     });
   });
 });
@@ -285,11 +303,16 @@ router.put("/intake-column", async (req, res, next) => {
   }
 });
 
-router.get("/intake/tickets", async (_req, res, next) => {
+router.get("/intake/tickets", async (req, res, next) => {
   try {
-    validatePipelineJiraConfig();
-    const result = await listIntakeColumnTickets();
-    res.json(result);
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
+
+    await withOrganizationContext(user.organizationId, async () => {
+      validatePipelineJiraConfig();
+      const result = await listIntakeColumnTickets();
+      res.json(result);
+    });
   } catch (err) {
     next(normalizePipelineError(err));
   }
