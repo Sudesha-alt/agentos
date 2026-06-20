@@ -51,7 +51,7 @@ export interface JiraBoardOption {
 export async function listJiraProjects(): Promise<JiraProjectOption[]> {
   ensurePipelineReady();
   const data = (await pipelineJiraFetch(
-    "/rest/api/3/project/search?maxResults=50&orderBy=lastIssueUpdated"
+    "/rest/api/3/project/search?maxResults=50&orderBy=lastIssueUpdatedTime"
   )) as {
     values?: { id?: string; key?: string; name?: string }[];
   };
