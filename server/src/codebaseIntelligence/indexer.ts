@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { prisma } from "../db/client";
 import {
   createChatCompletion,
@@ -11,6 +12,7 @@ import { getRepoContext } from "../git-integration/gitCredentialsStore";
 import { resolveRepoIndexBranch } from "../git-integration/resolveRepoBranch";
 import { getGitCredentials } from "../git-integration/gitCredentialsStore";
 import { fetchFilesAtRef } from "../integrations/git/githubGraphqlClient";
+import { getActiveOrganizationId } from "../organization/context";
 import { requireActiveOrganizationId } from "../organization/orgScope";
 import { logger } from "../utils/logger";
 import { withRetry } from "../utils/retry";
@@ -23,10 +25,22 @@ import { MAX_HEADER_ONLY_FILE_SIZE, CODEBASE_EMBEDDING_INPUT_MAX_CHARS } from ".
 import { buildEmbeddingChunks } from "./astChunker";
 import type { LayoutFileInput } from "./layoutComputer";
 
-function repoIds() {
+/** Index runs carry org id explicitly so concurrent HTTP requests cannot clear scope. */
+const indexOrganizationContext = new AsyncLocalStorage<string>();
+
+function resolveIndexOrganizationId(explicit?: string): string {
+  const fromScope = indexOrganizationContext.getStore();
+  if (fromScope) return fromScope;
+  if (explicit) return explicit;
+  const fromRequest = getActiveOrganizationId();
+  if (fromRequest) return fromRequest;
+  return requireActiveOrganizationId();
+}
+
+function repoIds(organizationId?: string) {
   const ctx = getRepoContext();
-  const organizationId = requireActiveOrganizationId();
-  return { organizationId, repoOwner: ctx.workspace, repoName: ctx.repoSlug };
+  const orgId = resolveIndexOrganizationId(organizationId);
+  return { organizationId: orgId, repoOwner: ctx.workspace, repoName: ctx.repoSlug };
 }
 
 const SKIP_PATTERNS = [
@@ -99,17 +113,43 @@ export interface IndexRunResult {
   durationMs: number;
 }
 
-function assertRepoContext(): { repoOwner: string; repoName: string } {
-  return repoIds();
+function assertRepoContext(organizationId?: string): {
+  organizationId: string;
+  repoOwner: string;
+  repoName: string;
+} {
+  return repoIds(organizationId);
 }
 
 export async function runFullIndex(
   branchName: string,
-  options?: { runId?: string; triggerType?: "manual" | "webhook" | "pr_merge" }
+  options?: {
+    runId?: string;
+    triggerType?: "manual" | "webhook" | "pr_merge";
+    organizationId?: string;
+  }
+): Promise<IndexRunResult> {
+  const organizationId = options?.organizationId ?? getActiveOrganizationId();
+  if (!organizationId) {
+    throw new Error("organization_context_required");
+  }
+
+  return indexOrganizationContext.run(organizationId, () =>
+    runFullIndexInner(branchName, { ...options, organizationId })
+  );
+}
+
+async function runFullIndexInner(
+  branchName: string,
+  options: {
+    runId?: string;
+    triggerType?: "manual" | "webhook" | "pr_merge";
+    organizationId: string;
+  }
 ): Promise<IndexRunResult> {
   const resolvedBranch = await resolveRepoIndexBranch(branchName);
   branchName = resolvedBranch;
-  const { repoOwner, repoName } = assertRepoContext();
+  const { repoOwner, repoName } = assertRepoContext(options.organizationId);
   const startedAt = Date.now();
 
   const prismaAny = prisma as any;
@@ -264,8 +304,30 @@ export async function runIncrementalIndex(input: {
   runId?: string;
   batchIndex?: number;
   batchTotal?: number;
+  organizationId?: string;
 }): Promise<IndexRunResult> {
-  const { repoOwner, repoName } = assertRepoContext();
+  const organizationId = input.organizationId ?? getActiveOrganizationId();
+  if (!organizationId) {
+    throw new Error("organization_context_required");
+  }
+
+  return indexOrganizationContext.run(organizationId, () =>
+    runIncrementalIndexInner({ ...input, organizationId })
+  );
+}
+
+async function runIncrementalIndexInner(input: {
+  branchName: string;
+  changedFiles: string[];
+  deletedFiles: string[];
+  commitSha: string;
+  triggerType: "webhook" | "manual";
+  runId?: string;
+  batchIndex?: number;
+  batchTotal?: number;
+  organizationId: string;
+}): Promise<IndexRunResult> {
+  const { repoOwner, repoName } = assertRepoContext(input.organizationId);
   const startedAt = Date.now();
   const prismaAny = prisma as any;
 

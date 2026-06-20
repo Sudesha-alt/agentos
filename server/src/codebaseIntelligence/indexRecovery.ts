@@ -38,6 +38,7 @@ export async function recoverStaleIndexRuns(): Promise<void> {
       await runFullIndex(run.branchName, {
         runId: run.id,
         triggerType: run.triggerType ?? "manual",
+        organizationId: run.organizationId,
       });
     }).catch((err) => {
       logger.warn({ err, runId: run.id }, "recovered full index failed");

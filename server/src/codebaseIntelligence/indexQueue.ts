@@ -61,7 +61,11 @@ export async function enqueueFullIndex(
   });
 
   void withOrganizationContext(organizationId, async () => {
-    await runFullIndex(resolvedBranch, { runId: run.id, triggerType });
+    await runFullIndex(resolvedBranch, {
+      runId: run.id,
+      triggerType,
+      organizationId,
+    });
   }).catch((err) => {
     logger.warn({ err, runId: run.id, branchName: resolvedBranch }, "in-process full index failed");
   });
@@ -128,6 +132,7 @@ async function startIncrementalBatchRun(input: {
       runId: run.id,
       batchIndex: input.batchIndex,
       batchTotal: input.batchTotal,
+      organizationId,
     });
   }).catch((err) => {
     logger.warn({ err, runId: run.id }, "incremental index batch failed");

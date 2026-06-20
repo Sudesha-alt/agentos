@@ -1,32 +1,29 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import type { OrgRole } from "../generated/prisma/client";
 
-let activeOrganizationId: string | null = null;
-let organizationContextDepth = 0;
+/** Per-async-chain org scope — survives concurrent requests and background index jobs. */
+const organizationContextStorage = new AsyncLocalStorage<string>();
 
-export function enterActiveOrganizationContext(organizationId: string): void {
-  activeOrganizationId = organizationId;
-  organizationContextDepth += 1;
+/** Legacy fallback for routes not yet on AsyncLocalStorage. */
+let legacyActiveOrganizationId: string | null = null;
+
+export function runInOrganizationContext<T>(organizationId: string, fn: () => T): T {
+  return organizationContextStorage.run(organizationId, fn);
 }
 
-export function leaveActiveOrganizationContext(): void {
-  organizationContextDepth = Math.max(0, organizationContextDepth - 1);
-  if (organizationContextDepth === 0) {
-    activeOrganizationId = null;
-  }
+export function runInOrganizationContextAsync<T>(
+  organizationId: string,
+  fn: () => Promise<T>
+): Promise<T> {
+  return organizationContextStorage.run(organizationId, fn);
 }
 
-export function isOrganizationContextActive(): boolean {
-  return organizationContextDepth > 0 && Boolean(activeOrganizationId);
-}
-
-/** Direct assignment — used by legacy routes; resets nested depth tracking. */
 export function setActiveOrganizationId(organizationId: string | null): void {
-  activeOrganizationId = organizationId;
-  organizationContextDepth = organizationId ? 1 : 0;
+  legacyActiveOrganizationId = organizationId;
 }
 
 export function getActiveOrganizationId(): string | null {
-  return activeOrganizationId;
+  return organizationContextStorage.getStore() ?? legacyActiveOrganizationId;
 }
 
 export type OrganizationContext = {

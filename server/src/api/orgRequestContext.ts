@@ -1,4 +1,4 @@
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import {
   activateOrganizationJiraContext,
   warmOrganizationJiraCredentials,
@@ -7,11 +7,7 @@ import {
   activateOrganizationGitContext,
   warmOrganizationGitCredentials,
 } from "../git-integration/gitCredentialsStore";
-import {
-  enterActiveOrganizationContext,
-  leaveActiveOrganizationContext,
-  isOrganizationContextActive,
-} from "../organization/context";
+import { runInOrganizationContextAsync } from "../organization/context";
 import { resolveUserFromAuthHeader, type SessionUser } from "./routes/authSession";
 
 export function requireAuthUser(
@@ -43,20 +39,52 @@ export async function withOrganizationContext<T>(
   organizationId: string,
   fn: () => Promise<T>
 ): Promise<T> {
-  enterActiveOrganizationContext(organizationId);
-  await warmOrganizationJiraCredentials(organizationId);
-  await warmOrganizationGitCredentials(organizationId);
-  const { warmOrganizationIntakeMapping } = await import("../pipeline/jira/intakeConfig");
-  await warmOrganizationIntakeMapping(organizationId);
-  activateOrganizationJiraContext(organizationId);
-  activateOrganizationGitContext(organizationId);
-  try {
-    return await fn();
-  } finally {
-    leaveActiveOrganizationContext();
-    if (!isOrganizationContextActive()) {
+  return runInOrganizationContextAsync(organizationId, async () => {
+    await warmOrganizationJiraCredentials(organizationId);
+    await warmOrganizationGitCredentials(organizationId);
+    const { warmOrganizationIntakeMapping } = await import("../pipeline/jira/intakeConfig");
+    await warmOrganizationIntakeMapping(organizationId);
+    activateOrganizationJiraContext(organizationId);
+    activateOrganizationGitContext(organizationId);
+    try {
+      return await fn();
+    } finally {
       activateOrganizationJiraContext(null);
       activateOrganizationGitContext(null);
     }
-  }
+  });
+}
+
+/**
+ * Express middleware: bind org credentials + AsyncLocalStorage for the full request
+ * (until response finishes). Does not clear global org id — avoids breaking background jobs.
+ */
+export function bindOrganizationContextMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  const user = requireOrganizationUser(req, res);
+  if (!user?.organizationId) return;
+
+  void runInOrganizationContextAsync(user.organizationId, async () => {
+    await warmOrganizationJiraCredentials(user.organizationId!);
+    await warmOrganizationGitCredentials(user.organizationId!);
+    activateOrganizationJiraContext(user.organizationId!);
+    activateOrganizationGitContext(user.organizationId!);
+
+    await new Promise<void>((resolve) => {
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        activateOrganizationJiraContext(null);
+        activateOrganizationGitContext(null);
+        resolve();
+      };
+      res.once("finish", done);
+      res.once("close", done);
+      next();
+    });
+  }).catch(next);
 }
