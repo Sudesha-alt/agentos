@@ -1,11 +1,27 @@
 const ATLASSIAN_AUTH_BASE = "https://auth.atlassian.com";
 
+/**
+ * OAuth 2.0 (3LO) scopes for AgentOS Jira integration.
+ *
+ * Classic scopes cover platform REST (issues, JQL, user profile).
+ * Granular Jira Software scopes are required for Agile board APIs
+ * (GET /rest/agile/1.0/board, board configuration) since Atlassian's
+ * 2024 scope migration — read:jira-work alone returns 401/403 on those endpoints.
+ *
+ * After changing scopes in code, update the same permissions in the
+ * Atlassian Developer Console and have each org reconnect OAuth.
+ */
 export const ATLASSIAN_JIRA_SCOPES = [
+  // Classic — issues, JQL search, comments, transitions
   "read:jira-work",
   "write:jira-work",
   "read:jira-user",
   "manage:jira-webhook",
   "offline_access",
+  // Granular — projects list + boards (required for pipeline board picker)
+  "read:project:jira",
+  "read:board-scope:jira-software",
+  "read:board-scope.admin:jira-software",
 ] as const;
 
 export type AtlassianTokenResponse = {

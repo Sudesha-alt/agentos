@@ -4,6 +4,7 @@ import {
   pickJiraCloudResource,
 } from "../../jira-oauth/accessibleResources";
 import {
+  ATLASSIAN_JIRA_SCOPES,
   atlassianOAuthRedirectUri,
   buildAtlassianAuthorizeUrl,
   exchangeAtlassianCode,
@@ -231,6 +232,7 @@ router.get("/status", async (req, res, next) => {
       oauthAvailable,
       oauthDevMode,
       callbackUrl: atlassianOAuthRedirectUri(publicApiBase(req)),
+      requiredScopes: [...ATLASSIAN_JIRA_SCOPES],
     });
   } catch (err) {
     next(err);

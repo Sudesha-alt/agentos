@@ -57,7 +57,15 @@ function normalizePipelineError(err: unknown): unknown {
       err.message.startsWith("Pipeline Jira API") ||
       err.message.includes("Jira OAuth")
     ) {
-      return new ValidationError(err.message);
+      let message = err.message;
+      if (
+        /Pipeline Jira API (401|403)/.test(message) &&
+        /board|scope|Unauthorized|permission/i.test(message)
+      ) {
+        message +=
+          " — OAuth may be missing Jira Software board scopes. In the Atlassian Developer Console add read:project:jira, read:board-scope:jira-software, and read:board-scope.admin:jira-software, then Disconnect and reconnect Jira in AgentOS.";
+      }
+      return new ValidationError(message);
     }
   }
   return err;
@@ -70,13 +78,14 @@ router.get("/setup", async (req, res) => {
   await withOrganizationContext(user.organizationId, async () => {
     const jira = await getPublicOrganizationJiraConfig(user.organizationId!);
     const intake = getPipelineIntakeMapping();
-    let connected = false;
+    let pipelineReady = false;
     try {
       validatePipelineJiraConfig();
-      connected = true;
+      pipelineReady = true;
     } catch {
-      connected = jira.configured;
+      pipelineReady = false;
     }
+    const connected = pipelineReady || jira.configured;
 
     res.json({
       publicApiBase: pipelineJiraPublicBase(req),
@@ -87,17 +96,18 @@ router.get("/setup", async (req, res) => {
       intake,
       queue: getPipelineQueueState(user.organizationId!),
       mirror: getPipelineJiraMirrorConfig(),
-      mirrorJql: connected
+      mirrorJql: pipelineReady
         ? buildMirrorBackfillJql(jira.projectKeys)
         : null,
       sync: {
         config: getJiraSyncConfig(),
         running: isJiraSyncRunning(user.organizationId),
-        latestRun: connected ? await getLatestSyncRun(user.organizationId) : null,
-        stats: connected ? await getJiraIssueStats(user.organizationId) : null,
+        latestRun: pipelineReady ? await getLatestSyncRun(user.organizationId) : null,
+        stats: pipelineReady ? await getJiraIssueStats(user.organizationId) : null,
       },
       jira,
       connected,
+      pipelineReady,
     });
   });
 });
