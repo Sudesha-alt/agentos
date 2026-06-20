@@ -82,12 +82,13 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
   const githubApp = setup?.githubApp;
   const githubAppEnabled = Boolean(githubApp?.configured && githubApp?.installUrl);
   const git = setup?.git;
-  const connected = Boolean(setup?.connected);
+  const setupConnected = Boolean(setup?.connected);
+  const connected = setupConnected && !disconnected;
   const accountLogin = setup?.accountLogin ?? git?.workspace ?? null;
   const activeInstallationId = pendingInstallationId || git?.installationId || "";
   const isGithubApp =
     git?.authMethod === "github_app" || Boolean(activeInstallationId && tab === "github");
-  const installationDetected = Boolean(setup?.installationDetected);
+  const installationDetected = Boolean(setup?.installationDetected) && !disconnected;
   const needsRepoPick =
     Boolean(setup?.needsRepoSelection) ||
     Boolean(installationDetected && !connected) ||
@@ -97,10 +98,10 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
   const installPendingFinish = installationDetected && !connected;
 
   useEffect(() => {
-    if (connected) {
+    if (setupConnected) {
       setDisconnected(false);
     }
-  }, [connected]);
+  }, [setupConnected]);
 
   useEffect(() => {
     if (clearedGithubError.current) return;
@@ -110,13 +111,26 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
   }, [searchParams, setSearchParams]);
 
   useEffect(() => {
+    if (disconnected || !setupConnected) {
+      if (!setup?.git?.installationId) {
+        setPendingInstallationId("");
+        setSelectedRepo("");
+        setRepos([]);
+      }
+      if (disconnected) return;
+    }
     if (setup?.git?.installationId) {
       setPendingInstallationId(setup.git.installationId);
     }
     if (setup?.availableRepositories?.length) {
       setRepos(setup.availableRepositories);
     }
-  }, [setup?.git?.installationId, setup?.availableRepositories]);
+  }, [
+    disconnected,
+    setupConnected,
+    setup?.git?.installationId,
+    setup?.availableRepositories,
+  ]);
 
   useEffect(() => {
     const installationId = searchParams.get("installation_id");
@@ -297,15 +311,15 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
         </div>
       ) : null}
 
-      {(connected || indexRunId) && (
+      {(connected || indexRunId) && !disconnected ? (
         <IndexProgressBar
           runId={indexRunId ?? undefined}
           branch={git?.defaultBranch ?? "main"}
-          enabled={Boolean(connected || indexRunId)}
+          enabled={Boolean((connected || indexRunId) && !disconnected)}
         />
-      )}
+      ) : null}
 
-      {disconnected && !connected ? (
+      {disconnected ? (
         <div className="flex items-start gap-3 rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-3 text-sm">
           <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-green-500/20 text-green-500">
             ✓

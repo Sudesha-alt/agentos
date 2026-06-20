@@ -39,7 +39,7 @@ export default function JiraIntegration({ embedded = false }) {
     error: setupError,
     loading: setupLoading,
     refetch: refetchSetup,
-  } = usePipelineJiraSetup({ pollMs: 5000 });
+  } = usePipelineJiraSetup({ pollMs: 30000 });
 
   if (setupLoading && !setup) {
     return (
@@ -69,10 +69,13 @@ export default function JiraIntegration({ embedded = false }) {
 function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   const { orgPath } = useOrg();
   const [searchParams, setSearchParams] = useSearchParams();
-  const connected = Boolean(setup?.connected);
-  const pipelineReady = Boolean(setup?.pipelineReady ?? setup?.connected);
+  const [disconnected, setDisconnected] = useState(false);
+  const setupConnected = Boolean(setup?.connected);
+  const pipelineReady = Boolean(setup?.pipelineReady);
+  const needsReconnect = Boolean(setup?.needsReconnect);
+  const connected = setupConnected && !disconnected;
   const intakeConfigured = Boolean(setup?.intake?.aiWorkerColumnName);
-  const connectedViaOAuth = Boolean(setup?.jira?.connectedViaOAuth);
+  const connectedViaOAuth = Boolean(setup?.jira?.connectedViaOAuth) && !disconnected;
   const authMethod = setup?.jira?.authMethod ?? "api_token";
 
   const {
@@ -98,7 +101,6 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   const [connectPending, setConnectPending] = useState(false);
   const [oauthPending, setOauthPending] = useState(false);
   const [disconnectPending, setDisconnectPending] = useState(false);
-  const [disconnected, setDisconnected] = useState(false);
   const [mappingPending, setMappingPending] = useState(false);
   const [webhookPending, setWebhookPending] = useState(false);
   const [showLegacyForm, setShowLegacyForm] = useState(false);
@@ -108,6 +110,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [loadingBoards, setLoadingBoards] = useState(false);
   const boardsErrorRef = useRef("");
+  const projectsErrorRef = useRef("");
   const [oauthAvailable, setOauthAvailable] = useState(false);
   const [oauthDevMode, setOauthDevMode] = useState(false);
   const [statusMessage, setStatusMessage] = useState(() => {
@@ -131,8 +134,8 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
     (email.trim() || setup?.jira?.email) &&
     (apiToken.trim() || setup?.jira?.hasApiToken);
 
-  /** OAuth or API token — load project/board lists whenever Jira is linked in DB */
-  const canPickProjectBoard = Boolean(connected && setup?.jira?.configured);
+  /** Only call Jira REST when runtime credentials validate (not just DB row present). */
+  const canPickProjectBoard = Boolean(pipelineReady && setup?.jira?.configured);
 
   useEffect(() => {
     let cancelled = false;
@@ -163,12 +166,12 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   }, [searchParams, setSearchParams]);
 
   useEffect(() => {
-    if (connected) {
+    if (setupConnected) {
       setDisconnected(false);
     } else if (!setup?.jira?.baseUrl && !setup?.jira?.connectedViaOAuth) {
       resetIntegrationState();
     }
-  }, [connected, setup?.jira?.baseUrl, setup?.jira?.connectedViaOAuth]);
+  }, [setupConnected, setup?.jira?.baseUrl, setup?.jira?.connectedViaOAuth]);
 
   useEffect(() => {
     if (connectedViaOAuth) {
@@ -195,7 +198,13 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   }, [setup?.jira?.projectKeys, selectedProjectKey]);
 
   useEffect(() => {
-    if (!canPickProjectBoard) return;
+    if (!canPickProjectBoard) {
+      projectsErrorRef.current = "";
+      return undefined;
+    }
+    if (projectsErrorRef.current === "auth") {
+      return undefined;
+    }
     let cancelled = false;
     (async () => {
       setLoadingProjects(true);
@@ -204,11 +213,16 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
         if (!cancelled) {
           setJiraProjects(projects ?? []);
           boardsErrorRef.current = "";
+          projectsErrorRef.current = "";
           setConnectError("");
         }
       } catch (err) {
         if (!cancelled) {
-          setConnectError(err.message || "Could not load Jira projects");
+          const message = err.message || "Could not load Jira projects";
+          if (/OAuth tokens are missing|not configured|401|403|invalid_grant/i.test(message)) {
+            projectsErrorRef.current = "auth";
+          }
+          setConnectError(message);
         }
       } finally {
         if (!cancelled) setLoadingProjects(false);
@@ -328,6 +342,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
     setShowLegacyForm(false);
     setConnectError("");
     boardsErrorRef.current = "";
+    projectsErrorRef.current = "";
   }
 
   async function handleOAuthConnect() {
@@ -444,7 +459,24 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
         </div>
       ) : null}
 
-      {connected && !pipelineReady ? (
+      {needsReconnect && !disconnected ? (
+        <div className="flex flex-col gap-3 rounded-app-sm border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm">
+          <p className="text-app-ink-dim">
+            Jira settings are saved but the server cannot use the OAuth tokens for this workspace.
+            Disconnect Jira, then use <strong>Connect with Atlassian</strong> again.
+          </p>
+          <button
+            type="button"
+            onClick={handleDisconnect}
+            disabled={disconnectPending}
+            className="self-start rounded-lg border border-amber-500/40 px-3 py-1.5 text-sm font-medium text-app-ink disabled:opacity-50"
+          >
+            {disconnectPending ? "Disconnecting…" : "Disconnect and reconnect"}
+          </button>
+        </div>
+      ) : null}
+
+      {connected && !pipelineReady && !needsReconnect ? (
         <p className="rounded-app-sm border border-amber-500/30 bg-amber-500/5 px-4 py-2.5 text-sm text-app-ink-dim">
           Jira OAuth is linked but credentials are incomplete. Disconnect and use{" "}
           <strong>Connect with Atlassian</strong> again after updating scopes in the Atlassian Developer Console.
@@ -462,7 +494,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
           {statusMessage}
         </p>
       ) : null}
-      {connectError ? (
+      {connectError && !needsReconnect ? (
         <p className="rounded-app-sm border border-danger/30 bg-danger/10 px-4 py-2.5 text-sm text-danger">
           {connectError}
         </p>

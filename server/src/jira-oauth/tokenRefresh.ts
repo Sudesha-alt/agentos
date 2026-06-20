@@ -44,19 +44,30 @@ export async function ensureFreshJiraOAuthToken(
       return;
     }
 
-    const tokens = await refreshAtlassianToken(latest.refreshToken);
-    const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
+    try {
+      const tokens = await refreshAtlassianToken(latest.refreshToken);
+      const expiresAt = new Date(Date.now() + tokens.expires_in * 1000);
 
-    await saveOrganizationJiraOAuthTokens(orgId, {
-      accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token ?? latest.refreshToken,
-      tokenExpiresAt: expiresAt,
-      scopes: tokens.scope ?? latest.scopes,
-    });
+      await saveOrganizationJiraOAuthTokens(orgId, {
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token ?? latest.refreshToken,
+        tokenExpiresAt: expiresAt,
+        scopes: tokens.scope ?? latest.scopes,
+      });
 
-    await warmOrganizationJiraCredentials(orgId);
-    if (getActiveOrganizationId() === orgId) {
-      activateOrganizationJiraContext(orgId);
+      await warmOrganizationJiraCredentials(orgId);
+      if (getActiveOrganizationId() === orgId) {
+        activateOrganizationJiraContext(orgId);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (/invalid_grant|refresh token|token has been revoked/i.test(msg)) {
+        const { purgeOrganizationJiraIntegration } = await import(
+          "../organization/jiraConfigStore"
+        );
+        await purgeOrganizationJiraIntegration(orgId);
+      }
+      throw err;
     }
   })();
 
