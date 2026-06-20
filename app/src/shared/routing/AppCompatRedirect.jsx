@@ -1,13 +1,14 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../providers/useAuth";
 import { orgPath } from "./orgPaths";
+import AppPageFallback from "../ui/AppPageFallback";
 
 /** Redirect legacy /app/* bookmarks to /:orgSlug/* */
 export default function AppCompatRedirect() {
   const { organization, hasOrganization, isAuthenticated, loading } = useAuth();
   const location = useLocation();
 
-  if (loading) return null;
+  if (loading) return <AppPageFallback />;
 
   if (!isAuthenticated) {
     return (

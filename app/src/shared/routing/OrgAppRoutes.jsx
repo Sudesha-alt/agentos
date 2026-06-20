@@ -16,6 +16,7 @@ const JiraSearch = lazy(() => import("../../app/pages/JiraSearch"));
 const PmAgents = lazy(() => import("../../app/pages/PmAgents"));
 const Roadmap = lazy(() => import("../../app/pages/Roadmap"));
 const CodebaseIntelligence = lazy(() => import("../../app/pages/CodebaseIntelligence"));
+const OrgNotFound = lazy(() => import("../../app/pages/OrgNotFound"));
 
 function RedirectTo({ segments }) {
   const { orgPath } = useOrg();
@@ -56,5 +57,6 @@ export const orgAppRouteElements = (
     <Route path="jira" element={<RedirectTo segments={["settings", "integrations", "jira"]} />} />
     <Route path="jira-search" element={<JiraSearch />} />
     <Route path="settings/*" element={<SettingsRoutes />} />
+    <Route path="*" element={<OrgNotFound />} />
   </>
 );

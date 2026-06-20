@@ -173,7 +173,7 @@ export default function GlobalSearchCore({
                   title={ticket.jiraKey}
                   subtitle={ticket.summary}
                   meta={ticket.currentStage?.replaceAll("_", " ")}
-                  onClick={() => go(`/app/pipelines/${ticket.id}`)}
+                  onClick={() => go(orgPath("pipelines", ticket.id))}
                   compact={compact}
                 />
               ))}
@@ -188,7 +188,7 @@ export default function GlobalSearchCore({
                   title={entry.event?.replaceAll("_", " ")}
                   subtitle={`${entry.jiraKey} · ${formatAuditInline(entry) || entry.summary}`}
                   meta={formatRelativeTime(entry.timestamp)}
-                  onClick={() => go(`/app/pipelines/${entry.pipelineId}`)}
+                  onClick={() => go(orgPath("pipelines", entry.pipelineId))}
                   compact={compact}
                 />
               ))}

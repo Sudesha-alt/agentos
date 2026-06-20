@@ -22,6 +22,7 @@ export default function SettingsRoutes() {
         <Route path="codebase-index" element={<SettingsCodebaseIndexPage />} />
         <Route path="company" element={<CompanyIntelligence embedded />} />
         <Route path="pipeline" element={<SettingsPipelinePage />} />
+        <Route path="*" element={<Navigate to="../integrations" replace />} />
       </Route>
     </Routes>
   );

@@ -19,11 +19,12 @@ Legacy `*.png` assets had opaque black backgrounds and are superseded by the SVG
 
 Legacy SVG tile mark — see Atlassian Design guidelines.
 
-## Hero pixel art
+## Hero background
 
 | File | Usage |
 |------|--------|
-| `cool.gif` | Active hero animation (3620×1930) |
-| `cool-hero-poster.png` | Static poster for reduced-motion |
+| `mountain.gif` | Active hero animation — cinematic mountain sunrise |
+| `cool.gif` | Previous lo-fi pixel hero (unused) |
+| `cool-hero-poster.png` | Static poster for previous hero (unused) |
 | `temple.gif` / `temple-hero.gif` | Previous temple scene (unused) |
 | `agentos-hero-pixel.gif` | Legacy placeholder (unused) |

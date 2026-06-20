@@ -18,6 +18,7 @@ import {
 } from "./VirinSections";
 import { CompetitorAnalysisSection } from "./CompetitorAnalysisSection";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 import { motionSafe, pageStagger, sectionFadeUp } from "../../lib/motion";
 
 export function PmStageProgress({ analysis }) {
@@ -415,6 +416,7 @@ export function PmRetrospectiveSection({ retrospective, onRun, running }) {
 
 export function PmTechHandoffSection({ jiraKey, analysisComplete }) {
   const navigate = useNavigate();
+  const orgPath = useOrgPathBuilder();
   const [handoffData, setHandoffData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [copyState, setCopyState] = useState(null);
@@ -450,7 +452,7 @@ export function PmTechHandoffSection({ jiraKey, analysisComplete }) {
       setPipelineMsg(result.message ?? "Coding pipeline started.");
       const params = new URLSearchParams({ ticket: jiraKey });
       if (result.pipelineId) params.set("pipeline", result.pipelineId);
-      navigate(`/app/ananta?${params.toString()}`);
+      navigate(`${orgPath("ananta")}?${params.toString()}`);
     } catch (err) {
       const msg = err.message ?? "Failed to start coding pipeline";
       setHandoffError(
@@ -484,7 +486,7 @@ export function PmTechHandoffSection({ jiraKey, analysisComplete }) {
         right={
           <div className="flex flex-wrap gap-2">
             <Link
-              to={`/app/ananta?ticket=${encodeURIComponent(jiraKey)}`}
+              to={`${orgPath("ananta")}?ticket=${encodeURIComponent(jiraKey)}`}
               className="rounded-full border border-hairline px-4 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-indigo hover:border-indigo"
             >
               Open in Ananta

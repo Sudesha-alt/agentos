@@ -37,12 +37,16 @@ export default function Login() {
         return;
       }
       const slug = session.organization?.slug ?? session.user?.organizationSlug;
+      const orgHome = slug ? sessionHomePath(session) : destination;
       const target =
         slug && destination.startsWith("/app")
           ? migrateAppPath(slug, destination)
-          : slug
-            ? sessionHomePath(session)
-            : destination;
+          : slug &&
+              (destination === `/${slug}` || destination.startsWith(`/${slug}/`))
+            ? destination
+            : slug
+              ? orgHome
+              : destination;
       navigate(target, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign-in failed.");

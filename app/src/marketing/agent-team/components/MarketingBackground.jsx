@@ -1,5 +1,5 @@
 /**
- * Lo-fi pixel-art hero — animated GIF with gradient overlay for copy.
+ * Cinematic mountain sunrise — animated hero background with gradient overlay for copy.
  */
 export default function MarketingBackground() {
   return (
@@ -8,23 +8,15 @@ export default function MarketingBackground() {
       aria-hidden
     >
       <div className="at-hero-img-overlay absolute inset-0 z-[1]" />
-      <picture>
-        <source
-          media="(prefers-reduced-motion: reduce)"
-          srcSet="/marketing/cool-hero-poster.png"
-        />
-        <img
-          alt=""
-          src="/marketing/cool.gif"
-          width={3620}
-          height={1930}
-          decoding="async"
-          fetchPriority="high"
-          loading="eager"
-          className="at-hero-pixel-img at-hero-pixel-img-cool absolute bottom-0 z-0 h-full max-w-none object-cover"
-        />
-      </picture>
-      <div className="at-hero-pixel-ground" aria-hidden />
+      <img
+        alt=""
+        src="/marketing/mountain.gif"
+        decoding="async"
+        fetchPriority="high"
+        loading="eager"
+        className="at-hero-mountain-img absolute inset-0 z-0 h-full w-full object-cover"
+      />
+      <div className="at-hero-mountain-fade" aria-hidden />
     </div>
   );
 }

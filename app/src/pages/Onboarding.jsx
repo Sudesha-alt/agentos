@@ -25,7 +25,7 @@ const STEPS = ["welcome", "stage", "team", "role", "company", "organization"];
 
 export default function Onboarding() {
   const navigate = useNavigate();
-  const { user, organization, refresh } = useAuth();
+  const { user, organization, refresh, logout } = useAuth();
   const [stepIndex, setStepIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState(false);
@@ -44,6 +44,11 @@ export default function Onboarding() {
   const [newOrgName, setNewOrgName] = useState("");
   const [orgChoice, setOrgChoice] = useState(null);
   const [selectedOrgId, setSelectedOrgId] = useState(null);
+
+  async function redirectToLoginAfterAuthFailure() {
+    await logout();
+    navigate("/login", { replace: true, state: { from: "/onboarding" } });
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -66,7 +71,7 @@ export default function Onboarding() {
         if (!cancelled) {
           const message = err instanceof Error ? err.message : "";
           if (message.includes("401") || message.toLowerCase().includes("unauthorized")) {
-            navigate("/login", { replace: true, state: { from: "/onboarding" } });
+            void redirectToLoginAfterAuthFailure();
           }
         }
       } finally {
@@ -212,7 +217,9 @@ export default function Onboarding() {
       const message = err instanceof Error ? err.message : "Something went wrong";
       if (message.includes("401") || message.toLowerCase().includes("unauthorized") || message.toLowerCase().includes("session expired")) {
         setError("Your session expired. Please sign in again to continue setup.");
-        setTimeout(() => navigate("/login", { replace: true }), 1500);
+        setTimeout(() => {
+          void redirectToLoginAfterAuthFailure();
+        }, 1500);
       } else if (message.toLowerCase().includes("already belong")) {
         setError(message);
         await refresh();

@@ -228,15 +228,39 @@ const restAuthAdapter = {
   async getSession() {
     const stored = readStoredSession();
     if (!stored?.token) return null;
+
     try {
-      return AuthSessionSchema.parse(
-        await fetchJson(apiPath("/api", "/auth/session"), {
-          headers: authHeaders(stored),
-        })
-      );
+      const res = await fetch(apiPath("/api", "/auth/session"), {
+        headers: {
+          "Content-Type": "application/json",
+          ...authHeaders(stored),
+        },
+      });
+
+      if (res.status === 401) {
+        clearStoredSession();
+        return null;
+      }
+
+      if (!res.ok) {
+        return stored;
+      }
+
+      const data = await res.json();
+
+      if (data?.organization && !data.organization.slug && stored.organization?.slug) {
+        data.organization.slug = stored.organization.slug;
+      }
+
+      try {
+        const session = AuthSessionSchema.parse(data);
+        persistSession(session);
+        return session;
+      } catch {
+        return stored;
+      }
     } catch {
-      clearStoredSession();
-      return null;
+      return stored;
     }
   },
   async login(payload) {

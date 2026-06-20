@@ -204,6 +204,7 @@ router.get("/session", async (req, res) => {
           id: user.organizationId,
           name: user.organizationName!,
           domain: user.organizationDomain!,
+          slug: user.organizationSlug!,
           role: user.organizationRole!,
         }
       : undefined,

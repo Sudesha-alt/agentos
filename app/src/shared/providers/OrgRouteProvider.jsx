@@ -5,6 +5,15 @@ import { isReservedSlug, orgPath, orgRelativePath } from "../routing/orgPaths";
 
 const OrgContext = createContext(null);
 
+function reservedSlugRedirectTarget(pathname) {
+  const parts = pathname.split("/").filter(Boolean);
+  const root = parts[0];
+  if (!root) return "/";
+  if (root === "onboarding") return "/onboarding";
+  if (root === "app") return "/app";
+  return `/${root}`;
+}
+
 export function OrgRouteProvider({ children }) {
   const { organization, hasOrganization } = useAuth();
   const { orgSlug: paramSlug } = useParams();
@@ -16,10 +25,17 @@ export function OrgRouteProvider({ children }) {
     return <Navigate to="/onboarding" replace />;
   }
 
-  if (isReservedSlug(paramSlug) || paramSlug !== sessionSlug) {
-    const relative = paramSlug && !isReservedSlug(paramSlug)
-      ? orgRelativePath(location.pathname, paramSlug)
-      : orgRelativePath(location.pathname.replace(/^\/app/, `/${sessionSlug}`), sessionSlug);
+  if (isReservedSlug(paramSlug)) {
+    return (
+      <Navigate
+        to={reservedSlugRedirectTarget(location.pathname) + location.search + location.hash}
+        replace
+      />
+    );
+  }
+
+  if (paramSlug !== sessionSlug) {
+    const relative = orgRelativePath(location.pathname, paramSlug);
     const suffix = relative.replace(/^\//, "");
     const target = suffix
       ? orgPath(sessionSlug, suffix) + location.search + location.hash

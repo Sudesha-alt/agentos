@@ -4,6 +4,7 @@ import StatusPill from "../../app/components/StatusPill";
 import Spinner from "../../app/components/Spinner";
 import EmptyState from "../../app/components/EmptyState";
 import { Panel } from "../../shared/ui/Panel";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 import { formatRelativeTime, formatStageLabel } from "../../shared/lib/format";
 import { EASE } from "../../lib/motion";
 
@@ -23,6 +24,7 @@ export default function PipelineTableWidget({
   query,
   onQueryChange,
 }) {
+  const orgPath = useOrgPathBuilder();
   return (
     <>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -92,7 +94,7 @@ export default function PipelineTableWidget({
                 className="border-t border-hairline first:border-t-0 hover:bg-canvas/25 transition-colors"
               >
                 <Link
-                  to={`/app/pipelines/${item.id}`}
+                  to={orgPath("pipelines", item.id)}
                   className="grid grid-cols-[140px_1fr_140px_140px_120px] items-center gap-3 px-5 py-4"
                 >
                   <span className="font-mono text-[12px] text-ink">{item.jiraKey}</span>

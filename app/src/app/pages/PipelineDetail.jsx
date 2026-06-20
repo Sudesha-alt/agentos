@@ -95,7 +95,7 @@ export default function PipelineDetail() {
               <StatusPill status={item.status} />
               {item.status === "PAUSED" ? (
                 <Link
-                  to={`/app/pipelines/${item.id}/override`}
+                  to={orgPath("pipelines", item.id, "override")}
                   className="btn-trace inline-flex items-center gap-2 rounded-full border border-indigo/50 bg-indigo/10 px-4 py-2 text-[13px] text-ink transition-all hover:shadow-glow-indigo"
                 >
                   <span className="size-1.5 rounded-full bg-warning shadow-[0_0_8px_2px_rgba(245,158,11,0.6)]" />
@@ -103,7 +103,7 @@ export default function PipelineDetail() {
                 </Link>
               ) : null}
               <Link
-                to={`/app/pipelines/${item.id}/override`}
+                to={orgPath("pipelines", item.id, "override")}
                 className="rounded-full border border-hairline bg-surface/40 px-4 py-2 text-[13px] text-ink-dim transition-colors hover:border-hairline-strong hover:text-ink"
               >
                 Open override workspace
