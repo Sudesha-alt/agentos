@@ -33,37 +33,11 @@ import {
   getRunbook,
 } from "../../codebaseIntelligence/knowledgeService";
 import { checkKnowledgeGenerateRateLimit } from "../../codebaseIntelligence/knowledgeRateLimit";
-import {
-  activateOrganizationGitContext,
-  warmOrganizationGitCredentials,
-} from "../../git-integration/gitCredentialsStore";
-import {
-  activateOrganizationJiraContext,
-  warmOrganizationJiraCredentials,
-} from "../../pipeline/jira/credentialsStore";
-import { setActiveOrganizationId } from "../../organization/context";
-import { requireOrganizationUser } from "../orgRequestContext";
+import { bindOrganizationContextMiddleware } from "../orgRequestContext";
 
 const router = Router();
 
-router.use(async (req, res, next) => {
-  const user = requireOrganizationUser(req, res);
-  if (!user?.organizationId) return;
-
-  setActiveOrganizationId(user.organizationId);
-  await warmOrganizationJiraCredentials(user.organizationId);
-  await warmOrganizationGitCredentials(user.organizationId);
-  activateOrganizationJiraContext(user.organizationId);
-  activateOrganizationGitContext(user.organizationId);
-
-  res.on("finish", () => {
-    setActiveOrganizationId(null);
-    activateOrganizationJiraContext(null);
-    activateOrganizationGitContext(null);
-  });
-
-  next();
-});
+router.use(bindOrganizationContextMiddleware);
 
 router.get("/status", async (req, res, next) => {
   try {

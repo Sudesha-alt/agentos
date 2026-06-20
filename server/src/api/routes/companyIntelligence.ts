@@ -6,7 +6,7 @@ import {
   activateOrganizationJiraContext,
   warmOrganizationJiraCredentials,
 } from "../../pipeline/jira/credentialsStore";
-import { setActiveOrganizationId } from "../../organization/context";
+import { runInOrganizationContextAsync } from "../../organization/context";
 
 const router = Router();
 
@@ -36,17 +36,20 @@ async function withOrganizationContext(
   fn: (organizationId?: string) => Promise<void>
 ) {
   const organizationId = resolveOrganizationId(req);
-  if (organizationId) {
-    setActiveOrganizationId(organizationId);
+  if (!organizationId) {
+    await fn(undefined);
+    return;
+  }
+
+  await runInOrganizationContextAsync(organizationId, async () => {
     await warmOrganizationJiraCredentials(organizationId);
     activateOrganizationJiraContext(organizationId);
-  }
-  try {
-    await fn(organizationId);
-  } finally {
-    setActiveOrganizationId(null);
-    activateOrganizationJiraContext(null);
-  }
+    try {
+      await fn(organizationId);
+    } finally {
+      activateOrganizationJiraContext(null);
+    }
+  });
 }
 
 router.get("/", async (req, res, next) => {
