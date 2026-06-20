@@ -98,6 +98,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   const [connectPending, setConnectPending] = useState(false);
   const [oauthPending, setOauthPending] = useState(false);
   const [disconnectPending, setDisconnectPending] = useState(false);
+  const [disconnected, setDisconnected] = useState(false);
   const [mappingPending, setMappingPending] = useState(false);
   const [webhookPending, setWebhookPending] = useState(false);
   const [showLegacyForm, setShowLegacyForm] = useState(false);
@@ -158,6 +159,14 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
     next.delete("error");
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (connected) {
+      setDisconnected(false);
+    } else if (!setup?.jira?.baseUrl && !setup?.jira?.connectedViaOAuth) {
+      resetIntegrationState();
+    }
+  }, [connected, setup?.jira?.baseUrl, setup?.jira?.connectedViaOAuth]);
 
   useEffect(() => {
     if (connectedViaOAuth) {
@@ -300,6 +309,23 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   const intakeItems = intakeData?.items ?? [];
   const showApiTokenForm = showLegacyForm && !connectedViaOAuth;
 
+  function resetIntegrationState() {
+    setBaseUrl("");
+    setEmail("");
+    setApiToken("");
+    setBoardId("");
+    setProjectKeys("");
+    setWebhookSecret("");
+    setColumns([]);
+    setIntakeColumn("");
+    setJiraProjects([]);
+    setJiraBoards([]);
+    setSelectedProjectKey("");
+    setShowLegacyForm(false);
+    setConnectError("");
+    boardsErrorRef.current = "";
+  }
+
   async function handleOAuthConnect() {
     setOauthPending(true);
     setConnectError("");
@@ -313,12 +339,18 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   }
 
   async function handleDisconnect() {
+    const confirmed = window.confirm(
+      "Remove Jira from this workspace? Connection settings, OAuth tokens, project/board mapping, and intake column will be deleted. You will need to connect again."
+    );
+    if (!confirmed) return;
+
     setDisconnectPending(true);
     setConnectError("");
     setStatusMessage("");
     try {
       await disconnectJiraOAuth();
-      setStatusMessage("Jira disconnected.");
+      resetIntegrationState();
+      setDisconnected(true);
       await refetchSetup();
     } catch (err) {
       setConnectError(err.message || "Disconnect failed");
@@ -398,6 +430,20 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
       kicker="Jira"
       title="Jira pipeline"
     >
+
+      {disconnected && !connected ? (
+        <div className="flex items-start gap-3 rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-3 text-sm">
+          <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-green-500/20 text-green-500">
+            ✓
+          </span>
+          <div>
+            <p className="font-medium text-app-ink">Jira disconnected</p>
+            <p className="mt-0.5 text-app-ink-dim">
+              The integration was removed. Connect with Atlassian or an API token to set up again.
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {connected && !pipelineReady ? (
         <p className="rounded-app-sm border border-amber-500/30 bg-amber-500/5 px-4 py-2.5 text-sm text-app-ink-dim">

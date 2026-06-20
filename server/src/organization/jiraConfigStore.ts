@@ -239,6 +239,17 @@ export async function clearOrganizationJiraConfig(
   clearOrganizationIntakeMapping(organizationId);
 }
 
+/** Remove all Jira integration data for a workspace (DB + in-memory creds). */
+export async function purgeOrganizationJiraIntegration(
+  organizationId: string
+): Promise<void> {
+  await clearOrganizationJiraConfig(organizationId);
+  const { clearOrganizationJiraRuntime } = await import(
+    "../pipeline/jira/credentialsStore"
+  );
+  clearOrganizationJiraRuntime(organizationId);
+}
+
 export async function saveOrganizationPipelineIntake(
   organizationId: string,
   input: {

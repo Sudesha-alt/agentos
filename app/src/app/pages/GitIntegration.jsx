@@ -97,6 +97,12 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
   const installPendingFinish = installationDetected && !connected;
 
   useEffect(() => {
+    if (connected) {
+      setDisconnected(false);
+    }
+  }, [connected]);
+
+  useEffect(() => {
     if (clearedGithubError.current) return;
     if (!searchParams.get("github_error")) return;
     clearedGithubError.current = true;
@@ -213,12 +219,13 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
 
   async function onDisconnect() {
     const confirmed = window.confirm(
-      "Disconnect GitHub from AgentOS? Saved install and repository selection will be cleared. Indexed codebase data is kept. To revoke GitHub access entirely, uninstall the AgentOS app from your GitHub account settings."
+      "Remove GitHub from this workspace? The app install, repository selection, and connection settings will be deleted. You will need to connect again."
     );
     if (!confirmed) return;
 
     setDisconnectPending(true);
     setErr("");
+    setStatus("");
     try {
       await disconnectGitIntegration();
       setPendingInstallationId("");
@@ -227,8 +234,6 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
       setIndexRunId(null);
       setDisconnected(true);
       await refetch();
-      // Auto-clear the success banner after 5 s
-      setTimeout(() => setDisconnected(false), 5000);
     } catch (e) {
       setErr(formatGitIntegrationError(e));
     } finally {
@@ -300,7 +305,7 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
         />
       )}
 
-      {disconnected && (
+      {disconnected && !connected ? (
         <div className="flex items-start gap-3 rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-3 text-sm">
           <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-green-500/20 text-green-500">
             ✓
@@ -308,7 +313,7 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
           <div>
             <p className="font-medium text-app-ink">GitHub disconnected</p>
             <p className="mt-0.5 text-app-ink-dim">
-              The integration has been removed. Connect a new GitHub repository below.
+              The integration was removed. Connect with GitHub again to install the app and pick a repository.
             </p>
           </div>
         </div>
