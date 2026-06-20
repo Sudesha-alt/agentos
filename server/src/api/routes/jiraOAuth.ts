@@ -211,6 +211,15 @@ router.get("/status", async (req, res, next) => {
     if (!user?.organizationId) return;
 
     const jira = await getPublicOrganizationJiraConfig(user.organizationId);
+    const oauthAvailable = isAtlassianOAuthEnabled();
+
+    // Warn the frontend when the OAuth app is configured but likely still private
+    // (ATLASSIAN_OAUTH_DEV_MODE=true means the app hasn't been published yet).
+    const oauthDevMode =
+      oauthAvailable &&
+      (process.env.ATLASSIAN_OAUTH_DEV_MODE === "true" ||
+        process.env.ATLASSIAN_OAUTH_DEV_MODE === "1");
+
     res.json({
       configured: jira.configured,
       authMethod: jira.authMethod,
@@ -219,7 +228,8 @@ router.get("/status", async (req, res, next) => {
       siteName: jira.siteName,
       email: jira.email,
       projectKeys: jira.projectKeys,
-      oauthAvailable: isAtlassianOAuthEnabled(),
+      oauthAvailable,
+      oauthDevMode,
       callbackUrl: atlassianOAuthRedirectUri(publicApiBase(req)),
     });
   } catch (err) {

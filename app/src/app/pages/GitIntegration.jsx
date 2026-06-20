@@ -64,6 +64,7 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
   const [installPending, setInstallPending] = useState(false);
   const [selectPending, setSelectPending] = useState(false);
   const [disconnectPending, setDisconnectPending] = useState(false);
+  const [disconnected, setDisconnected] = useState(false);
   const [err, setErr] = useState(() => {
     const code = searchParams.get("github_error");
     if (code === "invalid_state") {
@@ -219,13 +220,15 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
     setDisconnectPending(true);
     setErr("");
     try {
-      const result = await disconnectGitIntegration();
+      await disconnectGitIntegration();
       setPendingInstallationId("");
       setSelectedRepo("");
       setRepos([]);
       setIndexRunId(null);
-      setStatus(result.message ?? "GitHub disconnected.");
+      setDisconnected(true);
       await refetch();
+      // Auto-clear the success banner after 5 s
+      setTimeout(() => setDisconnected(false), 5000);
     } catch (e) {
       setErr(formatGitIntegrationError(e));
     } finally {
@@ -295,6 +298,20 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
           branch={git?.defaultBranch ?? "main"}
           enabled={Boolean(connected || indexRunId)}
         />
+      )}
+
+      {disconnected && (
+        <div className="flex items-start gap-3 rounded-lg border border-green-500/30 bg-green-500/5 px-4 py-3 text-sm">
+          <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-full bg-green-500/20 text-green-500">
+            ✓
+          </span>
+          <div>
+            <p className="font-medium text-app-ink">GitHub disconnected</p>
+            <p className="mt-0.5 text-app-ink-dim">
+              The integration has been removed. Connect a new GitHub repository below.
+            </p>
+          </div>
+        </div>
       )}
 
       {connected ? (
@@ -441,7 +458,7 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
               )}
 
               {err ? <p className="font-mono text-[11px] text-danger">{err}</p> : null}
-              {status ? <p className="text-sm text-success">{status}</p> : null}
+              {!disconnected && status ? <p className="text-sm text-success">{status}</p> : null}
             </div>
           </Panel>
 

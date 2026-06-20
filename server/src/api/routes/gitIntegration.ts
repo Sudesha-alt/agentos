@@ -375,18 +375,29 @@ router.post("/integration/disconnect", async (req, res, next) => {
     const user = requireOrganizationUser(req, res);
     if (!user?.organizationId) return;
 
-    const { clearOrganizationGitConfig } = await import(
+    const { loadOrganizationGitConfig, clearOrganizationGitConfig } = await import(
       "../../organization/gitConfigStore"
     );
-    const { unlinkGithubInstallationFromOrganization } = await import(
+    const { removeGithubInstallation } = await import(
       "../../git-integration/githubInstallationStore"
     );
+
+    // Read installationId before clearing so we can fully delete the installation.
+    // Just unlinking (organizationId = null) would cause repairOrganizationGithubInstall
+    // to immediately re-bind the orphan on the next setup call.
+    const config = await loadOrganizationGitConfig(user.organizationId);
+    const installationId = config?.installationId ?? null;
+
     await clearOrganizationGitConfig(user.organizationId);
-    await unlinkGithubInstallationFromOrganization(user.organizationId);
+
+    if (installationId) {
+      await removeGithubInstallation(installationId);
+    }
+
     res.json({
       ok: true,
       message:
-        "Git integration disconnected for your workspace. Indexed codebase data is kept; uninstall the GitHub App on GitHub if you want to revoke access entirely.",
+        "GitHub disconnected. Indexed codebase data is kept; to revoke GitHub access entirely, uninstall the AgentOS app from your GitHub account settings.",
     });
   } catch (err) {
     next(err);

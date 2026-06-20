@@ -27,7 +27,8 @@ const OAUTH_ERROR_MESSAGES = {
   invalid_state: "OAuth session expired or was invalid. Try Connect with Atlassian again.",
   connect_failed: "Atlassian authorized the app, but the server could not save the connection.",
   no_jira_site: "No Jira Cloud site was found for this Atlassian account.",
-  access_denied: "Atlassian authorization was cancelled.",
+  access_denied:
+    "Atlassian blocked the connection — the OAuth app is in development mode and only its creator can authorize it. Use the API token method below, or ask the app owner to publish the Atlassian OAuth app.",
 };
 
 export default function JiraIntegration({ embedded = false }) {
@@ -97,9 +98,11 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   const [mappingPending, setMappingPending] = useState(false);
   const [webhookPending, setWebhookPending] = useState(false);
   const [showLegacyForm, setShowLegacyForm] = useState(
-    () => connected && !connectedViaOAuth
+    // Show API token form by default when not connected — it works unconditionally
+    () => !connected || (connected && !connectedViaOAuth)
   );
   const [oauthAvailable, setOauthAvailable] = useState(false);
+  const [oauthDevMode, setOauthDevMode] = useState(false);
   const [statusMessage, setStatusMessage] = useState(() => {
     if (searchParams.get("connected") === "1") {
       return "Jira connected via Atlassian OAuth.";
@@ -127,7 +130,10 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
     (async () => {
       try {
         const status = await getJiraOAuthStatus();
-        if (!cancelled) setOauthAvailable(Boolean(status?.oauthAvailable));
+        if (!cancelled) {
+          setOauthAvailable(Boolean(status?.oauthAvailable));
+          setOauthDevMode(Boolean(status?.oauthDevMode));
+        }
       } catch {
         /* optional */
       }
@@ -282,7 +288,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
           subtitle={
             connected
               ? `Connected via ${authMethod === "oauth" ? "Atlassian OAuth" : "API token"}`
-              : "OAuth is recommended for new connections."
+              : "Connect using an Atlassian API token or OAuth."
           }
         />
 
@@ -305,7 +311,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
               ) : null}
             </p>
             <div className="flex flex-wrap gap-3">
-              {oauthAvailable ? (
+              {oauthAvailable && !oauthDevMode ? (
                 <button
                   type="button"
                   disabled={oauthPending}
@@ -337,8 +343,32 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
             </p>
           </div>
         ) : (
-          <div className="space-y-4 px-4 pb-4 sm:px-6">
-            {oauthAvailable ? (
+          <div className="space-y-4 px-4 pb-2 sm:px-6">
+            {/* Dev-mode / private OAuth app warning */}
+            {oauthAvailable && oauthDevMode ? (
+              <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm">
+                <span className="mt-0.5 shrink-0 text-amber-500">⚠</span>
+                <div>
+                  <p className="font-medium text-app-ink">Atlassian OAuth app is in development mode</p>
+                  <p className="mt-1 text-app-ink-dim">
+                    Only the owner of the Atlassian OAuth app can connect via OAuth right now. To allow other users,{" "}
+                    <a
+                      href="https://developer.atlassian.com/console/myapps/"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-indigo underline"
+                    >
+                      go to the Atlassian developer console
+                    </a>{" "}
+                    → open your OAuth app → Distribution → set <strong>Sharing</strong>.
+                    <br />
+                    <span className="mt-1 block font-medium text-app-ink">
+                      In the meantime, use the API token form below — it works for everyone.
+                    </span>
+                  </p>
+                </div>
+              </div>
+            ) : oauthAvailable ? (
               <button
                 type="button"
                 disabled={oauthPending}
@@ -347,27 +377,37 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
               >
                 {oauthPending ? "Redirecting to Atlassian…" : "Connect with Atlassian"}
               </button>
-            ) : (
-              <p className="text-sm text-app-ink-dim">
-                Atlassian OAuth is not configured on the server. Use the API token form below or set ATLASSIAN_CLIENT_ID on the API.
-              </p>
-            )}
+            ) : null}
 
+            {!oauthAvailable ? (
+              <p className="text-sm text-app-ink-dim">
+                Atlassian OAuth is not configured on the server. Set{" "}
+                <code className="rounded bg-app-surface-muted px-1 text-xs">ATLASSIAN_CLIENT_ID</code> and{" "}
+                <code className="rounded bg-app-surface-muted px-1 text-xs">ATLASSIAN_CLIENT_SECRET</code> on Render, or use the API token form below.
+              </p>
+            ) : null}
+          </div>
+        )}
+
+        {connected && connectedViaOAuth ? (
+          <div className="border-t border-app-border px-4 pb-4 pt-3 sm:px-6">
             <button
               type="button"
               onClick={() => setShowLegacyForm((v) => !v)}
               className="text-sm text-app-ink-dim underline hover:text-app-ink"
             >
-              {showLegacyForm ? "Hide API token connect" : "Use API token (legacy)"}
+              {showLegacyForm ? "Hide API token form" : "Switch to API token"}
             </button>
           </div>
-        )}
+        ) : null}
 
         {(!connected || showLegacyForm) && !connectedViaOAuth ? (
           <form className="grid gap-4 border-t border-app-border p-4 md:grid-cols-2 sm:px-6" onSubmit={handleConnect}>
-            <label className="block text-sm md:col-span-2">
-              <span className="type-kicker text-app-ink-mute">Legacy — API token (Basic auth)</span>
-            </label>
+          <label className="block text-sm md:col-span-2">
+            <span className="type-kicker text-app-ink-mute">
+              {connected ? "Update API token credentials" : "API token — works for everyone"}
+            </span>
+          </label>
             <label className="block text-sm">
               <span className="type-kicker">Base URL</span>
               <input

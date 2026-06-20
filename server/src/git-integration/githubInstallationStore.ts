@@ -243,9 +243,9 @@ export async function unlinkGithubInstallationFromOrganization(
 
 export async function removeGithubInstallation(installationId: string): Promise<void> {
   if (!process.env.DATABASE_URL?.trim()) return;
-  await prismaAny.githubInstallation.deleteMany({
-    where: { installationId },
-  });
+  // Remove repository rows first to avoid FK constraint violations
+  await prismaAny.githubRepository.deleteMany({ where: { installationId } });
+  await prismaAny.githubInstallation.deleteMany({ where: { installationId } });
 }
 
 export async function persistInstallationFlow(input: {
