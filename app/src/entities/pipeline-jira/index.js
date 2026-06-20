@@ -29,8 +29,12 @@ export async function registerPipelineJiraWebhook(body = {}) {
   });
 }
 
-export async function getPipelineJiraBoardColumns() {
-  return fetchJson(root("/boards/columns"), { headers: requestHeaders() });
+export async function getPipelineJiraBoardColumns(boardId) {
+  const query =
+    boardId != null && String(boardId).trim()
+      ? `?boardId=${encodeURIComponent(String(boardId).trim())}`
+      : "";
+  return fetchJson(root(`/boards/columns${query}`), { headers: requestHeaders() });
 }
 
 export async function getPipelineJiraProjects() {

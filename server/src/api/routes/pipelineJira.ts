@@ -242,7 +242,9 @@ router.get("/boards/columns", async (req, res, next) => {
     if (!user?.organizationId) return;
 
     await withOrganizationContext(user.organizationId, async () => {
-      const columns = await getBoardColumnsOrdered();
+      const boardId =
+        typeof req.query.boardId === "string" ? req.query.boardId.trim() : undefined;
+      const columns = await getBoardColumnsOrdered(boardId);
       res.json({ columns });
     });
   } catch (err) {

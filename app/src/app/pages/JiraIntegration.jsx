@@ -127,10 +127,12 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   const clearedOAuthParams = useRef(false);
 
   const canConnectLegacy =
-    baseUrl &&
-    boardId &&
-    projectKeys.trim() &&
+    baseUrl.trim() &&
+    (email.trim() || setup?.jira?.email) &&
     (apiToken.trim() || setup?.jira?.hasApiToken);
+
+  /** OAuth or API token — load project/board lists whenever Jira is linked in DB */
+  const canPickProjectBoard = Boolean(connected && setup?.jira?.configured);
 
   useEffect(() => {
     let cancelled = false;
@@ -193,7 +195,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   }, [setup?.jira?.projectKeys, selectedProjectKey]);
 
   useEffect(() => {
-    if (!pipelineReady || authMethod !== "oauth") return;
+    if (!canPickProjectBoard) return;
     let cancelled = false;
     (async () => {
       setLoadingProjects(true);
@@ -202,6 +204,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
         if (!cancelled) {
           setJiraProjects(projects ?? []);
           boardsErrorRef.current = "";
+          setConnectError("");
         }
       } catch (err) {
         if (!cancelled) {
@@ -214,10 +217,10 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
     return () => {
       cancelled = true;
     };
-  }, [pipelineReady, authMethod]);
+  }, [canPickProjectBoard]);
 
   useEffect(() => {
-    if (!pipelineReady || authMethod !== "oauth" || !selectedProjectKey) {
+    if (!canPickProjectBoard || !selectedProjectKey) {
       setJiraBoards([]);
       return undefined;
     }
@@ -246,23 +249,25 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
     return () => {
       cancelled = true;
     };
-  }, [pipelineReady, authMethod, selectedProjectKey]);
+  }, [canPickProjectBoard, selectedProjectKey]);
 
   useEffect(() => {
-    if (!connected || !boardId || !/^\d+$/.test(String(boardId).trim())) return;
+    if (!canPickProjectBoard || !boardId || !/^\d+$/.test(String(boardId).trim())) {
+      return undefined;
+    }
     let cancelled = false;
     (async () => {
       try {
-        const { columns: cols } = await getPipelineJiraBoardColumns();
+        const { columns: cols } = await getPipelineJiraBoardColumns(boardId);
         if (!cancelled && cols?.length) setColumns(cols);
       } catch {
-        /* optional until board mapped */
+        /* optional until board saved */
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [connected, boardId]);
+  }, [canPickProjectBoard, boardId]);
 
   const columnOptions = useMemo(
     () => columns.map((c) => c.name).filter(Boolean),
@@ -272,20 +277,19 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   async function handleSavePipelineSettings(e) {
     e.preventDefault();
     const id = boardId.trim();
-    if (authMethod === "oauth" && (!selectedProjectKey || !id || !/^\d+$/.test(id))) {
+    if (!selectedProjectKey || !id || !/^\d+$/.test(id)) {
       setConnectError("Select a project and board from the dropdowns before saving.");
       return;
     }
     setConnectPending(true);
     setConnectError("");
     try {
-      const keys =
-        authMethod === "oauth" && selectedProjectKey
-          ? [selectedProjectKey]
-          : projectKeys
-              .split(",")
-              .map((k) => k.trim())
-              .filter(Boolean);
+      const keys = selectedProjectKey
+        ? [selectedProjectKey]
+        : projectKeys
+            .split(",")
+            .map((k) => k.trim())
+            .filter(Boolean);
       await connectPipelineJira({
         baseUrl: (setup?.jira?.baseUrl || baseUrl).trim(),
         email: setup?.jira?.email || email.trim() || undefined,
@@ -295,7 +299,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
       setStatusMessage("Pipeline settings saved.");
       await refetchSetup();
       if (boardId.trim()) {
-        const { columns: cols } = await getPipelineJiraBoardColumns();
+        const { columns: cols } = await getPipelineJiraBoardColumns(id);
         if (cols?.length) setColumns(cols);
       }
     } catch (err) {
@@ -370,11 +374,6 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
         email: email.trim() || undefined,
         apiToken: apiToken.trim() || undefined,
         webhookSecret: webhookSecret.trim() || undefined,
-        boardId: boardId.trim(),
-        projectKeys: projectKeys
-          .split(",")
-          .map((k) => k.trim())
-          .filter(Boolean),
       });
       setApiToken("");
       setStatusMessage("Jira connected with API token.");
@@ -637,23 +636,9 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
                 placeholder={setup?.jira?.hasApiToken ? "Saved — leave blank to keep" : "Required"}
               />
             </label>
-            <label className="block text-sm">
-              <span className="type-kicker">Board ID</span>
-              <input
-                className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
-                value={boardId}
-                onChange={(e) => setBoardId(e.target.value)}
-              />
-            </label>
-            <label className="block text-sm md:col-span-2">
-              <span className="type-kicker">Project keys (comma-separated)</span>
-              <input
-                className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
-                value={projectKeys}
-                onChange={(e) => setProjectKeys(e.target.value)}
-                placeholder="SCRUM"
-              />
-            </label>
+            <p className="text-xs text-app-ink-mute md:col-span-2">
+              After connecting, choose your project and board in <strong>Pipeline settings</strong> below.
+            </p>
             <label className="block text-sm md:col-span-2">
               <span className="type-kicker">Webhook secret (optional)</span>
               <input
@@ -679,95 +664,77 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
         <Panel>
           <PanelHeader
             title="Pipeline settings"
-            subtitle={
-              authMethod === "oauth"
-                ? "Pick your Jira project and board — no API token needed."
-                : undefined
-            }
+            subtitle="Choose your Jira project and board — loaded automatically from your site."
           />
           <form
             className="grid gap-4 p-4 md:grid-cols-2 sm:px-6"
             onSubmit={handleSavePipelineSettings}
           >
-            {authMethod === "oauth" ? (
-              <>
-                <label className="block text-sm">
-                  <span className="type-kicker">Project</span>
-                  <select
-                    className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
-                    value={selectedProjectKey}
-                    onChange={(e) => {
-                      const key = e.target.value;
-                      setSelectedProjectKey(key);
-                      setProjectKeys(key);
-                      setBoardId("");
-                      boardsErrorRef.current = "";
-                    }}
-                    disabled={loadingProjects}
-                  >
-                    <option value="">
-                      {loadingProjects ? "Loading projects…" : "Select a project…"}
-                    </option>
-                    {jiraProjects.map((p) => (
-                      <option key={p.key} value={p.key}>
-                        {p.key} — {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="block text-sm">
-                  <span className="type-kicker">Board</span>
-                  <select
-                    className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
-                    value={boardId}
-                    onChange={(e) => setBoardId(e.target.value)}
-                    disabled={!selectedProjectKey || loadingBoards}
-                  >
-                    <option value="">
-                      {!selectedProjectKey
-                        ? "Select a project first"
-                        : loadingBoards
-                          ? "Loading boards…"
-                          : "Select a board…"}
-                    </option>
-                    {jiraBoards.map((b) => (
-                      <option key={b.id} value={String(b.id)}>
-                        {b.name} ({b.type}) · #{b.id}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </>
-            ) : (
-              <>
-                <label className="block text-sm">
-                  <span className="type-kicker">Board ID</span>
-                  <input
-                    className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
-                    value={boardId}
-                    onChange={(e) => setBoardId(e.target.value)}
-                    placeholder="Numeric board id from Jira board URL"
-                  />
-                </label>
-                <label className="block text-sm">
-                  <span className="type-kicker">Project keys</span>
-                  <input
-                    className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
-                    value={projectKeys}
-                    onChange={(e) => setProjectKeys(e.target.value)}
-                    placeholder="SCRUM"
-                  />
-                </label>
-              </>
-            )}
+            <label className="block text-sm">
+              <span className="type-kicker">Project</span>
+              <select
+                className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
+                value={selectedProjectKey}
+                onChange={(e) => {
+                  const key = e.target.value;
+                  setSelectedProjectKey(key);
+                  setProjectKeys(key);
+                  setBoardId("");
+                  boardsErrorRef.current = "";
+                  setColumns([]);
+                }}
+                disabled={loadingProjects || !canPickProjectBoard}
+              >
+                <option value="">
+                  {loadingProjects
+                    ? "Loading projects…"
+                    : !canPickProjectBoard
+                      ? "Connect Jira first"
+                      : jiraProjects.length
+                        ? "Select a project…"
+                        : "No projects found"}
+                </option>
+                {jiraProjects.map((p) => (
+                  <option key={p.key} value={p.key}>
+                    {p.key} — {p.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-sm">
+              <span className="type-kicker">Board</span>
+              <select
+                className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
+                value={boardId}
+                onChange={(e) => setBoardId(e.target.value)}
+                disabled={!selectedProjectKey || loadingBoards}
+              >
+                <option value="">
+                  {!selectedProjectKey
+                    ? "Select a project first"
+                    : loadingBoards
+                      ? "Loading boards…"
+                      : jiraBoards.length
+                        ? "Select a board…"
+                        : "No boards for this project"}
+                </option>
+                {jiraBoards.map((b) => (
+                  <option key={b.id} value={String(b.id)}>
+                    {b.name} ({b.type}) · #{b.id}
+                  </option>
+                ))}
+              </select>
+            </label>
             <div className="md:col-span-2">
               <button
                 type="submit"
                 disabled={
+                  !selectedProjectKey ||
                   !boardId.trim() ||
-                  !projectKeys.trim() ||
+                  !/^\d+$/.test(boardId.trim()) ||
                   connectPending ||
-                  (authMethod === "oauth" && (loadingProjects || loadingBoards))
+                  loadingProjects ||
+                  loadingBoards
                 }
                 className="app-btn-primary disabled:opacity-50"
               >
@@ -776,6 +743,12 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
             </div>
           </form>
         </Panel>
+      ) : null}
+
+      {connected && canPickProjectBoard && !loadingProjects && jiraProjects.length === 0 && !connectError ? (
+        <p className="text-sm text-app-ink-dim">
+          No Jira projects visible for your account. Confirm you have Browse projects permission in Jira.
+        </p>
       ) : null}
 
       {connected ? (
@@ -797,6 +770,13 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
                 ))}
               </select>
             </label>
+            {!columnOptions.length ? (
+              <p className="text-xs text-app-ink-mute">
+                {boardId && /^\d+$/.test(String(boardId))
+                  ? "Loading columns… or save pipeline settings first."
+                  : "Select a project and board above to load columns."}
+              </p>
+            ) : null}
             <button
               type="submit"
               disabled={!intakeColumn || mappingPending}

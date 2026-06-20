@@ -94,9 +94,10 @@ export async function listJiraBoards(projectKey?: string): Promise<JiraBoardOpti
     .filter((b) => Number.isFinite(b.id));
 }
 
-export async function getBoardColumnsOrdered(): Promise<BoardColumnDto[]> {
+export async function getBoardColumnsOrdered(boardIdOverride?: string): Promise<BoardColumnDto[]> {
   ensurePipelineReady();
-  const { boardId } = getPipelineIntakeMapping();
+  const { boardId: mappedId } = getPipelineIntakeMapping();
+  const boardId = (boardIdOverride ?? mappedId)?.trim();
   if (!boardId) {
     throw new ValidationError(
       "Board ID is not set — choose a project and board in Pipeline settings first."
