@@ -28,6 +28,7 @@ import {
   savePipelineCompletionSettings,
   savePipelineIntakeColumn,
 } from "../../pipeline/jira/intakeConfig";
+import { reconcileOrganizationJiraIntegration } from "../../pipeline/jira/reconcileIntegration";
 import { getJiraIssueStats } from "../../jira-sync/issueRepository";
 import { getLatestSyncRun, isJiraSyncRunning } from "../../jira-sync/syncService";
 import { getJiraSyncConfig } from "../../jira-sync/config";
@@ -74,6 +75,8 @@ function normalizePipelineError(err: unknown): unknown {
 router.get("/setup", async (req, res) => {
   const user = requireOrganizationUser(req, res);
   if (!user?.organizationId) return;
+
+  await reconcileOrganizationJiraIntegration(user.organizationId);
 
   await withOrganizationContext(user.organizationId, async () => {
     const jira = await getPublicOrganizationJiraConfig(user.organizationId!);

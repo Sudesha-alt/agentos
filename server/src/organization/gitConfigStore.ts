@@ -145,3 +145,27 @@ export async function getPublicOrganizationGitConfig(
 export async function clearOrganizationGitConfig(organizationId: string): Promise<void> {
   await prisma.organizationGitConfig.deleteMany({ where: { organizationId } });
 }
+
+/** Remove all GitHub/Git integration data for a workspace (DB + install + cache). */
+export async function purgeOrganizationGitIntegration(
+  organizationId: string
+): Promise<void> {
+  const config = await loadOrganizationGitConfig(organizationId);
+  const installationId = config?.installationId ?? null;
+
+  await clearOrganizationGitConfig(organizationId);
+
+  const {
+    clearOrganizationGitRuntime,
+    activateOrganizationGitContext,
+  } = await import("../git-integration/gitCredentialsStore");
+  clearOrganizationGitRuntime(organizationId);
+  activateOrganizationGitContext(null);
+
+  if (installationId) {
+    const { removeGithubInstallation } = await import(
+      "../git-integration/githubInstallationStore"
+    );
+    await removeGithubInstallation(installationId);
+  }
+}

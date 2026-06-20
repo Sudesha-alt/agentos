@@ -12,9 +12,9 @@ import {
 } from "../../jira-oauth/atlassianOAuth";
 import { createJiraOAuthState, validateJiraOAuthState } from "../../jira-oauth/stateStore";
 import {
-  clearOrganizationJiraConfig,
   getPublicOrganizationJiraConfig,
   isAtlassianOAuthEnabled,
+  purgeOrganizationJiraIntegration,
   saveOrganizationJiraOAuthConfig,
 } from "../../organization/jiraConfigStore";
 import {
@@ -244,9 +244,12 @@ router.post("/disconnect", async (req, res, next) => {
     const user = requireOrganizationUser(req, res);
     if (!user?.organizationId) return;
 
-    await clearOrganizationJiraConfig(user.organizationId);
+    await purgeOrganizationJiraIntegration(user.organizationId);
     activateOrganizationJiraContext(null);
-    res.json({ disconnected: true });
+    res.json({
+      disconnected: true,
+      message: "Jira integration removed. Connect again to set up OAuth, projects, boards, and webhooks.",
+    });
   } catch (err) {
     next(err);
   }

@@ -62,6 +62,13 @@ export function activateOrganizationJiraContext(organizationId: string | null): 
   }
 }
 
+export function clearOrganizationJiraRuntime(organizationId: string): void {
+  orgRuntimeCreds.delete(organizationId);
+  if (getActiveOrganizationId() === organizationId) {
+    runtimeCreds = null;
+  }
+}
+
 function normalizeBaseUrl(url: string): string {
   return url.replace(/\/+$/, "");
 }

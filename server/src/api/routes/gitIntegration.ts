@@ -19,6 +19,7 @@ import {
   probeGithubAppCredentials,
 } from "../../integrations/git/githubApp";
 import { resolveGitIntegrationSetupState } from "../../git-integration/gitSetupState";
+import { reconcileOrganizationGithubIntegration } from "../../git-integration/reconcileIntegration";
 import { repairOrganizationGithubInstall } from "../../git-integration/githubOrgRepair";
 import { getLatestGithubInstallState } from "../../git-integration/githubInstallationStore";
 import { parseOAuthState, createOAuthState } from "../../git-integration/oauthState";
@@ -74,6 +75,7 @@ router.get("/integration/setup", async (req, res, next) => {
 
     await withOrganizationContext(user.organizationId, async () => {
       const orgSlug = await resolveOrgSlug(user.organizationId, user.organizationSlug);
+      await reconcileOrganizationGithubIntegration(user.organizationId!);
       await repairOrganizationGithubInstall(user.organizationId!);
       const git = await getPublicOrganizationGitConfig(user.organizationId!);
       const setupState = await resolveGitIntegrationSetupState(git, {
@@ -375,29 +377,17 @@ router.post("/integration/disconnect", async (req, res, next) => {
     const user = requireOrganizationUser(req, res);
     if (!user?.organizationId) return;
 
-    const { loadOrganizationGitConfig, clearOrganizationGitConfig } = await import(
+    const { purgeOrganizationGitIntegration } = await import(
       "../../organization/gitConfigStore"
     );
-    const { removeGithubInstallation } = await import(
-      "../../git-integration/githubInstallationStore"
-    );
 
-    // Read installationId before clearing so we can fully delete the installation.
-    // Just unlinking (organizationId = null) would cause repairOrganizationGithubInstall
-    // to immediately re-bind the orphan on the next setup call.
-    const config = await loadOrganizationGitConfig(user.organizationId);
-    const installationId = config?.installationId ?? null;
-
-    await clearOrganizationGitConfig(user.organizationId);
-
-    if (installationId) {
-      await removeGithubInstallation(installationId);
-    }
+    await purgeOrganizationGitIntegration(user.organizationId);
 
     res.json({
       ok: true,
+      disconnected: true,
       message:
-        "GitHub disconnected. Indexed codebase data is kept; to revoke GitHub access entirely, uninstall the AgentOS app from your GitHub account settings.",
+        "GitHub integration removed. Connect with GitHub again to install the app and select a repository.",
     });
   } catch (err) {
     next(err);

@@ -210,6 +210,13 @@ export function activateOrganizationGitContext(organizationId: string | null): v
   }
 }
 
+export function clearOrganizationGitRuntime(organizationId: string): void {
+  orgRuntimeCreds.delete(organizationId);
+  if (getActiveOrganizationId() === organizationId) {
+    runtimeCreds = null;
+  }
+}
+
 function getActiveGitCredentialsInternal(): StoredGitCredentials | null {
   const orgId = getActiveOrganizationId();
   if (orgId) {
