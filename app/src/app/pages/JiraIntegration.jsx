@@ -3,6 +3,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import {
   connectPipelineJira,
   getPipelineJiraBoardColumns,
+  getPipelineJiraBoards,
+  getPipelineJiraProjects,
   registerPipelineJiraWebhook,
   savePipelineIntakeColumn,
   usePipelineIntakeTickets,
@@ -97,10 +99,12 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   const [disconnectPending, setDisconnectPending] = useState(false);
   const [mappingPending, setMappingPending] = useState(false);
   const [webhookPending, setWebhookPending] = useState(false);
-  const [showLegacyForm, setShowLegacyForm] = useState(
-    // Show API token form by default when not connected — it works unconditionally
-    () => !connected || (connected && !connectedViaOAuth)
-  );
+  const [showLegacyForm, setShowLegacyForm] = useState(false);
+  const [jiraProjects, setJiraProjects] = useState([]);
+  const [jiraBoards, setJiraBoards] = useState([]);
+  const [selectedProjectKey, setSelectedProjectKey] = useState("");
+  const [loadingProjects, setLoadingProjects] = useState(false);
+  const [loadingBoards, setLoadingBoards] = useState(false);
   const [oauthAvailable, setOauthAvailable] = useState(false);
   const [oauthDevMode, setOauthDevMode] = useState(false);
   const [statusMessage, setStatusMessage] = useState(() => {
@@ -154,7 +158,68 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   }, [searchParams, setSearchParams]);
 
   useEffect(() => {
-    if (!connected) return;
+    if (connectedViaOAuth) {
+      setShowLegacyForm(false);
+    }
+  }, [connectedViaOAuth]);
+
+  useEffect(() => {
+    if (setup?.jira?.projectKeys?.length && !selectedProjectKey) {
+      setSelectedProjectKey(setup.jira.projectKeys[0]);
+      setProjectKeys(setup.jira.projectKeys.join(", "));
+    }
+    if (setup?.intake?.boardId && !boardId) {
+      setBoardId(setup.intake.boardId);
+    }
+  }, [setup?.jira?.projectKeys, setup?.intake?.boardId, selectedProjectKey, boardId]);
+
+  useEffect(() => {
+    if (!connected || authMethod !== "oauth") return;
+    let cancelled = false;
+    (async () => {
+      setLoadingProjects(true);
+      try {
+        const { projects } = await getPipelineJiraProjects();
+        if (!cancelled) setJiraProjects(projects ?? []);
+      } catch (err) {
+        if (!cancelled) {
+          setConnectError(err.message || "Could not load Jira projects");
+        }
+      } finally {
+        if (!cancelled) setLoadingProjects(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [connected, authMethod]);
+
+  useEffect(() => {
+    if (!connected || authMethod !== "oauth" || !selectedProjectKey) {
+      setJiraBoards([]);
+      return undefined;
+    }
+    let cancelled = false;
+    (async () => {
+      setLoadingBoards(true);
+      try {
+        const { boards } = await getPipelineJiraBoards(selectedProjectKey);
+        if (!cancelled) setJiraBoards(boards ?? []);
+      } catch (err) {
+        if (!cancelled) {
+          setConnectError(err.message || "Could not load Jira boards");
+        }
+      } finally {
+        if (!cancelled) setLoadingBoards(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [connected, authMethod, selectedProjectKey]);
+
+  useEffect(() => {
+    if (!connected || !boardId) return;
     let cancelled = false;
     (async () => {
       try {
@@ -167,15 +232,43 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
     return () => {
       cancelled = true;
     };
-  }, [connected]);
+  }, [connected, boardId]);
 
   const columnOptions = useMemo(
     () => columns.map((c) => c.name).filter(Boolean),
     [columns]
   );
 
+  async function handleSavePipelineSettings(e) {
+    e.preventDefault();
+    setConnectPending(true);
+    setConnectError("");
+    try {
+      await connectPipelineJira({
+        baseUrl: (setup?.jira?.baseUrl || baseUrl).trim(),
+        email: setup?.jira?.email || email.trim() || undefined,
+        boardId: boardId.trim(),
+        projectKeys: projectKeys
+          .split(",")
+          .map((k) => k.trim())
+          .filter(Boolean),
+      });
+      setStatusMessage("Pipeline settings saved.");
+      await refetchSetup();
+      if (boardId.trim()) {
+        const { columns: cols } = await getPipelineJiraBoardColumns();
+        if (cols?.length) setColumns(cols);
+      }
+    } catch (err) {
+      setConnectError(err.message || "Could not save settings");
+    } finally {
+      setConnectPending(false);
+    }
+  }
+
   const intakeStatuses = setup?.intake?.aiWorkerStatuses ?? [];
   const intakeItems = intakeData?.items ?? [];
+  const showApiTokenForm = showLegacyForm && !connectedViaOAuth;
 
   async function handleOAuthConnect() {
     setOauthPending(true);
@@ -270,6 +363,12 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
       kicker="Jira"
       title="Jira pipeline"
     >
+
+      {connectedViaOAuth && statusMessage ? (
+        <p className="rounded-app-sm border border-indigo/30 bg-indigo/5 px-4 py-2.5 text-sm text-app-ink-dim">
+          OAuth is connected. Choose your <strong>project</strong> and <strong>board</strong> in Pipeline settings below, then pick an intake column.
+        </p>
+      ) : null}
 
       {statusMessage ? (
         <p className="rounded-app-sm border border-success/30 bg-success/10 px-4 py-2.5 text-sm text-success">
@@ -386,6 +485,16 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
                 <code className="rounded bg-app-surface-muted px-1 text-xs">ATLASSIAN_CLIENT_SECRET</code> on Render, or use the API token form below.
               </p>
             ) : null}
+
+            {!oauthAvailable || oauthDevMode ? (
+              <button
+                type="button"
+                onClick={() => setShowLegacyForm((v) => !v)}
+                className="text-sm text-app-ink-dim underline hover:text-app-ink"
+              >
+                {showLegacyForm ? "Hide API token form" : "Use API token instead"}
+              </button>
+            ) : null}
           </div>
         )}
 
@@ -401,7 +510,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
           </div>
         ) : null}
 
-        {(!connected || showLegacyForm) && !connectedViaOAuth ? (
+        {showApiTokenForm ? (
           <form className="grid gap-4 border-t border-app-border p-4 md:grid-cols-2 sm:px-6" onSubmit={handleConnect}>
           <label className="block text-sm md:col-span-2">
             <span className="type-kicker text-app-ink-mute">
@@ -475,53 +584,97 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
 
       {connected ? (
         <Panel>
-          <PanelHeader title="Pipeline settings" />
+          <PanelHeader
+            title="Pipeline settings"
+            subtitle={
+              authMethod === "oauth"
+                ? "Pick your Jira project and board — no API token needed."
+                : undefined
+            }
+          />
           <form
             className="grid gap-4 p-4 md:grid-cols-2 sm:px-6"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              setConnectPending(true);
-              setConnectError("");
-              try {
-                await connectPipelineJira({
-                  baseUrl: (setup?.jira?.baseUrl || baseUrl).trim(),
-                  email: setup?.jira?.email || email.trim() || undefined,
-                  boardId: boardId.trim(),
-                  projectKeys: projectKeys
-                    .split(",")
-                    .map((k) => k.trim())
-                    .filter(Boolean),
-                });
-                setStatusMessage("Pipeline settings saved.");
-                await refetchSetup();
-              } catch (err) {
-                setConnectError(err.message || "Could not save settings");
-              } finally {
-                setConnectPending(false);
-              }
-            }}
+            onSubmit={handleSavePipelineSettings}
           >
-            <label className="block text-sm">
-              <span className="type-kicker">Board ID</span>
-              <input
-                className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
-                value={boardId}
-                onChange={(e) => setBoardId(e.target.value)}
-              />
-            </label>
-            <label className="block text-sm">
-              <span className="type-kicker">Project keys</span>
-              <input
-                className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
-                value={projectKeys}
-                onChange={(e) => setProjectKeys(e.target.value)}
-                placeholder="SCRUM"
-              />
-            </label>
+            {authMethod === "oauth" ? (
+              <>
+                <label className="block text-sm">
+                  <span className="type-kicker">Project</span>
+                  <select
+                    className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
+                    value={selectedProjectKey}
+                    onChange={(e) => {
+                      const key = e.target.value;
+                      setSelectedProjectKey(key);
+                      setProjectKeys(key);
+                      setBoardId("");
+                    }}
+                    disabled={loadingProjects}
+                  >
+                    <option value="">
+                      {loadingProjects ? "Loading projects…" : "Select a project…"}
+                    </option>
+                    {jiraProjects.map((p) => (
+                      <option key={p.key} value={p.key}>
+                        {p.key} — {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="block text-sm">
+                  <span className="type-kicker">Board</span>
+                  <select
+                    className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
+                    value={boardId}
+                    onChange={(e) => setBoardId(e.target.value)}
+                    disabled={!selectedProjectKey || loadingBoards}
+                  >
+                    <option value="">
+                      {!selectedProjectKey
+                        ? "Select a project first"
+                        : loadingBoards
+                          ? "Loading boards…"
+                          : "Select a board…"}
+                    </option>
+                    {jiraBoards.map((b) => (
+                      <option key={b.id} value={String(b.id)}>
+                        {b.name} ({b.type}) · #{b.id}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </>
+            ) : (
+              <>
+                <label className="block text-sm">
+                  <span className="type-kicker">Board ID</span>
+                  <input
+                    className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
+                    value={boardId}
+                    onChange={(e) => setBoardId(e.target.value)}
+                    placeholder="Numeric board id from Jira board URL"
+                  />
+                </label>
+                <label className="block text-sm">
+                  <span className="type-kicker">Project keys</span>
+                  <input
+                    className="mt-1.5 w-full rounded-app-sm border border-app-border bg-app-surface px-3 py-2 text-sm"
+                    value={projectKeys}
+                    onChange={(e) => setProjectKeys(e.target.value)}
+                    placeholder="SCRUM"
+                  />
+                </label>
+              </>
+            )}
             <div className="md:col-span-2">
               <button
                 type="submit"
-                disabled={!boardId.trim() || !projectKeys.trim() || connectPending}
+                disabled={
+                  !boardId.trim() ||
+                  !projectKeys.trim() ||
+                  connectPending ||
+                  (authMethod === "oauth" && (loadingProjects || loadingBoards))
+                }
                 className="app-btn-primary disabled:opacity-50"
               >
                 {connectPending ? "Saving…" : "Save pipeline settings"}

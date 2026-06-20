@@ -33,6 +33,17 @@ export async function getPipelineJiraBoardColumns() {
   return fetchJson(root("/boards/columns"), { headers: requestHeaders() });
 }
 
+export async function getPipelineJiraProjects() {
+  return fetchJson(root("/projects"), { headers: requestHeaders() });
+}
+
+export async function getPipelineJiraBoards(projectKey) {
+  const query = projectKey?.trim()
+    ? `?projectKey=${encodeURIComponent(projectKey.trim())}`
+    : "";
+  return fetchJson(root(`/boards${query}`), { headers: requestHeaders() });
+}
+
 export async function savePipelineIntakeColumn(body) {
   return fetchJson(root("/intake-column"), {
     method: "PUT",
