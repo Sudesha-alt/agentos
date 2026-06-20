@@ -94,6 +94,15 @@ export function createBitbucketProvider(
       };
     },
 
+    async branchExists(ctx, branchName) {
+      try {
+        await listDir(ctx, branchName, "");
+        return true;
+      } catch {
+        return false;
+      }
+    },
+
     async getRepoTree(ctx, branchName) {
       const items: GitTreeItem[] = [];
       await walkTree(ctx, branchName, "", items);

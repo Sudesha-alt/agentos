@@ -144,7 +144,7 @@ export async function selectGithubRepository(input: {
   };
 
   const defaultBranch =
-    input.defaultBranch?.trim() || meta.default_branch || "main";
+    meta.default_branch?.trim() || input.defaultBranch?.trim() || "main";
 
   if (input.organizationId) {
     await saveGitCredentialsForOrganization(input.organizationId, {

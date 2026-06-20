@@ -1,5 +1,6 @@
 import { runFullIndex, runIncrementalIndex } from "./indexer";
 import { getRepoContext } from "../git-integration/gitCredentialsStore";
+import { resolveRepoIndexBranch } from "../git-integration/resolveRepoBranch";
 import { requireActiveOrganizationId } from "../organization/orgScope";
 import { prisma } from "../db/client";
 import { logger } from "../utils/logger";
@@ -43,13 +44,14 @@ export async function enqueueFullIndex(
 ): Promise<EnqueueFullIndexResult> {
   const organizationId = requireActiveOrganizationId();
   const { workspace: repoOwner, repoSlug: repoName } = getRepoContext();
+  const resolvedBranch = await resolveRepoIndexBranch(branchName);
 
   const run = await prismaAny.codebaseIndexRun.create({
     data: {
       organizationId,
       repoOwner,
       repoName,
-      branchName,
+      branchName: resolvedBranch,
       runType: "full",
       status: "running",
       triggerType,
@@ -57,11 +59,11 @@ export async function enqueueFullIndex(
     },
   });
 
-  void runFullIndex(branchName, { runId: run.id, triggerType }).catch((err) => {
-    logger.warn({ err, runId: run.id, branchName }, "in-process full index failed");
+  void runFullIndex(resolvedBranch, { runId: run.id, triggerType }).catch((err) => {
+    logger.warn({ err, runId: run.id, branchName: resolvedBranch }, "in-process full index failed");
   });
 
-  logger.info({ runId: run.id, branchName, triggerType }, "started full codebase index in-process");
+  logger.info({ runId: run.id, branchName: resolvedBranch, triggerType }, "started full codebase index in-process");
   return { runId: run.id, queued: false };
 }
 

@@ -8,6 +8,7 @@ import {
 } from "../llm/openaiClient";
 import { gitClient } from "../integrations/gitProvider";
 import { getRepoContext } from "../git-integration/gitCredentialsStore";
+import { resolveRepoIndexBranch } from "../git-integration/resolveRepoBranch";
 import { getGitCredentials } from "../git-integration/gitCredentialsStore";
 import { fetchFilesAtRef } from "../integrations/git/githubGraphqlClient";
 import { requireActiveOrganizationId } from "../organization/orgScope";
@@ -106,6 +107,8 @@ export async function runFullIndex(
   branchName: string,
   options?: { runId?: string; triggerType?: "manual" | "webhook" | "pr_merge" }
 ): Promise<IndexRunResult> {
+  const resolvedBranch = await resolveRepoIndexBranch(branchName);
+  branchName = resolvedBranch;
   const { repoOwner, repoName } = assertRepoContext();
   const startedAt = Date.now();
 
@@ -114,7 +117,11 @@ export async function runFullIndex(
   if (runId) {
     await prismaAny.codebaseIndexRun.update({
       where: { id: runId },
-      data: { status: "running", triggerType: options?.triggerType ?? "manual" },
+      data: {
+        status: "running",
+        triggerType: options?.triggerType ?? "manual",
+        branchName: resolvedBranch,
+      },
     });
   } else {
     const run = await prismaAny.codebaseIndexRun.create({

@@ -11,6 +11,7 @@ import {
   indexRunProgress,
 } from "../../codebaseIntelligence/indexQueue";
 import { getRepoContext } from "../../git-integration/gitCredentialsStore";
+import { resolveRepoIndexBranch } from "../../git-integration/resolveRepoBranch";
 import {
   githubAppInstallUrl,
   githubAppPublicConfig,
@@ -418,10 +419,11 @@ router.post("/github/select-repo", async (req, res, next) => {
 router.post("/index/full", async (req, res) => {
   try {
     const ctx = getRepoContext();
-    const branchName =
+    const requested =
       typeof req.body?.branch === "string" && req.body.branch.trim()
         ? req.body.branch.trim()
         : ctx.defaultBranch;
+    const branchName = await resolveRepoIndexBranch(requested);
     const result = await enqueueFullIndex(branchName, "manual");
     res.json({
       ok: true,

@@ -80,6 +80,25 @@ export function createGithubProvider(
       return { fullName: data.full_name, defaultBranch: data.default_branch };
     },
 
+    async branchExists(ctx, branchName) {
+      try {
+        const token = await getToken();
+        const res = await fetch(
+          `${API_BASE}/repos/${ctx.workspace}/${ctx.repoSlug}/git/ref/heads/${encodeURIComponent(branchName)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+            },
+          }
+        );
+        return res.ok;
+      } catch {
+        return false;
+      }
+    },
+
     async getRepoTree(ctx, branchName) {
       const refData = await githubFetch<{ object: { sha: string } }>(
         `/repos/${ctx.workspace}/${ctx.repoSlug}/git/ref/heads/${encodeURIComponent(branchName)}`

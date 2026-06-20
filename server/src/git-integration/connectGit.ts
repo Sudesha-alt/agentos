@@ -58,7 +58,14 @@ export async function connectGit(input: {
       : createGithubProvider(() => Promise.resolve(draft.token));
 
   const meta = await client.testConnection(ctx);
-  const defaultBranch = input.defaultBranch?.trim() || meta.defaultBranch || draft.defaultBranch;
+  let defaultBranch =
+    meta.defaultBranch?.trim() || input.defaultBranch?.trim() || draft.defaultBranch;
+  if (input.defaultBranch?.trim() && meta.defaultBranch) {
+    const exists = await client.branchExists(ctx, input.defaultBranch.trim());
+    if (!exists) {
+      defaultBranch = meta.defaultBranch.trim();
+    }
+  }
 
   if (input.organizationId) {
     await saveOrganizationGitConfig(input.organizationId, {

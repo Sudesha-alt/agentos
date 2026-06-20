@@ -29,6 +29,7 @@ export interface GitPushFile {
 export interface GitProviderClient {
   readonly provider: GitProviderId;
   testConnection(ctx: GitRepoContext): Promise<{ fullName: string; defaultBranch?: string }>;
+  branchExists(ctx: GitRepoContext, branchName: string): Promise<boolean>;
   getRepoTree(ctx: GitRepoContext, branchName: string): Promise<GitTreeItem[]>;
   getFileContent(
     ctx: GitRepoContext,
