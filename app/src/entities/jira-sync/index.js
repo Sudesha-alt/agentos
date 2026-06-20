@@ -1,13 +1,18 @@
 import { apiPath } from "../../shared/config/apiBase";
 import { DATA_MODE } from "../../shared/config/app";
+import { authHeaders } from "../../shared/lib/authHeaders";
 import { fetchJson } from "../../shared/lib/fetchJson";
 import { useResource } from "../../shared/lib/useResource";
 import { mockApi } from "../../app/api/mock";
 
 const sync = (path) => apiPath("/api", `/jira-sync${path}`);
 
+function requestHeaders(extra = {}) {
+  return { ...authHeaders(), ...extra };
+}
+
 const restAdapter = {
-  getStatus: () => fetchJson(sync("/status")),
+  getStatus: () => fetchJson(sync("/status"), { headers: requestHeaders() }),
   listIssues: (params = {}) => {
     const qs = new URLSearchParams();
     if (params.status) qs.set("status", params.status);
@@ -16,14 +21,18 @@ const restAdapter = {
     if (params.limit != null) qs.set("limit", String(params.limit));
     if (params.offset != null) qs.set("offset", String(params.offset));
     const query = qs.toString();
-    return fetchJson(sync(`/issues${query ? `?${query}` : ""}`));
+    return fetchJson(sync(`/issues${query ? `?${query}` : ""}`), {
+      headers: requestHeaders(),
+    });
   },
   getIssue: (jiraKey) =>
-    fetchJson(sync(`/issues/${encodeURIComponent(jiraKey)}`)),
+    fetchJson(sync(`/issues/${encodeURIComponent(jiraKey)}`), {
+      headers: requestHeaders(),
+    }),
   runSync: (body = {}) =>
     fetchJson(sync("/run"), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: requestHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(body),
     }),
 };
@@ -56,6 +65,7 @@ export function runJiraSync(body) {
 export function useJiraSyncStatus(options = {}) {
   return useResource(() => getJiraSyncStatus(), [], {
     pollMs: options.pollMs ?? 8000,
+    skip: options.skip,
   });
 }
 
@@ -63,5 +73,6 @@ export function useJiraSyncIssues(params, options = {}) {
   const key = JSON.stringify(params ?? {});
   return useResource(() => listJiraSyncIssues(params), [key], {
     pollMs: options.pollMs ?? 12000,
+    skip: options.skip,
   });
 }

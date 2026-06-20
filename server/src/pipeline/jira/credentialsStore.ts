@@ -5,6 +5,7 @@ import {
   loadOrganizationJiraConfig,
   saveOrganizationJiraConfig,
 } from "../../organization/jiraConfigStore";
+import { ValidationError } from "../../utils/errors";
 
 export type JiraAuthMethod = "api_token" | "oauth";
 
@@ -198,7 +199,7 @@ export function validatePipelineJiraConfig(): void {
   }
 
   if (missing.length) {
-    throw new Error(`Pipeline Jira not configured: ${missing.join(", ")}`);
+    throw new ValidationError(`Pipeline Jira not configured: ${missing.join(", ")}`);
   }
 }
 

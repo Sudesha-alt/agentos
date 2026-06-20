@@ -164,14 +164,22 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   }, [connectedViaOAuth]);
 
   useEffect(() => {
+    if (setup?.intake?.boardId) {
+      const id = setup.intake.boardId;
+      if (/^\d+$/.test(id)) {
+        setBoardId(id);
+      } else if (id && !/^\d+$/.test(id)) {
+        setBoardId("");
+      }
+    }
+  }, [setup?.intake?.boardId]);
+
+  useEffect(() => {
     if (setup?.jira?.projectKeys?.length && !selectedProjectKey) {
       setSelectedProjectKey(setup.jira.projectKeys[0]);
       setProjectKeys(setup.jira.projectKeys.join(", "));
     }
-    if (setup?.intake?.boardId && !boardId) {
-      setBoardId(setup.intake.boardId);
-    }
-  }, [setup?.jira?.projectKeys, setup?.intake?.boardId, selectedProjectKey, boardId]);
+  }, [setup?.jira?.projectKeys, selectedProjectKey]);
 
   useEffect(() => {
     if (!connected || authMethod !== "oauth") return;
@@ -219,7 +227,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   }, [connected, authMethod, selectedProjectKey]);
 
   useEffect(() => {
-    if (!connected || !boardId) return;
+    if (!connected || !boardId || !/^\d+$/.test(String(boardId).trim())) return;
     let cancelled = false;
     (async () => {
       try {
@@ -241,17 +249,26 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
 
   async function handleSavePipelineSettings(e) {
     e.preventDefault();
+    const id = boardId.trim();
+    if (authMethod === "oauth" && (!selectedProjectKey || !id || !/^\d+$/.test(id))) {
+      setConnectError("Select a project and board from the dropdowns before saving.");
+      return;
+    }
     setConnectPending(true);
     setConnectError("");
     try {
+      const keys =
+        authMethod === "oauth" && selectedProjectKey
+          ? [selectedProjectKey]
+          : projectKeys
+              .split(",")
+              .map((k) => k.trim())
+              .filter(Boolean);
       await connectPipelineJira({
         baseUrl: (setup?.jira?.baseUrl || baseUrl).trim(),
         email: setup?.jira?.email || email.trim() || undefined,
-        boardId: boardId.trim(),
-        projectKeys: projectKeys
-          .split(",")
-          .map((k) => k.trim())
-          .filter(Boolean),
+        boardId: id,
+        projectKeys: keys,
       });
       setStatusMessage("Pipeline settings saved.");
       await refetchSetup();
@@ -345,6 +362,11 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   }
 
   async function handleRegisterWebhook() {
+    const keys = setup?.jira?.projectKeys ?? [];
+    if (!keys.length) {
+      setConnectError("Save pipeline settings (project + board) before registering the webhook.");
+      return;
+    }
     setWebhookPending(true);
     setStatusMessage("");
     try {
@@ -422,9 +444,14 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
               ) : null}
               <button
                 type="button"
-                disabled={webhookPending}
+                disabled={webhookPending || !(setup?.jira?.projectKeys?.length)}
                 onClick={handleRegisterWebhook}
-                className="rounded-app-sm border border-app-border px-4 py-2 text-sm text-app-ink-dim hover:text-app-ink"
+                className="rounded-app-sm border border-app-border px-4 py-2 text-sm text-app-ink-dim hover:text-app-ink disabled:opacity-50"
+                title={
+                  setup?.jira?.projectKeys?.length
+                    ? undefined
+                    : "Save project and board in Pipeline settings first"
+                }
               >
                 {webhookPending ? "Registering…" : "Register webhook"}
               </button>
@@ -724,7 +751,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
 
       {connected ? (
         <>
-          <JiraSyncStatusPanel setupSync={setup?.sync} />
+          <JiraSyncStatusPanel setupSync={setup?.sync} connected={connected} />
           <JiraTicketBrowser connected={connected} />
         </>
       ) : null}

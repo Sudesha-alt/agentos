@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { prisma } from "../db/client";
 import type { PipelineJiraCredentials } from "../pipeline/jira/credentialsStore";
+import { ValidationError } from "../utils/errors";
 
 export type JiraAuthMethod = "api_token" | "oauth";
 
@@ -234,6 +235,16 @@ export async function saveOrganizationPipelineIntake(
     statuses: string[];
   }
 ): Promise<void> {
+  const existing = await prisma.organizationJiraConfig.findUnique({
+    where: { organizationId },
+    select: { organizationId: true },
+  });
+  if (!existing) {
+    throw new ValidationError(
+      "Jira is not connected for this workspace. Connect via OAuth or API token first."
+    );
+  }
+
   await prisma.organizationJiraConfig.update({
     where: { organizationId },
     data: {
