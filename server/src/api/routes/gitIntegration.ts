@@ -416,26 +416,30 @@ router.post("/github/select-repo", async (req, res, next) => {
 });
 
 /** Fetch entire repo from GitHub → AI summaries → Postgres + vector embeddings → graph cache. */
-router.post("/index/full", async (req, res) => {
+router.post("/index/full", async (req, res, next) => {
   try {
-    const ctx = getRepoContext();
-    const requested =
-      typeof req.body?.branch === "string" && req.body.branch.trim()
-        ? req.body.branch.trim()
-        : ctx.defaultBranch;
-    const branchName = await resolveRepoIndexBranch(requested);
-    const result = await enqueueFullIndex(branchName, "manual");
-    res.json({
-      ok: true,
-      branchName,
-      repo: `${ctx.workspace}/${ctx.repoSlug}`,
-      runId: result.runId,
-      queued: result.queued,
-      message: "Full index started in-process on the API server",
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
+
+    await withOrganizationContext(user.organizationId, async () => {
+      const ctx = getRepoContext();
+      const requested =
+        typeof req.body?.branch === "string" && req.body.branch.trim()
+          ? req.body.branch.trim()
+          : ctx.defaultBranch;
+      const branchName = await resolveRepoIndexBranch(requested);
+      const result = await enqueueFullIndex(branchName, "manual");
+      res.json({
+        ok: true,
+        branchName,
+        repo: `${ctx.workspace}/${ctx.repoSlug}`,
+        runId: result.runId,
+        queued: result.queued,
+        message: "Full index started in-process on the API server",
+      });
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "index_enqueue_failed";
-    res.status(400).json({ error: "index_enqueue_failed", message });
+    next(err);
   }
 });
 

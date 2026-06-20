@@ -1,4 +1,5 @@
 import { prisma } from "../db/client";
+import { withOrganizationContext } from "../api/orgRequestContext";
 import { logger } from "../utils/logger";
 import { runFullIndex } from "./indexer";
 
@@ -33,9 +34,11 @@ export async function recoverStaleIndexRuns(): Promise<void> {
       "restarting full index after interruption"
     );
 
-    void runFullIndex(run.branchName, {
-      runId: run.id,
-      triggerType: run.triggerType ?? "manual",
+    void withOrganizationContext(run.organizationId, async () => {
+      await runFullIndex(run.branchName, {
+        runId: run.id,
+        triggerType: run.triggerType ?? "manual",
+      });
     }).catch((err) => {
       logger.warn({ err, runId: run.id }, "recovered full index failed");
     });
