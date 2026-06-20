@@ -70,6 +70,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   const { orgPath } = useOrg();
   const [searchParams, setSearchParams] = useSearchParams();
   const connected = Boolean(setup?.connected);
+  const pipelineReady = Boolean(setup?.pipelineReady ?? setup?.connected);
   const intakeConfigured = Boolean(setup?.intake?.aiWorkerColumnName);
   const connectedViaOAuth = Boolean(setup?.jira?.connectedViaOAuth);
   const authMethod = setup?.jira?.authMethod ?? "api_token";
@@ -105,6 +106,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   const [selectedProjectKey, setSelectedProjectKey] = useState("");
   const [loadingProjects, setLoadingProjects] = useState(false);
   const [loadingBoards, setLoadingBoards] = useState(false);
+  const boardsErrorRef = useRef("");
   const [oauthAvailable, setOauthAvailable] = useState(false);
   const [oauthDevMode, setOauthDevMode] = useState(false);
   const [statusMessage, setStatusMessage] = useState(() => {
@@ -182,13 +184,16 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   }, [setup?.jira?.projectKeys, selectedProjectKey]);
 
   useEffect(() => {
-    if (!connected || authMethod !== "oauth") return;
+    if (!pipelineReady || authMethod !== "oauth") return;
     let cancelled = false;
     (async () => {
       setLoadingProjects(true);
       try {
         const { projects } = await getPipelineJiraProjects();
-        if (!cancelled) setJiraProjects(projects ?? []);
+        if (!cancelled) {
+          setJiraProjects(projects ?? []);
+          boardsErrorRef.current = "";
+        }
       } catch (err) {
         if (!cancelled) {
           setConnectError(err.message || "Could not load Jira projects");
@@ -200,11 +205,15 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
     return () => {
       cancelled = true;
     };
-  }, [connected, authMethod]);
+  }, [pipelineReady, authMethod]);
 
   useEffect(() => {
-    if (!connected || authMethod !== "oauth" || !selectedProjectKey) {
+    if (!pipelineReady || authMethod !== "oauth" || !selectedProjectKey) {
       setJiraBoards([]);
+      return undefined;
+    }
+    const errKey = `${selectedProjectKey}`;
+    if (boardsErrorRef.current === errKey) {
       return undefined;
     }
     let cancelled = false;
@@ -212,9 +221,13 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
       setLoadingBoards(true);
       try {
         const { boards } = await getPipelineJiraBoards(selectedProjectKey);
-        if (!cancelled) setJiraBoards(boards ?? []);
+        if (!cancelled) {
+          setJiraBoards(boards ?? []);
+          boardsErrorRef.current = "";
+        }
       } catch (err) {
         if (!cancelled) {
+          boardsErrorRef.current = errKey;
           setConnectError(err.message || "Could not load Jira boards");
         }
       } finally {
@@ -224,7 +237,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
     return () => {
       cancelled = true;
     };
-  }, [connected, authMethod, selectedProjectKey]);
+  }, [pipelineReady, authMethod, selectedProjectKey]);
 
   useEffect(() => {
     if (!connected || !boardId || !/^\d+$/.test(String(boardId).trim())) return;
@@ -385,6 +398,13 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
       kicker="Jira"
       title="Jira pipeline"
     >
+
+      {connected && !pipelineReady ? (
+        <p className="rounded-app-sm border border-amber-500/30 bg-amber-500/5 px-4 py-2.5 text-sm text-app-ink-dim">
+          Jira OAuth is linked but credentials are incomplete. Disconnect and use{" "}
+          <strong>Connect with Atlassian</strong> again after updating scopes in the Atlassian Developer Console.
+        </p>
+      ) : null}
 
       {connectedViaOAuth && statusMessage ? (
         <p className="rounded-app-sm border border-indigo/30 bg-indigo/5 px-4 py-2.5 text-sm text-app-ink-dim">
@@ -635,6 +655,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
                       setSelectedProjectKey(key);
                       setProjectKeys(key);
                       setBoardId("");
+                      boardsErrorRef.current = "";
                     }}
                     disabled={loadingProjects}
                   >
@@ -751,8 +772,8 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
 
       {connected ? (
         <>
-          <JiraSyncStatusPanel setupSync={setup?.sync} connected={connected} />
-          <JiraTicketBrowser connected={connected} />
+          <JiraSyncStatusPanel setupSync={setup?.sync} connected={pipelineReady} />
+          <JiraTicketBrowser connected={pipelineReady} />
         </>
       ) : null}
 
