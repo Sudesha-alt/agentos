@@ -71,6 +71,15 @@ export async function saveOrganizationJiraConfig(
     input.authMethod ??
     (existing?.authMethod === "oauth" ? "oauth" : "api_token");
 
+  if (
+    authMethod === "oauth" &&
+    !(existing?.cloudId && existing.accessToken?.trim())
+  ) {
+    throw new ValidationError(
+      "Cannot save Jira settings as OAuth without a completed Atlassian connection. Use Connect with Atlassian first."
+    );
+  }
+
   const creds: PipelineJiraCredentials = {
     baseUrl: input.baseUrl.replace(/\/+$/, ""),
     email: input.email.trim() || existing?.email || "",
@@ -203,6 +212,9 @@ export async function saveOrganizationJiraOAuthTokens(
     scopes?: string;
   }
 ): Promise<void> {
+  if (!input.accessToken?.trim()) {
+    throw new Error("Atlassian token refresh returned an empty access token");
+  }
   await prisma.organizationJiraConfig.update({
     where: { organizationId },
     data: {

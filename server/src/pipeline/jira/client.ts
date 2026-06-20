@@ -1,5 +1,7 @@
 import { JiraClient } from "../../integrations/jiraClient";
 import { ensureFreshJiraOAuthToken } from "../../jira-oauth/tokenRefresh";
+import { getActiveOrganizationId } from "../../organization/context";
+import { ValidationError } from "../../utils/errors";
 import {
   getActivePipelineJiraCredentials,
   validatePipelineJiraConfig,
@@ -14,9 +16,19 @@ export async function resolveJiraApiBaseAndAuth(): Promise<{
 
   if (creds.authMethod === "oauth") {
     await ensureFreshJiraOAuthToken();
-    const fresh = getActivePipelineJiraCredentials();
+    let fresh = getActivePipelineJiraCredentials();
+    if ((!fresh.cloudId || !fresh.accessToken) && getActiveOrganizationId()) {
+      const orgId = getActiveOrganizationId()!;
+      const { warmOrganizationJiraCredentials } = await import("./credentialsStore");
+      await warmOrganizationJiraCredentials(orgId);
+      fresh = getActivePipelineJiraCredentials();
+    }
     if (!fresh.cloudId || !fresh.accessToken) {
-      throw new Error("Jira OAuth tokens are missing");
+      throw new ValidationError(
+        "Jira OAuth tokens are missing for this workspace. Disconnect Jira, then use Connect with Atlassian again. " +
+          "If this keeps happening, check Render logs for jira oauth callback failed and verify ATLASSIAN_CLIENT_ID, " +
+          "ATLASSIAN_CLIENT_SECRET, and the callback URL match your Atlassian app."
+      );
     }
     return {
       apiBase: `https://api.atlassian.com/ex/jira/${fresh.cloudId}`,
