@@ -89,6 +89,10 @@ export function getOpenAIClient(): OpenAI {
     );
   }
 
-  cached = new OpenAI({ apiKey });
+  cached = new OpenAI({
+    apiKey,
+    timeout: 120_000,
+    maxRetries: 0,
+  });
   return cached;
 }

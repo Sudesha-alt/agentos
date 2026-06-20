@@ -583,7 +583,14 @@ async function indexFileContent(
     },
   });
 
-  await updateFileEmbeddings(filePath, branchName, file.content, intelligence, language);
+  try {
+    await updateFileEmbeddings(filePath, branchName, file.content, intelligence, language);
+  } catch (err) {
+    logger.warn(
+      { filePath, branchName, err },
+      "embedding failed — file metadata saved; semantic search may be partial for this file"
+    );
+  }
 
   const layoutInput: LayoutFileInput = {
     filePath,
@@ -724,47 +731,59 @@ async function updateFileEmbeddings(
 
   for (let i = 0; i < chunks.length; i += 1) {
     if (i > 0) {
-      await new Promise((resolve) => setTimeout(resolve, 120));
+      await new Promise((resolve) => setTimeout(resolve, 200));
     }
     const chunk = chunks[i];
-    const embeddingResponse = await withRetry(
-      () =>
-        getOpenAIClient().embeddings.create({
-          model: EMBEDDING_MODEL,
-          input: chunk.text.slice(0, CODEBASE_EMBEDDING_INPUT_MAX_CHARS),
-        }),
-      {
-        maxAttempts: 3,
-        baseDelayMs: 1000,
-        maxDelayMs: 10000,
-        context: { operation: "embedding", filePath, chunkIndex: i },
-      }
-    );
+    try {
+      const embeddingResponse = await withRetry(
+        () =>
+          getOpenAIClient().embeddings.create({
+            model: EMBEDDING_MODEL,
+            input: chunk.text.slice(0, CODEBASE_EMBEDDING_INPUT_MAX_CHARS),
+          }),
+        {
+          maxAttempts: 5,
+          baseDelayMs: 2000,
+          maxDelayMs: 20_000,
+          context: { operation: "embedding", filePath, chunkIndex: i },
+        }
+      );
 
-    rows.push({
-      filePath,
-      repoOwner: repoOwner,
-      repoName: repoName,
-      branchName,
-      chunkIndex: i,
-      chunkContent: chunk.text,
-      embedding: embeddingResponse.data[0].embedding,
-      metadata: {
+      rows.push({
         filePath,
-        language,
-        summary: intelligence.summary,
-        patterns: intelligence.patterns,
+        repoOwner: repoOwner,
+        repoName: repoName,
+        branchName,
         chunkIndex: i,
-        totalChunks: chunks.length,
-        spanType: chunk.metadata.spanType,
-        symbolName: chunk.metadata.symbolName,
-        startLine: chunk.metadata.startLine,
-        endLine: chunk.metadata.endLine,
-        chunkStrategy: chunk.metadata.chunkStrategy,
-        isHeader: chunk.metadata.isHeader,
-      },
-      contentHash: sha256(chunk.text),
-    });
+        chunkContent: chunk.text,
+        embedding: embeddingResponse.data[0].embedding,
+        metadata: {
+          filePath,
+          language,
+          summary: intelligence.summary,
+          patterns: intelligence.patterns,
+          chunkIndex: i,
+          totalChunks: chunks.length,
+          spanType: chunk.metadata.spanType,
+          symbolName: chunk.metadata.symbolName,
+          startLine: chunk.metadata.startLine,
+          endLine: chunk.metadata.endLine,
+          chunkStrategy: chunk.metadata.chunkStrategy,
+          isHeader: chunk.metadata.isHeader,
+        },
+        contentHash: sha256(chunk.text),
+      });
+    } catch (err) {
+      logger.warn(
+        { filePath, branchName, chunkIndex: i, err },
+        "embedding chunk failed after retries — skipping chunk"
+      );
+    }
+  }
+
+  if (!rows.length) {
+    logger.warn({ filePath, branchName }, "no embedding chunks succeeded for file");
+    return;
   }
 
   try {
