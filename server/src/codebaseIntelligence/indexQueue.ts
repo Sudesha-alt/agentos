@@ -1,6 +1,7 @@
 import { runFullIndex, runIncrementalIndex } from "./indexer";
 import { getRepoContext } from "../git-integration/gitCredentialsStore";
 import { resolveRepoIndexBranch } from "../git-integration/resolveRepoBranch";
+import { withOrganizationContext } from "../api/orgRequestContext";
 import { requireActiveOrganizationId } from "../organization/orgScope";
 import { prisma } from "../db/client";
 import { logger } from "../utils/logger";
@@ -59,7 +60,9 @@ export async function enqueueFullIndex(
     },
   });
 
-  void runFullIndex(resolvedBranch, { runId: run.id, triggerType }).catch((err) => {
+  void withOrganizationContext(organizationId, async () => {
+    await runFullIndex(resolvedBranch, { runId: run.id, triggerType });
+  }).catch((err) => {
     logger.warn({ err, runId: run.id, branchName: resolvedBranch }, "in-process full index failed");
   });
 
@@ -115,15 +118,17 @@ async function startIncrementalBatchRun(input: {
     },
   });
 
-  void runIncrementalIndex({
-    branchName: input.branchName,
-    changedFiles: input.changedFiles,
-    deletedFiles: input.deletedFiles,
-    commitSha: input.commitSha,
-    triggerType: "webhook",
-    runId: run.id,
-    batchIndex: input.batchIndex,
-    batchTotal: input.batchTotal,
+  void withOrganizationContext(organizationId, async () => {
+    await runIncrementalIndex({
+      branchName: input.branchName,
+      changedFiles: input.changedFiles,
+      deletedFiles: input.deletedFiles,
+      commitSha: input.commitSha,
+      triggerType: "webhook",
+      runId: run.id,
+      batchIndex: input.batchIndex,
+      batchTotal: input.batchTotal,
+    });
   }).catch((err) => {
     logger.warn({ err, runId: run.id }, "incremental index batch failed");
   });

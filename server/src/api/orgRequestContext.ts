@@ -7,7 +7,11 @@ import {
   activateOrganizationGitContext,
   warmOrganizationGitCredentials,
 } from "../git-integration/gitCredentialsStore";
-import { setActiveOrganizationId } from "../organization/context";
+import {
+  enterActiveOrganizationContext,
+  leaveActiveOrganizationContext,
+  isOrganizationContextActive,
+} from "../organization/context";
 import { resolveUserFromAuthHeader, type SessionUser } from "./routes/authSession";
 
 export function requireAuthUser(
@@ -39,7 +43,7 @@ export async function withOrganizationContext<T>(
   organizationId: string,
   fn: () => Promise<T>
 ): Promise<T> {
-  setActiveOrganizationId(organizationId);
+  enterActiveOrganizationContext(organizationId);
   await warmOrganizationJiraCredentials(organizationId);
   await warmOrganizationGitCredentials(organizationId);
   const { warmOrganizationIntakeMapping } = await import("../pipeline/jira/intakeConfig");
@@ -49,8 +53,10 @@ export async function withOrganizationContext<T>(
   try {
     return await fn();
   } finally {
-    setActiveOrganizationId(null);
-    activateOrganizationJiraContext(null);
-    activateOrganizationGitContext(null);
+    leaveActiveOrganizationContext();
+    if (!isOrganizationContextActive()) {
+      activateOrganizationJiraContext(null);
+      activateOrganizationGitContext(null);
+    }
   }
 }
