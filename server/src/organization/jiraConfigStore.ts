@@ -220,6 +220,33 @@ export async function clearOrganizationJiraConfig(
   await prisma.organizationJiraConfig.deleteMany({
     where: { organizationId },
   });
+  const { clearOrganizationIntakeMapping } = await import(
+    "../pipeline/jira/intakeConfig"
+  );
+  clearOrganizationIntakeMapping(organizationId);
+}
+
+export async function saveOrganizationPipelineIntake(
+  organizationId: string,
+  input: {
+    boardId?: string;
+    columnName: string;
+    statuses: string[];
+  }
+): Promise<void> {
+  await prisma.organizationJiraConfig.update({
+    where: { organizationId },
+    data: {
+      ...(input.boardId?.trim() ? { boardId: input.boardId.trim() } : {}),
+      aiWorkerColumnName: input.columnName,
+      aiWorkerStatusesJson: input.statuses,
+      updatedAt: new Date(),
+    },
+  });
+  const { warmOrganizationIntakeMapping } = await import(
+    "../pipeline/jira/intakeConfig"
+  );
+  await warmOrganizationIntakeMapping(organizationId);
 }
 
 export async function getPublicOrganizationJiraConfig(organizationId: string) {

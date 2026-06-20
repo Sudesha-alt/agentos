@@ -42,6 +42,8 @@ export async function withOrganizationContext<T>(
   setActiveOrganizationId(organizationId);
   await warmOrganizationJiraCredentials(organizationId);
   await warmOrganizationGitCredentials(organizationId);
+  const { warmOrganizationIntakeMapping } = await import("../pipeline/jira/intakeConfig");
+  await warmOrganizationIntakeMapping(organizationId);
   activateOrganizationJiraContext(organizationId);
   activateOrganizationGitContext(organizationId);
   try {

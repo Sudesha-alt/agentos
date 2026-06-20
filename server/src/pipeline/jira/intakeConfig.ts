@@ -1,4 +1,6 @@
 import { getDb } from "../../jira-intake/sqliteStore";
+import { getActiveOrganizationId } from "../../organization/context";
+import { prisma } from "../../db/client";
 
 export interface PipelineCompletionSettings {
   completionStatusName: string;
@@ -40,7 +42,67 @@ function defaultStatuses(): string[] {
   return parseList(process.env.PIPELINE_JIRA_AI_WORKER_STATUSES, ["AI Worker"]);
 }
 
+const orgIntakeCache = new Map<string, PipelineIntakeMapping>();
+
+function parseStatusesJson(raw: unknown): string[] {
+  if (!raw) return defaultStatuses();
+  try {
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (Array.isArray(parsed) && parsed.length) {
+      return parsed.map(String).filter(Boolean);
+    }
+  } catch {
+    /* keep defaults */
+  }
+  return defaultStatuses();
+}
+
+function parseCompletionJson(raw: unknown): PipelineCompletionSettings {
+  if (!raw) return { ...DEFAULT_COMPLETION };
+  try {
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    return { ...DEFAULT_COMPLETION, ...(parsed as Partial<PipelineCompletionSettings>) };
+  } catch {
+    return { ...DEFAULT_COMPLETION };
+  }
+}
+
+/** Load board/column mapping from Postgres for the active org (multi-tenant). */
+export async function warmOrganizationIntakeMapping(
+  organizationId: string
+): Promise<void> {
+  const row = await prisma.organizationJiraConfig.findUnique({
+    where: { organizationId },
+    select: {
+      boardId: true,
+      aiWorkerColumnName: true,
+      aiWorkerStatusesJson: true,
+      completionSettingsJson: true,
+    },
+  });
+  if (!row) {
+    orgIntakeCache.delete(organizationId);
+    return;
+  }
+
+  orgIntakeCache.set(organizationId, {
+    boardId: row.boardId?.trim() || "",
+    aiWorkerColumnName: row.aiWorkerColumnName?.trim() || "",
+    aiWorkerStatuses: parseStatusesJson(row.aiWorkerStatusesJson),
+    completionSettings: parseCompletionJson(row.completionSettingsJson),
+  });
+}
+
+export function clearOrganizationIntakeMapping(organizationId: string): void {
+  orgIntakeCache.delete(organizationId);
+}
+
 export function getPipelineIntakeMapping(): PipelineIntakeMapping {
+  const orgId = getActiveOrganizationId();
+  if (orgId && orgIntakeCache.has(orgId)) {
+    return orgIntakeCache.get(orgId)!;
+  }
+
   const row = getDb()
     .prepare(
       `SELECT board_id, ai_worker_column_name, ai_worker_statuses_json, completion_settings_json

@@ -17,6 +17,8 @@ import {
 import {
   getBoardColumnsOrdered,
   listIntakeColumnTickets,
+  listJiraBoards,
+  listJiraProjects,
   resolveIntakeStatusesForColumn,
 } from "../../pipeline/jira/boardService";
 import {
@@ -122,6 +124,10 @@ router.post("/connect", async (req, res) => {
   try {
     await withOrganizationContext(organizationId, async () => {
       const webhookUrl = pipelineJiraWebhookUrl(req);
+      const authMethod =
+        prior.connectedViaOAuth || prior.authMethod === "oauth"
+          ? ("oauth" as const)
+          : ("api_token" as const);
       const result = await connectPipelineJira({
         baseUrl,
         email: email || undefined,
@@ -132,7 +138,7 @@ router.post("/connect", async (req, res) => {
         webhookUrl,
         autoRegisterWebhook: req.body?.autoRegisterWebhook !== false,
         organizationId,
-        authMethod: "api_token",
+        authMethod,
       });
       res.json({
         ...result,
@@ -171,10 +177,46 @@ router.post("/webhook/register", async (req, res) => {
   });
 });
 
-router.get("/boards/columns", async (_req, res, next) => {
+router.get("/projects", async (req, res, next) => {
   try {
-    const columns = await getBoardColumnsOrdered();
-    res.json({ columns });
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
+
+    await withOrganizationContext(user.organizationId, async () => {
+      const projects = await listJiraProjects();
+      res.json({ projects });
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/boards", async (req, res, next) => {
+  try {
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
+
+    const projectKey =
+      typeof req.query.projectKey === "string" ? req.query.projectKey : undefined;
+
+    await withOrganizationContext(user.organizationId, async () => {
+      const boards = await listJiraBoards(projectKey);
+      res.json({ boards });
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/boards/columns", async (req, res, next) => {
+  try {
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
+
+    await withOrganizationContext(user.organizationId, async () => {
+      const columns = await getBoardColumnsOrdered();
+      res.json({ columns });
+    });
   } catch (err) {
     next(err);
   }
@@ -182,20 +224,32 @@ router.get("/boards/columns", async (_req, res, next) => {
 
 router.put("/intake-column", async (req, res, next) => {
   try {
-    validatePipelineJiraConfig();
-    const columnName = String(req.body?.columnName ?? "").trim();
-    if (!columnName) {
-      res.status(400).json({ error: "columnName is required" });
-      return;
-    }
-    const columns = await getBoardColumnsOrdered();
-    const statuses = resolveIntakeStatusesForColumn(columnName, columns);
-    const intake = savePipelineIntakeColumn({
-      boardId: req.body?.boardId ? String(req.body.boardId).trim() : undefined,
-      columnName,
-      statuses,
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
+
+    await withOrganizationContext(user.organizationId, async () => {
+      validatePipelineJiraConfig();
+      const columnName = String(req.body?.columnName ?? "").trim();
+      if (!columnName) {
+        res.status(400).json({ error: "columnName is required" });
+        return;
+      }
+      const columns = await getBoardColumnsOrdered();
+      const statuses = resolveIntakeStatusesForColumn(columnName, columns);
+      const boardId = req.body?.boardId ? String(req.body.boardId).trim() : undefined;
+
+      const { saveOrganizationPipelineIntake } = await import(
+        "../../organization/jiraConfigStore"
+      );
+      await saveOrganizationPipelineIntake(user.organizationId!, {
+        boardId,
+        columnName,
+        statuses,
+      });
+
+      const intake = getPipelineIntakeMapping();
+      res.json(intake);
     });
-    res.json(intake);
   } catch (err) {
     next(err);
   }

@@ -23,6 +23,66 @@ export interface IntakeTicketDto {
   updated: string | null;
 }
 
+export interface JiraProjectOption {
+  id: string;
+  key: string;
+  name: string;
+}
+
+export interface JiraBoardOption {
+  id: number;
+  name: string;
+  projectKey: string;
+  projectName: string;
+  type: string;
+}
+
+export async function listJiraProjects(): Promise<JiraProjectOption[]> {
+  validatePipelineJiraConfig();
+  const data = (await pipelineJiraFetch(
+    "/rest/api/3/project/search?maxResults=50&orderBy=lastIssueUpdated"
+  )) as {
+    values?: { id?: string; key?: string; name?: string }[];
+  };
+
+  return (data.values ?? [])
+    .map((p) => ({
+      id: String(p.id ?? ""),
+      key: String(p.key ?? ""),
+      name: String(p.name ?? p.key ?? ""),
+    }))
+    .filter((p) => p.key);
+}
+
+export async function listJiraBoards(projectKey?: string): Promise<JiraBoardOption[]> {
+  validatePipelineJiraConfig();
+  const params = new URLSearchParams({ maxResults: "50" });
+  if (projectKey?.trim()) {
+    params.set("projectKeyOrId", projectKey.trim());
+  }
+
+  const data = (await pipelineJiraFetch(
+    `/rest/agile/1.0/board?${params.toString()}`
+  )) as {
+    values?: {
+      id?: number;
+      name?: string;
+      type?: string;
+      location?: { projectKey?: string; projectName?: string };
+    }[];
+  };
+
+  return (data.values ?? [])
+    .map((b) => ({
+      id: Number(b.id),
+      name: String(b.name ?? `Board ${b.id}`),
+      projectKey: String(b.location?.projectKey ?? ""),
+      projectName: String(b.location?.projectName ?? ""),
+      type: String(b.type ?? ""),
+    }))
+    .filter((b) => Number.isFinite(b.id));
+}
+
 export async function getBoardColumnsOrdered(): Promise<BoardColumnDto[]> {
   validatePipelineJiraConfig();
   const { boardId } = getPipelineIntakeMapping();
