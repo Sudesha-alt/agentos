@@ -8,6 +8,7 @@ import {
 import {
   validatePipelineJiraConfig,
 } from "../../pipeline/jira/credentialsStore";
+import { ValidationError } from "../../utils/errors";
 import { getPipelineJiraMirrorConfig } from "../../pipeline/jira/config";
 import { buildMirrorBackfillJql } from "../../pipeline/jira/mirror/jql";
 import {
@@ -47,6 +48,20 @@ import {
 } from "../orgRequestContext";
 
 const router = Router();
+
+function normalizePipelineError(err: unknown): unknown {
+  if (err instanceof ValidationError) return err;
+  if (err instanceof Error) {
+    if (
+      err.message.startsWith("Pipeline Jira not configured") ||
+      err.message.startsWith("Pipeline Jira API") ||
+      err.message.includes("Jira OAuth")
+    ) {
+      return new ValidationError(err.message);
+    }
+  }
+  return err;
+}
 
 router.get("/setup", async (req, res) => {
   const user = requireOrganizationUser(req, res);
@@ -187,7 +202,7 @@ router.get("/projects", async (req, res, next) => {
       res.json({ projects });
     });
   } catch (err) {
-    next(err);
+    next(normalizePipelineError(err));
   }
 });
 
@@ -204,7 +219,7 @@ router.get("/boards", async (req, res, next) => {
       res.json({ boards });
     });
   } catch (err) {
-    next(err);
+    next(normalizePipelineError(err));
   }
 });
 
@@ -218,7 +233,7 @@ router.get("/boards/columns", async (req, res, next) => {
       res.json({ columns });
     });
   } catch (err) {
-    next(err);
+    next(normalizePipelineError(err));
   }
 });
 
@@ -251,7 +266,7 @@ router.put("/intake-column", async (req, res, next) => {
       res.json(intake);
     });
   } catch (err) {
-    next(err);
+    next(normalizePipelineError(err));
   }
 });
 
@@ -261,7 +276,7 @@ router.get("/intake/tickets", async (_req, res, next) => {
     const result = await listIntakeColumnTickets();
     res.json(result);
   } catch (err) {
-    next(err);
+    next(normalizePipelineError(err));
   }
 });
 
@@ -298,7 +313,7 @@ router.post("/intake/scan", async (req, res, next) => {
       });
     });
   } catch (err) {
-    next(err);
+    next(normalizePipelineError(err));
   }
 });
 
@@ -307,7 +322,7 @@ router.get("/mirror/stats", async (_req, res, next) => {
     const stats = await getMirrorStats();
     res.json(stats);
   } catch (err) {
-    next(err);
+    next(normalizePipelineError(err));
   }
 });
 
@@ -344,7 +359,7 @@ router.post("/mirror/backfill", async (req, res, next) => {
       res.json(result);
     });
   } catch (err) {
-    next(err);
+    next(normalizePipelineError(err));
   }
 });
 

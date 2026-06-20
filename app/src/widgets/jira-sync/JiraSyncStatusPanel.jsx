@@ -4,8 +4,11 @@ import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import Spinner from "../../app/components/Spinner";
 import { formatRelativeTime } from "../../shared/lib/format";
 
-export default function JiraSyncStatusPanel({ setupSync }) {
-  const { data: status, loading, refetch } = useJiraSyncStatus({ pollMs: 6000 });
+export default function JiraSyncStatusPanel({ setupSync, connected = true }) {
+  const { data: status, loading, refetch } = useJiraSyncStatus({
+    pollMs: connected ? 6000 : undefined,
+    skip: !connected,
+  });
   const [syncPending, setSyncPending] = useState(false);
   const [message, setMessage] = useState("");
 

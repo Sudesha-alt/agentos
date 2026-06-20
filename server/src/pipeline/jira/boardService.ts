@@ -1,10 +1,21 @@
 import { parseDescription } from "../../jira-intake/descriptionParser";
+import { ValidationError } from "../../utils/errors";
 import {
   getActivePipelineJiraCredentials,
   validatePipelineJiraConfig,
 } from "./credentialsStore";
 import { pipelineJiraFetch } from "./client";
 import { getPipelineIntakeMapping, getPipelineIntakeStatuses } from "./intakeConfig";
+
+function ensurePipelineReady(): void {
+  try {
+    validatePipelineJiraConfig();
+  } catch (err) {
+    throw new ValidationError(
+      err instanceof Error ? err.message : "Pipeline Jira not configured"
+    );
+  }
+}
 
 export interface BoardColumnDto {
   name: string;
@@ -38,7 +49,7 @@ export interface JiraBoardOption {
 }
 
 export async function listJiraProjects(): Promise<JiraProjectOption[]> {
-  validatePipelineJiraConfig();
+  ensurePipelineReady();
   const data = (await pipelineJiraFetch(
     "/rest/api/3/project/search?maxResults=50&orderBy=lastIssueUpdated"
   )) as {
@@ -55,7 +66,7 @@ export async function listJiraProjects(): Promise<JiraProjectOption[]> {
 }
 
 export async function listJiraBoards(projectKey?: string): Promise<JiraBoardOption[]> {
-  validatePipelineJiraConfig();
+  ensurePipelineReady();
   const params = new URLSearchParams({ maxResults: "50" });
   if (projectKey?.trim()) {
     params.set("projectKeyOrId", projectKey.trim());
@@ -84,10 +95,17 @@ export async function listJiraBoards(projectKey?: string): Promise<JiraBoardOpti
 }
 
 export async function getBoardColumnsOrdered(): Promise<BoardColumnDto[]> {
-  validatePipelineJiraConfig();
+  ensurePipelineReady();
   const { boardId } = getPipelineIntakeMapping();
   if (!boardId) {
-    throw new Error("PIPELINE_JIRA_BOARD_ID or boardId from connect is required");
+    throw new ValidationError(
+      "Board ID is not set — choose a project and board in Pipeline settings first."
+    );
+  }
+  if (!/^\d+$/.test(boardId)) {
+    throw new ValidationError(
+      `Invalid board ID "${boardId}" — use the board dropdown (numeric id), not the project key.`
+    );
   }
 
   const configData = (await pipelineJiraFetch(
