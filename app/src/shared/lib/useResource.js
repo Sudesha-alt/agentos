@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 
-export function useResource(fetcher, deps = [], { pollMs } = {}) {
+export function useResource(fetcher, deps = [], { pollMs, skip = false } = {}) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!skip);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
+    if (skip) return undefined;
+
     let cancelled = false;
 
     async function run(initial) {
@@ -38,7 +40,7 @@ export function useResource(fetcher, deps = [], { pollMs } = {}) {
       window.clearInterval(id);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tick, pollMs, ...deps]);
+  }, [skip, tick, pollMs, ...deps]);
 
   return {
     data,

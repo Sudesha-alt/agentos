@@ -13,8 +13,8 @@ export default function NotificationCenter() {
   const orgPath = useOrgPathBuilder();
   const [open, setOpen] = useState(false);
   const panelRef = useRef(null);
-  const { items: pipelines } = usePipelineList(undefined, { pollMs: 12_000 });
-  const { data: eventsData } = useActivityEvents({ pollMs: 30_000 });
+  const { items: pipelines } = usePipelineList(undefined, { pollMs: 30_000 });
+  const { data: eventsData } = useActivityEvents({ pollMs: open ? 30_000 : 0, skip: !open });
   const reviewItems = deriveReviewQueueItems(pipelines);
   const events = eventsData?.events ?? [];
   const totalCount = reviewItems.length + events.filter((e) => e.live).length;

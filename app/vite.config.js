@@ -39,6 +39,41 @@ export default defineConfig(({ mode }) => {
         },
       },
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            // React + routing — loaded on every page, keep together
+            if (
+              id.includes("node_modules/react/") ||
+              id.includes("node_modules/react-dom/") ||
+              id.includes("node_modules/react-router") ||
+              id.includes("node_modules/scheduler/")
+            ) {
+              return "react-vendor";
+            }
+            // Framer Motion — only needed in the authenticated org shell
+            if (id.includes("node_modules/framer-motion")) {
+              return "framer-motion";
+            }
+            // GSAP — marketing landing page only
+            if (id.includes("node_modules/gsap")) {
+              return "gsap";
+            }
+            // D3 — codebase visualization only
+            if (id.includes("node_modules/d3") || id.includes("node_modules/d3-")) {
+              return "d3";
+            }
+            // Zod — schema validation
+            if (id.includes("node_modules/zod")) {
+              return "zod";
+            }
+          },
+        },
+      },
+      // Raise the warning threshold slightly; our known large chunks are intentionally isolated
+      chunkSizeWarningLimit: 600,
+    },
     test: {
       environment: "jsdom",
       setupFiles: "./src/test/setup.js",

@@ -1,9 +1,9 @@
 import { lazy } from "react";
 import { Navigate, Route, useParams, useSearchParams } from "react-router-dom";
-import Dashboard from "../../app/pages/Dashboard";
-import Pipelines from "../../app/pages/Pipelines";
 import { useOrg } from "../providers/OrgRouteProvider";
 
+const Dashboard = lazy(() => import("../../app/pages/Dashboard"));
+const Pipelines = lazy(() => import("../../app/pages/Pipelines"));
 const PipelineDetail = lazy(() => import("../../app/pages/PipelineDetail"));
 const Override = lazy(() => import("../../app/pages/Override"));
 const SettingsRoutes = lazy(() => import("../../app/pages/SettingsRoutes"));

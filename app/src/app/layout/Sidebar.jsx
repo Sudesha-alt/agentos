@@ -54,7 +54,7 @@ export default function Sidebar() {
     : "active";
   const { collapsed, toggleCollapsed } = useSidebarCollapsed();
   const { isExpanded, toggle } = useNavExpanded(location.pathname);
-  const { items: pipelines } = usePipelineList(undefined, { pollMs: 12_000 });
+  const { items: pipelines } = usePipelineList(undefined, { pollMs: 30_000 });
   const counts = derivePipelineCounts(pipelines);
 
   function agentIsActive(agent) {

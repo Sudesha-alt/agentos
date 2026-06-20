@@ -17,6 +17,7 @@ function ChapterCoverArt({ chapter }) {
                 alt={meta.name}
                 className="h-[88px] w-[68px] object-contain object-bottom"
                 draggable={false}
+                loading="lazy"
               />
             );
           })}
@@ -36,6 +37,7 @@ function ChapterCoverArt({ chapter }) {
         alt={`${chapter.name} — ${chapter.role}`}
         className="h-[104px] w-full max-w-[140px] object-contain object-bottom"
         draggable={false}
+        loading="lazy"
       />
     </div>
   );
@@ -120,6 +122,7 @@ function ChapterDetail({ chapter, onClose }) {
                     alt={meta.name}
                     className="h-24 w-20 object-contain object-bottom"
                     draggable={false}
+                    loading="lazy"
                   />
                 );
               })}
@@ -130,6 +133,7 @@ function ChapterDetail({ chapter, onClose }) {
               alt={teammate.name}
               className="h-36 w-32 object-contain object-bottom"
               draggable={false}
+              loading="lazy"
             />
           ) : null}
         </div>

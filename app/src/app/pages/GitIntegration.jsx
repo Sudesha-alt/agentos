@@ -19,7 +19,6 @@ import { SettingsPageShell } from "../layout/SettingsPageShell";
 import { useOrg } from "../../shared/providers/OrgRouteProvider";
 
 export default function GitIntegration({ embedded = false }) {
-  const { orgPath } = useOrg();
   const { data: setup, error, loading, refetch } = useGitIntegrationSetup();
 
   if (loading && !setup) {
@@ -54,6 +53,7 @@ export default function GitIntegration({ embedded = false }) {
 }
 
 function GitIntegrationContent({ setup, refetch, embedded = false }) {
+  const { orgPath } = useOrg();
   const [searchParams, setSearchParams] = useSearchParams();
   const [tab, setTab] = useState("github");
   const [repos, setRepos] = useState(() => setup?.availableRepositories ?? []);

@@ -45,6 +45,7 @@ export function useMetricsSummary(options = {}) {
 export function useActivityEvents(options = {}) {
   return useResource(() => workspaceAdapter.activityEvents(), [], {
     pollMs: options.pollMs ?? 6000,
+    skip: options.skip,
   });
 }
 

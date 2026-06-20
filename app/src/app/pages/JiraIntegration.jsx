@@ -31,7 +31,6 @@ const OAUTH_ERROR_MESSAGES = {
 };
 
 export default function JiraIntegration({ embedded = false }) {
-  const { orgPath } = useOrg();
   const {
     data: setup,
     error: setupError,
@@ -65,6 +64,7 @@ export default function JiraIntegration({ embedded = false }) {
 }
 
 function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
+  const { orgPath } = useOrg();
   const [searchParams, setSearchParams] = useSearchParams();
   const connected = Boolean(setup?.connected);
   const intakeConfigured = Boolean(setup?.intake?.aiWorkerColumnName);

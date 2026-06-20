@@ -1,16 +1,18 @@
-import { useRef } from "react";
+import { lazy, Suspense, useRef } from "react";
 import { Link } from "react-router-dom";
 import { CLIENT_LOGOS, CLIENT_METRICS, HERO } from "./constants";
 import IntegrationMarquee from "./components/IntegrationMarquee";
 import MarketingBackground from "./components/MarketingBackground";
 import MarketingGridBackground from "./components/MarketingGridBackground";
-import HeroLaptopStage from "./components/HeroLaptopStage";
 import AgentChaptersSection from "./components/AgentChaptersSection";
 import MarketingFooter from "./components/MarketingFooter";
 import MarketingHeader from "./components/MarketingHeader";
-import DashboardCostEstimator from "../../widgets/landing-dashboard/DashboardCostEstimator";
 import { useLandingAnimations } from "./hooks/useLandingAnimations";
 import "./agentTeam.css";
+
+const DashboardCostEstimator = lazy(
+  () => import("../../widgets/landing-dashboard/DashboardCostEstimator")
+);
 
 export default function LandingPage() {
   const rootRef = useRef(null);
@@ -59,8 +61,6 @@ export default function LandingPage() {
             </div>
           </div>
         </div>
-
-        <HeroLaptopStage />
       </section>
 
       <main className="relative z-10 flex-1">
@@ -81,7 +81,9 @@ export default function LandingPage() {
                 with your team.
               </p>
             </div>
-            <DashboardCostEstimator variant="marketing" />
+            <Suspense fallback={<div className="h-64 animate-pulse rounded-xl bg-[#F0ECE5]" />}>
+              <DashboardCostEstimator variant="marketing" />
+            </Suspense>
           </div>
         </section>
 
