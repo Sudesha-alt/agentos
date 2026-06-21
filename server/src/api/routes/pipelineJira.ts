@@ -29,6 +29,10 @@ import {
   savePipelineCompletionSettings,
 } from "../../pipeline/jira/intakeConfig";
 import { getIntakeDiagnosticsSnapshot } from "../../pipeline/jira/intakeDiagnosticsStore";
+import {
+  getAiWorkerIntakeStatusesLive,
+  getLiveAiWorkerColumnStatuses,
+} from "../../pipeline/jira/intakeStatusResolver";
 import { getQueueStats } from "../../queue/pipelineQueueStore";
 import { listRecentIntakeEvents } from "../../db/repositories/intakeEventRepo";
 import { reconcileOrganizationJiraIntegration } from "../../pipeline/jira/reconcileIntegration";
@@ -397,11 +401,15 @@ router.get("/intake/status", async (req, res, next) => {
       const diagnostics = getIntakeDiagnosticsSnapshot(user.organizationId!);
       const queueStats = await getQueueStats(user.organizationId!);
       const recentEvents = await listRecentIntakeEvents(user.organizationId!, 10);
+      const liveColumnStatuses = await getLiveAiWorkerColumnStatuses();
+      const effectiveStatuses = await getAiWorkerIntakeStatusesLive();
 
       res.json({
         intake: {
           aiWorkerColumnName: intake.aiWorkerColumnName,
           aiWorkerStatuses: intake.aiWorkerStatuses,
+          liveColumnStatuses,
+          effectiveStatuses,
         },
         webhook: {
           lastReceivedAt: diagnostics.lastWebhookAt,

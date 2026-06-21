@@ -2,6 +2,7 @@ import {
   getPipelineIntakeMapping,
   isPipelineIntakeStatus,
 } from "../pipeline/jira/intakeConfig";
+import { getAiWorkerIntakeStatusesLive } from "../pipeline/jira/intakeStatusResolver";
 import { isAiWorkerEligibleIssueType } from "../pipeline/jira/aiWorkerIssueTypes";
 import { isPipelineJiraConfigured } from "../pipeline/jira/credentialsStore";
 import { listIntakeColumnTickets } from "../pipeline/jira/boardService";
@@ -131,7 +132,7 @@ export async function scanIntakeFromSyncedIssues(
   );
 
   const intake = getPipelineIntakeMapping();
-  const statuses = intake.aiWorkerStatuses ?? [];
+  const statuses = await getAiWorkerIntakeStatusesLive();
   if (statuses.length === 0) {
     return empty;
   }

@@ -12,6 +12,12 @@ import {
   isJiraKeyInPipelineQueue,
 } from "../../queue/inProcessRunner";
 import { isPipelineIntakeStatus } from "./intakeConfig";
+import {
+  formatIntakeStatusSkipMessage,
+  getAiWorkerIntakeStatusesLive,
+  getLiveAiWorkerColumnStatuses,
+  isIssueInAiWorkerIntake,
+} from "./intakeStatusResolver";
 import { shouldEnqueueJiraKey } from "./intakeDedup";
 import { classifyAiWorkerIntake } from "../../integrations/intentClassifier";
 import { getActiveOrganizationId } from "../../organization/context";
@@ -128,12 +134,19 @@ export async function tryIntakeEnqueue(
 
     const rootStatus =
       (rootIssue.fields as { status?: { name?: string } }).status?.name ?? "";
-    if (!isPipelineIntakeStatus(rootStatus)) {
+    const configuredStatuses = await getAiWorkerIntakeStatusesLive();
+    const liveColumnStatuses = await getLiveAiWorkerColumnStatuses();
+    if (!(await isIssueInAiWorkerIntake(rootStatus))) {
       await recordSkip(
         jiraKey,
         source,
         "not_in_intake_status",
-        `${jiraKey} is in "${rootStatus}" — only AI Worker column tickets start the pipeline`
+        formatIntakeStatusSkipMessage(
+          jiraKey,
+          rootStatus,
+          configuredStatuses,
+          liveColumnStatuses
+        )
       );
       return {
         sourceKey: jiraKey,
@@ -205,13 +218,18 @@ export async function tryIntakeEnqueue(
 
         const issueStatus =
           (issue.fields as { status?: { name?: string } }).status?.name ?? "";
-        if (!isPipelineIntakeStatus(issueStatus)) {
+        if (!(await isIssueInAiWorkerIntake(issueStatus))) {
           skipped += 1;
           await recordSkip(
             taskKey,
             source,
             "not_in_intake_status",
-            `${taskKey} is in "${issueStatus}" — only AI Worker column tickets are enqueued`
+            formatIntakeStatusSkipMessage(
+              taskKey,
+              issueStatus,
+              configuredStatuses,
+              liveColumnStatuses
+            )
           );
           continue;
         }

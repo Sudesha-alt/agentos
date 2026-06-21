@@ -13,6 +13,7 @@ import {
   extractBearerToken,
   verifyAtlassianOAuthWebhookJwt,
 } from "./jiraWebhookAuth";
+import { isPipelineIntakeStatus } from "./intakeConfig";
 import { type PipelineJiraWebhookPayload } from "./ticketNormalizer";
 import { upsertJiraIssueFromWebhook, handleJiraIssueDeleted } from "../../jira-sync/webhookBridge";
 import { tryIntakeEnqueue, type IntakeEnqueueResult } from "./intakeOrchestrator";
@@ -83,6 +84,29 @@ async function resolveWebhookOrganization(
   return null;
 }
 
+/** Skip comment-only webhooks; always run intake when Jira reports a status transition. */
+function shouldAttemptIntakeFromWebhook(payload: PipelineJiraWebhookPayload): boolean {
+  if (payload.webhookEvent === "jira:issue_created") return true;
+  if (payload.webhookEvent !== "jira:issue_updated") return false;
+
+  const changelog = (
+    payload as {
+      changelog?: {
+        items?: Array<{ field?: string; fieldId?: string; toString?: string }>;
+      };
+    }
+  ).changelog;
+
+  const statusChange = changelog?.items?.find(
+    (i) => i.field === "status" || i.fieldId === "status"
+  );
+  if (statusChange) return true;
+
+  const currentStatus =
+    (payload.issue.fields as { status?: { name?: string } }).status?.name ?? "";
+  return isPipelineIntakeStatus(currentStatus);
+}
+
 /** issue_updated in AI Worker column → decompose + queued pipeline; closed/done → mirror. */
 export async function handlePipelineJiraWebhook(
   req: Request,
@@ -139,8 +163,20 @@ async function handleIssueUpsert(
 
   await upsertJiraIssueFromWebhook(payload);
 
-  // Always verify via Jira REST — webhook payloads often omit changelog or use
-  // status names that do not match configured AI Worker statuses exactly.
+  if (!shouldAttemptIntakeFromWebhook(payload)) {
+    logger.debug(
+      { jiraKey, statusName, event: payload.webhookEvent },
+      "pipeline jira webhook: skipped intake — no status transition"
+    );
+    return {
+      sourceKey: jiraKey,
+      enqueued: 0,
+      skipped: 0,
+      started: false,
+      groups: [],
+    };
+  }
+
   const result = await tryIntakeEnqueue(jiraKey, "webhook");
 
   logger.info(
