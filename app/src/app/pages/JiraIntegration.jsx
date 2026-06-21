@@ -308,6 +308,15 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
     [columns]
   );
 
+  const selectedIntakeColumnMeta = useMemo(() => {
+    if (!intakeColumn) return null;
+    const col = columns.find(
+      (c) => c.name?.toLowerCase() === intakeColumn.toLowerCase()
+    );
+    const statuses = col?.statuses?.length ? col.statuses : [intakeColumn];
+    return { name: intakeColumn, statuses };
+  }, [columns, intakeColumn]);
+
   async function handleSavePipelineSettings(e) {
     e.preventDefault();
     const id = boardId.trim();
@@ -442,11 +451,19 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
     setMappingPending(true);
     setStatusMessage("");
     try {
-      await savePipelineIntakeColumn({
+      const saved = await savePipelineIntakeColumn({
         columnName: intakeColumn,
         boardId: boardId.trim() || undefined,
       });
-      setStatusMessage(`AI Worker intake column set to "${intakeColumn}".`);
+      const triggerStatuses =
+        saved?.aiWorkerStatuses?.length
+          ? saved.aiWorkerStatuses
+          : selectedIntakeColumnMeta?.statuses ?? [];
+      setStatusMessage(
+        triggerStatuses.length
+          ? `AI Worker column "${intakeColumn}" saved — pipeline triggers on Jira status: ${triggerStatuses.join(", ")}.`
+          : `AI Worker intake column set to "${intakeColumn}".`
+      );
       await refetchSetup();
       await refetchIntake();
     } catch (err) {
@@ -890,7 +907,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
         <Panel>
           <PanelHeader
             title="AI Worker intake column"
-            subtitle="Only Task and Bug tickets are picked up. Moving one into this column fetches it from Jira, notifies your team, and starts the agent pipeline."
+            subtitle="Only Task and Bug tickets are picked up. AgentOS watches the Jira workflow status behind the column — not the column label. If Jira says “Move to In Progress” when you drag a ticket into AI Worker, that status name is what triggers intake."
           />
           <form className="flex flex-wrap items-end gap-3 p-4 sm:px-6" onSubmit={handleSaveIntakeColumn}>
             <label className="block min-w-[240px] flex-1 text-sm">
@@ -901,11 +918,18 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
                 onChange={(e) => setIntakeColumn(e.target.value)}
               >
                 <option value="">Select column…</option>
-                {columnOptions.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
+                {columns.map((col) => {
+                  const name = col.name;
+                  if (!name) return null;
+                  const statusLabel = col.statuses?.length
+                    ? col.statuses.join(", ")
+                    : name;
+                  return (
+                    <option key={name} value={name}>
+                      {name} → {statusLabel}
+                    </option>
+                  );
+                })}
               </select>
             </label>
             {!columnOptions.length ? (
@@ -923,6 +947,23 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
               {mappingPending ? "Saving…" : "Save intake column"}
             </button>
           </form>
+          {selectedIntakeColumnMeta?.statuses?.length ? (
+            <p className="px-5 pb-2 text-xs text-app-ink-mute sm:px-6">
+              Column “{selectedIntakeColumnMeta.name}” maps to Jira status
+              {selectedIntakeColumnMeta.statuses.length > 1 ? "es" : ""}:{" "}
+              <strong className="text-app-ink">
+                {selectedIntakeColumnMeta.statuses.join(", ")}
+              </strong>
+              {selectedIntakeColumnMeta.statuses.length === 1 &&
+              selectedIntakeColumnMeta.statuses[0].toLowerCase() !==
+                selectedIntakeColumnMeta.name.toLowerCase() ? (
+                <span className="mt-1 block">
+                  Renaming the column in Jira does not rename the workflow status — save
+                  here after any column change so intake stays in sync.
+                </span>
+              ) : null}
+            </p>
+          ) : null}
           {intakeConfigured && intakeStatuses.length ? (
             <p className="px-5 pb-4 text-sm text-app-ink-dim sm:px-6">
               Trigger statuses:{" "}
@@ -1088,6 +1129,19 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
                 </p>
               </div>
             </div>
+            {intakeStatus?.intake?.effectiveStatuses?.length ? (
+              <p className="text-xs text-app-ink-mute">
+                Intake statuses: {intakeStatus.intake.effectiveStatuses.join(", ")}
+                {intakeStatus.intake.liveColumnStatuses?.length &&
+                intakeStatus.intake.liveColumnStatuses.join(", ") !==
+                  intakeStatus.intake.aiWorkerStatuses?.join(", ") ? (
+                  <>
+                    {" "}
+                    (live board column: {intakeStatus.intake.liveColumnStatuses.join(", ")})
+                  </>
+                ) : null}
+              </p>
+            ) : null}
             {intakeStatus?.lastScan ? (
               <p className="text-xs">
                 Last scan: {intakeStatus.lastScan.scanned} scanned,{" "}
