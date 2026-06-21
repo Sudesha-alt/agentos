@@ -1,32 +1,22 @@
 import type { ImplementationOutput, PrdOutput, QaOutput } from "../types/agents";
 import type { NormalizedTicket } from "../types/ticket";
 import { requireActiveOrganizationId } from "../organization/orgScope";
-import { getOpenAIClient } from "../llm/openaiClient";
+import { createEmbeddingVectors } from "../llm/embeddings";
 import { logger } from "../utils/logger";
-import { withRetry } from "../utils/retry";
 import { embedNormalizedTicket } from "./ticketEmbedService";
 import { vectorStore } from "./vectorStore";
 
-const EMBEDDING_MODEL = "text-embedding-3-small";
 
 export const embedder = {
   async embed(text: string): Promise<number[]> {
     const cleanedText = prepareTextForEmbedding(text);
-
-    const response = await withRetry(
-      () =>
-        getOpenAIClient().embeddings.create({
-          model: EMBEDDING_MODEL,
-          input: cleanedText,
-        }),
-      {
-        maxAttempts: 3,
-        baseDelayMs: 1000,
-        maxDelayMs: 10000,
-      }
-    );
-
-    return response.data[0].embedding;
+    const [embedding] = await createEmbeddingVectors([cleanedText], {
+      operation: "ticket_embedding",
+    });
+    if (!embedding) {
+      throw new Error("embedding returned empty result");
+    }
+    return embedding;
   },
 
   async embedTicket(

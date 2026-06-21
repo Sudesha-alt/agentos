@@ -153,15 +153,13 @@ function mapIssue(raw: {
   };
 }
 
-export async function listIntakeColumnTickets(): Promise<{
+export async function listTicketsByStatuses(statuses: string[]): Promise<{
   items: IntakeTicketDto[];
   jql: string;
 }> {
   validatePipelineJiraConfig();
-  const mapping = getPipelineIntakeMapping();
-  const statuses = getPipelineIntakeStatuses();
   if (!statuses.length) {
-    throw new Error("Configure the AI Worker intake column first");
+    return { items: [], jql: "" };
   }
 
   const clauses: string[] = [];
@@ -182,7 +180,7 @@ export async function listIntakeColumnTickets(): Promise<{
     method: "POST",
     body: JSON.stringify({
       jql,
-      maxResults: 50,
+      maxResults: 100,
       fields: [
         "summary",
         "description",
@@ -202,6 +200,17 @@ export async function listIntakeColumnTickets(): Promise<{
   return { items, jql };
 }
 
+export async function listIntakeColumnTickets(): Promise<{
+  items: IntakeTicketDto[];
+  jql: string;
+}> {
+  const statuses = getPipelineIntakeStatuses();
+  if (!statuses.length) {
+    throw new Error("Configure the AI Worker intake column first");
+  }
+  return listTicketsByStatuses(statuses);
+}
+
 export function resolveIntakeStatusesForColumn(
   columnName: string,
   columns: BoardColumnDto[]
@@ -210,4 +219,17 @@ export function resolveIntakeStatusesForColumn(
     (c) => c.name.toLowerCase() === columnName.trim().toLowerCase()
   );
   return col?.statuses.length ? col.statuses : [columnName.trim()];
+}
+
+export function resolveReferenceStatusesForColumns(
+  columnNames: string[],
+  columns: BoardColumnDto[]
+): string[] {
+  const statuses = new Set<string>();
+  for (const name of columnNames) {
+    for (const status of resolveIntakeStatusesForColumn(name, columns)) {
+      statuses.add(status);
+    }
+  }
+  return [...statuses];
 }

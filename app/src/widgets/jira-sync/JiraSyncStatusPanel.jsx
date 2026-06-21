@@ -35,6 +35,7 @@ export default function JiraSyncStatusPanel({ setupSync, connected = true }) {
     <Panel>
       <PanelHeader
         title="Ticket sync"
+        subtitle="Stores tickets in Postgres. Vector embedding uses reference + AI Worker columns (Jira Integration → Index Jira vectors)."
         right={
           running ? (
             <span className="font-mono text-[10px] uppercase text-indigo">Syncing…</span>

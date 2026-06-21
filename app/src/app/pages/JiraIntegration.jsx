@@ -7,6 +7,8 @@ import {
   getPipelineJiraProjects,
   registerPipelineJiraWebhook,
   savePipelineIntakeColumn,
+  savePipelineReferenceColumns,
+  syncPipelineReferenceColumns,
   usePipelineIntakeTickets,
   usePipelineJiraSetup,
 } from "../../entities/pipeline-jira";
@@ -98,6 +100,11 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   const [intakeColumn, setIntakeColumn] = useState(
     () => setup?.intake?.aiWorkerColumnName || ""
   );
+  const [referenceColumns, setReferenceColumns] = useState(
+    () => setup?.intake?.referenceColumnNames ?? []
+  );
+  const [referencePending, setReferencePending] = useState(false);
+  const [referenceSyncPending, setReferenceSyncPending] = useState(false);
   const [connectPending, setConnectPending] = useState(false);
   const [oauthPending, setOauthPending] = useState(false);
   const [disconnectPending, setDisconnectPending] = useState(false);
@@ -178,6 +185,12 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
       setShowLegacyForm(false);
     }
   }, [connectedViaOAuth]);
+
+  useEffect(() => {
+    if (setup?.intake?.referenceColumnNames?.length) {
+      setReferenceColumns(setup.intake.referenceColumnNames);
+    }
+  }, [setup?.intake?.referenceColumnNames]);
 
   useEffect(() => {
     if (setup?.intake?.boardId) {
@@ -324,6 +337,11 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   }
 
   const intakeStatuses = setup?.intake?.aiWorkerStatuses ?? [];
+  const referenceStatuses = setup?.intake?.referenceStatuses ?? [];
+  const referenceColumnOptions = useMemo(
+    () => columnOptions.filter((name) => name !== intakeColumn),
+    [columnOptions, intakeColumn]
+  );
   const intakeItems = intakeData?.items ?? [];
   const showApiTokenForm = showLegacyForm && !connectedViaOAuth;
 
@@ -336,6 +354,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
     setWebhookSecret("");
     setColumns([]);
     setIntakeColumn("");
+    setReferenceColumns([]);
     setJiraProjects([]);
     setJiraBoards([]);
     setSelectedProjectKey("");
@@ -417,6 +436,54 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
       setConnectError(err.message || "Could not save intake column");
     } finally {
       setMappingPending(false);
+    }
+  }
+
+  async function handleSaveReferenceColumns(e) {
+    e.preventDefault();
+    setReferencePending(true);
+    setStatusMessage("");
+    try {
+      const result = await savePipelineReferenceColumns({
+        columnNames: referenceColumns,
+      });
+      const embedded = result?.sync?.embedded ?? 0;
+      const synced = result?.sync?.synced ?? 0;
+      setStatusMessage(
+        synced > 0
+          ? `Reference columns saved — synced ${synced} ticket(s), embedded ${embedded} new/changed.`
+          : "Reference columns saved. Tickets in these columns are stored for context only (not pipelined)."
+      );
+      await refetchSetup();
+    } catch (err) {
+      setConnectError(err.message || "Could not save reference columns");
+    } finally {
+      setReferencePending(false);
+    }
+  }
+
+  function toggleReferenceColumn(name) {
+    setReferenceColumns((prev) =>
+      prev.includes(name) ? prev.filter((col) => col !== name) : [...prev, name]
+    );
+  }
+
+  async function handleIndexJiraVectors() {
+    setReferenceSyncPending(true);
+    setStatusMessage("");
+    try {
+      const result = await syncPipelineReferenceColumns();
+      const embedded = result?.sync?.embedded ?? 0;
+      const synced = result?.sync?.synced ?? 0;
+      const skipped = result?.sync?.skipped ?? 0;
+      setStatusMessage(
+        `Jira vector index complete — ${synced} ticket(s) synced, ${embedded} embedded, ${skipped} unchanged.`
+      );
+      await refetchSetup();
+    } catch (err) {
+      setConnectError(err.message || "Could not index Jira vectors");
+    } finally {
+      setReferenceSyncPending(false);
     }
   }
 
@@ -825,6 +892,95 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
               ))}
             </p>
           ) : null}
+        </Panel>
+      ) : null}
+
+      {connected ? (
+        <Panel>
+          <PanelHeader
+            title="Jira vector index (RAG)"
+            subtitle="Embeds ticket summaries and descriptions into Supabase pgvector for semantic search. Only reference + AI Worker statuses are vectorized — not the whole backlog."
+          />
+          <div className="space-y-4 p-4 sm:px-6">
+            <p className="text-[13px] leading-relaxed text-app-ink-dim">
+              <strong className="text-app-ink">Where to configure:</strong> pick reference columns
+              below (Done, Resolved, …), save, then use{" "}
+              <strong className="text-app-ink">Index Jira vectors</strong>. New or updated tickets
+              only — already-embedded tickets are skipped. Requires{" "}
+              <code className="font-mono text-[12px]">OPENAI_API_KEY</code> on the server.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                disabled={
+                  referenceSyncPending ||
+                  !referenceStatuses.length ||
+                  !pipelineReady
+                }
+                onClick={handleIndexJiraVectors}
+                className="app-btn-primary disabled:opacity-50"
+              >
+                {referenceSyncPending ? "Indexing…" : "Index Jira vectors"}
+              </button>
+              {!referenceStatuses.length ? (
+                <p className="text-xs text-app-ink-mute">
+                  Save reference columns first to enable indexing.
+                </p>
+              ) : (
+                <p className="text-xs text-app-ink-dim">
+                  Statuses: {referenceStatuses.join(", ")}
+                  {intakeStatuses.length
+                    ? ` · AI Worker: ${intakeStatuses.join(", ")}`
+                    : ""}
+                </p>
+              )}
+            </div>
+          </div>
+        </Panel>
+      ) : null}
+
+      {connected ? (
+        <Panel>
+          <PanelHeader
+            title="Reference columns (context only)"
+            subtitle="Done, Resolved, and similar columns — synced to Postgres and vector DB for RAG. Never start the agent pipeline."
+          />
+          <form className="space-y-4 p-4 sm:px-6" onSubmit={handleSaveReferenceColumns}>
+            {!referenceColumnOptions.length ? (
+              <p className="text-xs text-app-ink-mute">
+                Load board columns above, then select which columns hold completed work for context.
+              </p>
+            ) : (
+              <ul className="grid gap-2 sm:grid-cols-2">
+                {referenceColumnOptions.map((name) => (
+                  <li key={name}>
+                    <label className="flex cursor-pointer items-center gap-2 rounded-app-sm border border-app-border px-3 py-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={referenceColumns.includes(name)}
+                        onChange={() => toggleReferenceColumn(name)}
+                      />
+                      <span>{name}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="submit"
+                disabled={referencePending || !referenceColumnOptions.length}
+                className="app-btn-primary disabled:opacity-50"
+              >
+                {referencePending ? "Saving…" : "Save reference columns"}
+              </button>
+              {referenceStatuses.length ? (
+                <p className="text-xs text-app-ink-dim">
+                  Embed statuses: {referenceStatuses.join(", ")}
+                </p>
+              ) : null}
+            </div>
+          </form>
         </Panel>
       ) : null}
 

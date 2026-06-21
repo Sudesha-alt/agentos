@@ -16,6 +16,8 @@ export interface PipelineIntakeMapping {
   boardId: string;
   aiWorkerColumnName: string;
   aiWorkerStatuses: string[];
+  referenceColumnNames: string[];
+  referenceStatuses: string[];
   completionSettings: PipelineCompletionSettings;
 }
 
@@ -42,7 +44,28 @@ function defaultStatuses(): string[] {
   return parseList(process.env.PIPELINE_JIRA_AI_WORKER_STATUSES, ["AI Worker"]);
 }
 
+function defaultReferenceStatuses(): string[] {
+  return parseList(process.env.PIPELINE_JIRA_REFERENCE_STATUSES, [
+    "Done",
+    "Resolved",
+    "Closed",
+  ]);
+}
+
 const orgIntakeCache = new Map<string, PipelineIntakeMapping>();
+
+function parseStringListJson(raw: unknown): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (Array.isArray(parsed)) {
+      return parsed.map(String).map((s) => s.trim()).filter(Boolean);
+    }
+  } catch {
+    /* ignore */
+  }
+  return [];
+}
 
 function parseStatusesJson(raw: unknown): string[] {
   if (!raw) return defaultStatuses();
@@ -67,6 +90,25 @@ function parseCompletionJson(raw: unknown): PipelineCompletionSettings {
   }
 }
 
+function buildMappingFromParts(input: {
+  boardId?: string | null;
+  aiWorkerColumnName?: string | null;
+  aiWorkerStatusesJson?: unknown;
+  referenceColumnNamesJson?: unknown;
+  referenceStatusesJson?: unknown;
+  completionSettingsJson?: unknown;
+}): PipelineIntakeMapping {
+  const envBoardId = process.env.PIPELINE_JIRA_BOARD_ID?.trim() || "";
+  return {
+    boardId: input.boardId?.trim() || envBoardId,
+    aiWorkerColumnName: input.aiWorkerColumnName?.trim() || "",
+    aiWorkerStatuses: parseStatusesJson(input.aiWorkerStatusesJson),
+    referenceColumnNames: parseStringListJson(input.referenceColumnNamesJson),
+    referenceStatuses: parseStringListJson(input.referenceStatusesJson),
+    completionSettings: parseCompletionJson(input.completionSettingsJson),
+  };
+}
+
 /** Load board/column mapping from Postgres for the active org (multi-tenant). */
 export async function warmOrganizationIntakeMapping(
   organizationId: string
@@ -77,6 +119,8 @@ export async function warmOrganizationIntakeMapping(
       boardId: true,
       aiWorkerColumnName: true,
       aiWorkerStatusesJson: true,
+      referenceColumnNamesJson: true,
+      referenceStatusesJson: true,
       completionSettingsJson: true,
     },
   });
@@ -85,12 +129,7 @@ export async function warmOrganizationIntakeMapping(
     return;
   }
 
-  orgIntakeCache.set(organizationId, {
-    boardId: row.boardId?.trim() || "",
-    aiWorkerColumnName: row.aiWorkerColumnName?.trim() || "",
-    aiWorkerStatuses: parseStatusesJson(row.aiWorkerStatusesJson),
-    completionSettings: parseCompletionJson(row.completionSettingsJson),
-  });
+  orgIntakeCache.set(organizationId, buildMappingFromParts(row));
 }
 
 export function clearOrganizationIntakeMapping(organizationId: string): void {
@@ -117,35 +156,12 @@ export function getPipelineIntakeMapping(): PipelineIntakeMapping {
       }
     | undefined;
 
-  const envBoardId = process.env.PIPELINE_JIRA_BOARD_ID?.trim() || "";
-  let statuses = defaultStatuses();
-  if (row?.ai_worker_statuses_json) {
-    try {
-      const parsed = JSON.parse(row.ai_worker_statuses_json) as string[];
-      if (Array.isArray(parsed) && parsed.length) statuses = parsed;
-    } catch {
-      /* keep defaults */
-    }
-  }
-
-  let completionSettings = { ...DEFAULT_COMPLETION };
-  if (row?.completion_settings_json) {
-    try {
-      completionSettings = {
-        ...DEFAULT_COMPLETION,
-        ...(JSON.parse(row.completion_settings_json) as Partial<PipelineCompletionSettings>),
-      };
-    } catch {
-      /* keep defaults */
-    }
-  }
-
-  return {
-    boardId: row?.board_id || envBoardId,
-    aiWorkerColumnName: row?.ai_worker_column_name || "",
-    aiWorkerStatuses: statuses,
-    completionSettings,
-  };
+  return buildMappingFromParts({
+    boardId: row?.board_id,
+    aiWorkerColumnName: row?.ai_worker_column_name,
+    aiWorkerStatusesJson: row?.ai_worker_statuses_json,
+    completionSettingsJson: row?.completion_settings_json,
+  });
 }
 
 export function getPipelineCompletionSettings(): PipelineCompletionSettings {
@@ -174,10 +190,38 @@ export function getPipelineIntakeStatuses(): string[] {
   return statuses.length ? statuses : defaultStatuses();
 }
 
+export function getPipelineReferenceStatuses(): string[] {
+  return getPipelineIntakeMapping().referenceStatuses;
+}
+
+/** Statuses eligible for vector embedding (reference + intake, or env fallback). */
+export function getJiraEmbedStatuses(): string[] | null {
+  const mapping = getPipelineIntakeMapping();
+  const combined = [
+    ...new Set([...mapping.aiWorkerStatuses, ...mapping.referenceStatuses]),
+  ].filter(Boolean);
+  if (combined.length > 0) return combined;
+
+  const envRaw = process.env.JIRA_SYNC_EMBED_STATUSES?.trim();
+  if (!envRaw) return null;
+  return envRaw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export function isPipelineIntakeStatus(statusName: string | undefined): boolean {
   if (!statusName) return false;
   const normalized = statusName.trim().toLowerCase();
   return getPipelineIntakeStatuses().some(
+    (s) => s.trim().toLowerCase() === normalized
+  );
+}
+
+export function isPipelineReferenceStatus(statusName: string | undefined): boolean {
+  if (!statusName) return false;
+  const normalized = statusName.trim().toLowerCase();
+  return getPipelineReferenceStatuses().some(
     (s) => s.trim().toLowerCase() === normalized
   );
 }
@@ -217,9 +261,9 @@ export function savePipelineIntakeColumn(input: {
     });
 
   return {
+    ...existing,
     boardId,
     aiWorkerColumnName: input.columnName,
     aiWorkerStatuses: statuses,
-    completionSettings: existing.completionSettings,
   };
 }

@@ -1,3 +1,5 @@
+import { getJiraEmbedStatuses } from "../pipeline/jira/intakeConfig";
+
 export function getJiraSyncConfig() {
   const embedStatusesRaw =
     process.env.JIRA_SYNC_EMBED_STATUSES?.trim() ?? "";
@@ -16,6 +18,12 @@ export function getJiraSyncConfig() {
 }
 
 export function shouldEmbedStatus(status: string): boolean {
+  const orgStatuses = getJiraEmbedStatuses();
+  if (orgStatuses && orgStatuses.length > 0) {
+    const lower = status.toLowerCase();
+    return orgStatuses.some((s) => s.toLowerCase() === lower);
+  }
+
   const { embedStatuses } = getJiraSyncConfig();
   if (!embedStatuses || embedStatuses.length === 0) return true;
   const lower = status.toLowerCase();

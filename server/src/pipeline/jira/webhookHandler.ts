@@ -50,20 +50,28 @@ function enteredIntakeStatus(payload: PipelineJiraWebhookPayload): boolean {
   const changelog = (
     payload as {
       changelog?: {
-        items?: Array<{ field?: string; toString?: string }>;
+        items?: Array<{ field?: string; toString?: string; fromString?: string }>;
       };
     }
   ).changelog;
 
+  const currentStatus =
+    (payload.issue.fields as { status?: { name?: string } }).status?.name ?? "";
+
+  if (payload.webhookEvent === "jira:issue_created") {
+    return isPipelineIntakeStatus(currentStatus);
+  }
+
   if (changelog?.items?.length) {
     const statusChange = changelog.items.find((i) => i.field === "status");
     if (!statusChange) return false;
-    return isPipelineIntakeStatus(statusChange.toString);
+    const entered =
+      isPipelineIntakeStatus(statusChange.toString) &&
+      !isPipelineIntakeStatus(statusChange.fromString);
+    return entered;
   }
 
-  const currentStatus =
-    (payload.issue.fields as { status?: { name?: string } }).status?.name ?? "";
-  return isPipelineIntakeStatus(currentStatus);
+  return false;
 }
 
 /** issue_updated in AI Worker column → decompose + queued pipeline; closed/done → mirror. */

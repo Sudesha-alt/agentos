@@ -38,6 +38,10 @@ export default function SettingsCodebaseIndexPage() {
             GitHub integration →
           </Link>
           {" · "}
+          <Link to={orgPath("settings", "integrations", "jira")} className="text-indigo hover:underline">
+            Jira vector index →
+          </Link>
+          {" · "}
           connect and select a repository before indexing.
         </p>
       </div>

@@ -10,6 +10,7 @@ import {
   enqueuePipelineBatch,
   isJiraKeyInPipelineQueue,
 } from "../../queue/inProcessRunner";
+import { isPipelineIntakeStatus } from "./intakeConfig";
 import { shouldEnqueueJiraKey, logIntakeSkipped } from "./intakeDedup";
 import { classifyAiWorkerIntake } from "../../integrations/intentClassifier";
 import { logger } from "../../utils/logger";
@@ -29,6 +30,7 @@ const FETCH_FIELDS = [
   "components",
   "created",
   "project",
+  "status",
 ];
 
 export interface IntakeEnqueueResult {
@@ -59,8 +61,28 @@ export async function enqueueIntakeFromWebhook(
 export async function enqueueIntakeFromJiraKey(
   jiraKey: string,
   rawPayload?: PipelineJiraWebhookPayload,
-  pmContext?: PmPipelineContext
+  pmContext?: PmPipelineContext,
+  logSource: "webhook" | "scan" | "poll" | "manual" | "startup" = "manual"
 ): Promise<IntakeEnqueueResult> {
+  const rootIssue = await fetchPipelineIssue(jiraKey);
+  const rootStatus =
+    (rootIssue.fields as { status?: { name?: string } }).status?.name ?? "";
+  if (!isPipelineIntakeStatus(rootStatus)) {
+    await logIntakeSkipped(
+      jiraKey,
+      "not_in_intake_status",
+      `${jiraKey} is in "${rootStatus}" — only AI Worker column tickets start the pipeline`,
+      logSource === "manual" ? "manual" : logSource
+    );
+    return {
+      sourceKey: jiraKey,
+      enqueued: 0,
+      skipped: 1,
+      started: false,
+      groups: [],
+    };
+  }
+
   const decomposed = await decomposeForPipelineIntake(jiraKey);
   const batchItems: Array<{ ticketId: string; jiraKey: string }> = [];
   let skipped = 0;
@@ -86,11 +108,29 @@ export async function enqueueIntakeFromJiraKey(
       const dedup = await shouldEnqueueJiraKey(taskKey);
       if (!dedup.enqueue) {
         skipped += 1;
-        await logIntakeSkipped(taskKey, dedup.reason!, dedup.message ?? dedup.reason!, "manual");
+        await logIntakeSkipped(
+          taskKey,
+          dedup.reason!,
+          dedup.message ?? dedup.reason!,
+          logSource === "manual" ? "manual" : logSource
+        );
         continue;
       }
 
       const issue = await fetchPipelineIssue(taskKey);
+      const issueStatus =
+        (issue.fields as { status?: { name?: string } }).status?.name ?? "";
+      if (!isPipelineIntakeStatus(issueStatus)) {
+        skipped += 1;
+        await logIntakeSkipped(
+          taskKey,
+          "not_in_intake_status",
+          `${taskKey} is in "${issueStatus}" — only AI Worker column tickets are enqueued`,
+          logSource === "manual" ? "manual" : logSource
+        );
+        continue;
+      }
+
       const normalized = normalizePipelineIssue(issue);
       const taskIntent = classifyAiWorkerIntake(normalized);
 

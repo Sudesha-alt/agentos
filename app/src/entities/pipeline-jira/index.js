@@ -56,6 +56,23 @@ export async function savePipelineIntakeColumn(body) {
   });
 }
 
+export async function savePipelineReferenceColumns(body) {
+  return fetchJson(root("/reference-columns"), {
+    method: "PUT",
+    headers: requestHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify(body),
+  });
+}
+
+/** Fetch reference-column tickets from Jira and embed only new/changed into pgvector. */
+export async function syncPipelineReferenceColumns() {
+  return fetchJson(root("/reference-columns/sync"), {
+    method: "POST",
+    headers: requestHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({}),
+  });
+}
+
 export async function listPipelineIntakeTickets() {
   return fetchJson(root("/intake/tickets"), { headers: requestHeaders() });
 }

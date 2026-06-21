@@ -21,6 +21,7 @@ import {
   listJiraBoards,
   listJiraProjects,
   resolveIntakeStatusesForColumn,
+  resolveReferenceStatusesForColumns,
 } from "../../pipeline/jira/boardService";
 import {
   getPipelineCompletionSettings,
@@ -47,6 +48,7 @@ import {
   requireOrganizationUser,
   withOrganizationContext,
 } from "../orgRequestContext";
+import { logger } from "../../utils/logger";
 
 const router = Router();
 
@@ -297,6 +299,71 @@ router.put("/intake-column", async (req, res, next) => {
 
       const intake = getPipelineIntakeMapping();
       res.json(intake);
+    });
+  } catch (err) {
+    next(normalizePipelineError(err));
+  }
+});
+
+router.put("/reference-columns", async (req, res, next) => {
+  try {
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
+
+    await withOrganizationContext(user.organizationId, async () => {
+      validatePipelineJiraConfig();
+      const columnNames = Array.isArray(req.body?.columnNames)
+        ? req.body.columnNames.map((name: unknown) => String(name).trim()).filter(Boolean)
+        : [];
+      const columns = await getBoardColumnsOrdered();
+      const statuses = resolveReferenceStatusesForColumns(columnNames, columns);
+
+      const { saveOrganizationReferenceColumns } = await import(
+        "../../organization/jiraConfigStore"
+      );
+      await saveOrganizationReferenceColumns(user.organizationId!, {
+        columnNames,
+        statuses,
+      });
+
+      const { syncReferenceColumnTickets } = await import(
+        "../../jira-sync/referenceSyncService"
+      );
+      const syncResult = await syncReferenceColumnTickets().catch((err) => {
+        logger.warn({ err }, "reference column sync after save failed");
+        return null;
+      });
+
+      const intake = getPipelineIntakeMapping();
+      res.json({ intake, sync: syncResult });
+    });
+  } catch (err) {
+    next(normalizePipelineError(err));
+  }
+});
+
+router.post("/reference-columns/sync", async (req, res, next) => {
+  try {
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
+
+    await withOrganizationContext(user.organizationId, async () => {
+      validatePipelineJiraConfig();
+      const intake = getPipelineIntakeMapping();
+      if (!intake.referenceStatuses.length) {
+        res.status(400).json({
+          error: "reference_columns_not_configured",
+          message:
+            "Select reference columns (Done, Resolved, etc.) and save before indexing Jira vectors.",
+        });
+        return;
+      }
+
+      const { syncReferenceColumnTickets } = await import(
+        "../../jira-sync/referenceSyncService"
+      );
+      const syncResult = await syncReferenceColumnTickets();
+      res.json({ intake, sync: syncResult });
     });
   } catch (err) {
     next(normalizePipelineError(err));

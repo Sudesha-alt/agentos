@@ -85,12 +85,32 @@ export async function embedSyncedIssueRecord(
   issue: FetchedJiraIssue,
   gitContext?: string
 ): Promise<boolean> {
+  const organizationId = requireActiveOrganizationId();
+  const existing = await prisma.jiraIssue.findFirst({
+    where: { organizationId, jiraKey: issue.jiraKey },
+    select: { embeddedAt: true },
+  });
+
   const git = gitContext ?? (await fetchGitContext(issue.jiraKey));
   const fields = ticketFieldsFromFetched(issue, git || undefined);
+  const contentHash = buildTicketEmbedHash(fields);
+
+  if (
+    existing?.embeddedAt &&
+    issue.jiraUpdatedAt &&
+    issue.jiraUpdatedAt <= existing.embeddedAt &&
+    (await shouldSkipTicketEmbed(issue.jiraKey, contentHash))
+  ) {
+    logger.info(
+      { jiraKey: issue.jiraKey, embeddedAt: existing.embeddedAt.toISOString() },
+      "ticket embed skipped — unchanged since last embed"
+    );
+    return false;
+  }
+
   const embedded = await embedTicketFields(issue.jiraTicketId, fields);
 
   if (embedded) {
-    const organizationId = requireActiveOrganizationId();
     await prisma.jiraIssue.updateMany({
       where: { organizationId, jiraKey: issue.jiraKey },
       data: { embeddedAt: new Date(), gitContext: git || null },

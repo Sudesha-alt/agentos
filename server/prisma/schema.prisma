@@ -409,6 +409,8 @@ model OrganizationJiraConfig {
   boardId               String?
   aiWorkerColumnName    String?
   aiWorkerStatusesJson  Json?
+  referenceColumnNamesJson Json?
+  referenceStatusesJson Json?
   completionSettingsJson Json?
   updatedAt             DateTime     @updatedAt
 }

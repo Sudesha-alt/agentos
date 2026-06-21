@@ -1,3 +1,4 @@
+import { Agent, fetch as undiciFetch } from "node:undici";
 import OpenAI from "openai";
 import type {
   ChatCompletion,
@@ -5,6 +6,29 @@ import type {
 } from "openai/resources/chat/completions";
 
 let cached: OpenAI | undefined;
+let openaiDispatcher: Agent | undefined;
+
+/** Drop cached client after connection errors so the next call opens a fresh socket. */
+export function resetOpenAIClient(): void {
+  cached = undefined;
+  void openaiDispatcher?.close();
+  openaiDispatcher = undefined;
+}
+
+/** Fresh TCP per request — avoids stale keep-alive gzip streams on Render. */
+function openaiFetch(url: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  if (!openaiDispatcher) {
+    openaiDispatcher = new Agent({
+      pipelining: 0,
+      keepAliveTimeout: 1,
+      keepAliveMaxTimeout: 1,
+    });
+  }
+  return undiciFetch(url, {
+    ...init,
+    dispatcher: openaiDispatcher,
+  }) as unknown as Promise<Response>;
+}
 
 export const DEFAULT_OPENAI_CHAT_MODEL = "gpt-5.1";
 /** One-off / high-stakes tasks (company profile synthesis, etc.). */
@@ -93,6 +117,7 @@ export function getOpenAIClient(): OpenAI {
     apiKey,
     timeout: 120_000,
     maxRetries: 0,
+    fetch: openaiFetch,
   });
   return cached;
 }

@@ -3,10 +3,10 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import { prisma } from "../db/client";
 import {
   createChatCompletion,
-  getOpenAIClient,
   getOpenAISummaryModel,
   isOpenAIConfigured,
 } from "../llm/openaiClient";
+import { createEmbeddingVectors } from "../llm/embeddings";
 import { gitClient } from "../integrations/gitProvider";
 import { getRepoContext } from "../git-integration/gitCredentialsStore";
 import { resolveRepoIndexBranch } from "../git-integration/resolveRepoBranch";
@@ -102,7 +102,6 @@ const CODE_EXTENSIONS = new Set([
 ]);
 
 const MAX_FILE_SIZE = 100 * 1024;
-const EMBEDDING_MODEL = "text-embedding-3-small";
 const prismaAny = prisma as any;
 
 export interface IndexRunResult {
@@ -709,6 +708,60 @@ function regexIntelligence(content: string, filePath: string, language: string) 
   };
 }
 
+async function embedFileChunks(
+  texts: string[],
+  filePath: string,
+  branchName: string
+): Promise<number[][]> {
+  const vectors: number[][] = new Array(texts.length);
+  const subBatchSize = 4;
+  const subBatchDelayMs = 600;
+
+  for (let start = 0; start < texts.length; start += subBatchSize) {
+    if (start > 0) {
+      await new Promise((resolve) => setTimeout(resolve, subBatchDelayMs));
+    }
+    const end = Math.min(start + subBatchSize, texts.length);
+    const batch = texts.slice(start, end);
+
+    try {
+      const batchVectors = await createEmbeddingVectors(batch, {
+        filePath,
+        branchName,
+        chunkRange: `${start}-${end - 1}`,
+      });
+      batchVectors.forEach((vector, offset) => {
+        vectors[start + offset] = vector;
+      });
+    } catch (batchErr) {
+      logger.warn(
+        { filePath, branchName, chunkRange: `${start}-${end - 1}`, err: batchErr },
+        "embedding sub-batch failed — retrying chunks individually"
+      );
+      for (let i = start; i < end; i += 1) {
+        if (i > start) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+        try {
+          const [vector] = await createEmbeddingVectors([texts[i]!], {
+            filePath,
+            branchName,
+            chunkIndex: i,
+          });
+          if (vector) vectors[i] = vector;
+        } catch (err) {
+          logger.warn(
+            { filePath, branchName, chunkIndex: i, err },
+            "embedding chunk failed after retries — skipping chunk"
+          );
+        }
+      }
+    }
+  }
+
+  return vectors;
+}
+
 async function updateFileEmbeddings(
   filePath: string,
   branchName: string,
@@ -727,58 +780,40 @@ async function updateFileEmbeddings(
 
   const { repoOwner, repoName } = repoIds();
   const chunks = buildEmbeddingChunks(filePath, content, intelligence);
+  const texts = chunks.map((chunk) =>
+    chunk.text.slice(0, CODEBASE_EMBEDDING_INPUT_MAX_CHARS)
+  );
   const rows = [];
+  const vectors = await embedFileChunks(texts, filePath, branchName);
 
   for (let i = 0; i < chunks.length; i += 1) {
-    if (i > 0) {
-      await new Promise((resolve) => setTimeout(resolve, 200));
-    }
-    const chunk = chunks[i];
-    try {
-      const embeddingResponse = await withRetry(
-        () =>
-          getOpenAIClient().embeddings.create({
-            model: EMBEDDING_MODEL,
-            input: chunk.text.slice(0, CODEBASE_EMBEDDING_INPUT_MAX_CHARS),
-          }),
-        {
-          maxAttempts: 5,
-          baseDelayMs: 2000,
-          maxDelayMs: 20_000,
-          context: { operation: "embedding", filePath, chunkIndex: i },
-        }
-      );
-
-      rows.push({
+    const vector = vectors[i];
+    if (!vector) continue;
+    const chunk = chunks[i]!;
+    rows.push({
+      filePath,
+      repoOwner: repoOwner,
+      repoName: repoName,
+      branchName,
+      chunkIndex: i,
+      chunkContent: chunk.text,
+      embedding: vector,
+      metadata: {
         filePath,
-        repoOwner: repoOwner,
-        repoName: repoName,
-        branchName,
+        language,
+        summary: intelligence.summary,
+        patterns: intelligence.patterns,
         chunkIndex: i,
-        chunkContent: chunk.text,
-        embedding: embeddingResponse.data[0].embedding,
-        metadata: {
-          filePath,
-          language,
-          summary: intelligence.summary,
-          patterns: intelligence.patterns,
-          chunkIndex: i,
-          totalChunks: chunks.length,
-          spanType: chunk.metadata.spanType,
-          symbolName: chunk.metadata.symbolName,
-          startLine: chunk.metadata.startLine,
-          endLine: chunk.metadata.endLine,
-          chunkStrategy: chunk.metadata.chunkStrategy,
-          isHeader: chunk.metadata.isHeader,
-        },
-        contentHash: sha256(chunk.text),
-      });
-    } catch (err) {
-      logger.warn(
-        { filePath, branchName, chunkIndex: i, err },
-        "embedding chunk failed after retries — skipping chunk"
-      );
-    }
+        totalChunks: chunks.length,
+        spanType: chunk.metadata.spanType,
+        symbolName: chunk.metadata.symbolName,
+        startLine: chunk.metadata.startLine,
+        endLine: chunk.metadata.endLine,
+        chunkStrategy: chunk.metadata.chunkStrategy,
+        isHeader: chunk.metadata.isHeader,
+      },
+      contentHash: sha256(chunk.text),
+    });
   }
 
   if (!rows.length) {

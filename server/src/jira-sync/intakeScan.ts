@@ -9,6 +9,7 @@ import { shouldEnqueueJiraKey, logIntakeSkipped } from "../pipeline/jira/intakeD
 import { isJiraKeyInPipelineQueue } from "../queue/inProcessRunner";
 import { logger } from "../utils/logger";
 import { listJiraIssuesByStatus } from "./issueRepository";
+import { syncReferenceColumnTickets } from "./referenceSyncService";
 
 export type IntakeScanSource = "live-jira" | "synced-db" | "startup" | "poll" | "manual";
 
@@ -19,6 +20,15 @@ export interface IntakeScanResult {
   source: IntakeScanSource;
   errors: Array<{ jiraKey: string; message: string }>;
   skipReasons: Array<{ jiraKey: string; reason: string; message: string }>;
+}
+
+function intakeLogSource(
+  source: IntakeScanSource
+): "poll" | "scan" | "startup" | "manual" {
+  if (source === "poll") return "poll";
+  if (source === "startup") return "startup";
+  if (source === "manual") return "manual";
+  return "scan";
 }
 
 async function enqueueIssueKeys(
@@ -52,6 +62,7 @@ async function enqueueIssueKeys(
   let skipped = 0;
   const errors: IntakeScanResult["errors"] = [];
   const skipReasons: IntakeScanResult["skipReasons"] = [];
+  const logSource = intakeLogSource(source);
 
   for (const jiraKey of keys) {
     if (isJiraKeyInPipelineQueue(jiraKey)) {
@@ -62,13 +73,11 @@ async function enqueueIssueKeys(
     const dedup = await shouldEnqueueJiraKey(jiraKey);
     if (!dedup.enqueue) {
       skipped += 1;
-      const scanSource: "poll" | "scan" | "startup" =
-        source === "poll" ? "poll" : source === "startup" ? "startup" : "scan";
       await logIntakeSkipped(
         jiraKey,
         dedup.reason!,
         dedup.message ?? dedup.reason!,
-        scanSource
+        logSource
       );
       skipReasons.push({
         jiraKey,
@@ -79,7 +88,7 @@ async function enqueueIssueKeys(
     }
 
     try {
-      const result = await enqueueIntakeFromJiraKey(jiraKey);
+      const result = await enqueueIntakeFromJiraKey(jiraKey, undefined, undefined, logSource);
       if (result.enqueued > 0) enqueued += result.enqueued;
       skipped += result.skipped;
     } catch (err) {
@@ -116,6 +125,10 @@ export async function scanIntakeFromSyncedIssues(
     logger.debug({ source }, "intake scan skipped — pipeline Jira not configured yet");
     return empty;
   }
+
+  await syncReferenceColumnTickets().catch((err) =>
+    logger.warn({ err }, "reference column sync before intake failed")
+  );
 
   const intake = getPipelineIntakeMapping();
   const statuses = intake.aiWorkerStatuses ?? [];

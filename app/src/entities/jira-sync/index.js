@@ -35,6 +35,12 @@ const restAdapter = {
       headers: requestHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(body),
     }),
+  embedIssue: (jiraKey) =>
+    fetchJson(sync(`/issues/${encodeURIComponent(jiraKey)}/embed`), {
+      method: "POST",
+      headers: requestHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({}),
+    }),
 };
 
 const mockAdapter = {
@@ -60,6 +66,13 @@ export function getJiraSyncIssue(jiraKey) {
 
 export function runJiraSync(body) {
   return adapter.runSync(body);
+}
+
+export function embedJiraIssue(jiraKey) {
+  if (DATA_MODE !== "rest") {
+    return Promise.resolve({ jiraKey, embedded: true });
+  }
+  return restAdapter.embedIssue(jiraKey);
 }
 
 export function useJiraSyncStatus(options = {}) {

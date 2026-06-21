@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { useJiraSyncIssues } from "../../entities/jira-sync";
+import { embedJiraIssue, useJiraSyncIssues } from "../../entities/jira-sync";
 import EmptyState from "../../app/components/EmptyState";
 import LabelPill from "../../app/components/LabelPill";
 import Spinner from "../../app/components/Spinner";
@@ -16,6 +16,7 @@ export default function JiraTicketBrowser({ connected }) {
   const [statusFilter, setStatusFilter] = useState("");
   const animatedRef = useRef(false);
   const [didAnimate, setDidAnimate] = useState(false);
+  const [embeddingKey, setEmbeddingKey] = useState(null);
 
   const params = useMemo(
     () => ({
@@ -42,6 +43,15 @@ export default function JiraTicketBrowser({ connected }) {
 
   const safeStagger = motionSafe(pageStagger(0.03));
   const safeSection = motionSafe(sectionFadeUp);
+
+  async function handleEmbed(jiraKey) {
+    setEmbeddingKey(jiraKey);
+    try {
+      await embedJiraIssue(jiraKey);
+    } finally {
+      setEmbeddingKey(null);
+    }
+  }
 
   if (!connected) return null;
 
@@ -111,6 +121,14 @@ export default function JiraTicketBrowser({ connected }) {
                       : "—"}
                   </td>
                   <td className="px-5 py-2.5">
+                    <button
+                      type="button"
+                      disabled={embeddingKey === item.jiraKey}
+                      onClick={() => handleEmbed(item.jiraKey)}
+                      className="mr-3 text-[12px] text-indigo hover:underline disabled:opacity-50"
+                    >
+                      {embeddingKey === item.jiraKey ? "Embedding…" : "Embed"}
+                    </button>
                     <Link
                       to={`${orgPath("pm-agents")}?ticket=${encodeURIComponent(item.jiraKey)}`}
                       className="mr-3 text-[12px] text-indigo hover:underline"
