@@ -4,6 +4,7 @@ import { githubClient } from "../../integrations/githubClient";
 import { getActivePipelineJiraCredentials } from "../../pipeline/jira/credentialsStore";
 import { ValidationError, NotFoundError } from "../../utils/errors";
 import { refineHandoffFiles } from "./handoffRefine";
+import { normalizeDiscoverySummary } from "../virin/normalizeDiscoverySummary";
 import { pmAnalysisStore } from "./store";
 import type {
   AcceptanceCriterion,
@@ -348,7 +349,7 @@ export function buildTechAgentHandoffFromRecord(
     escalationReason: null,
   };
   const ac = record.acceptanceCriteria ?? {
-    userStory: record.questionMode?.discoverySummary?.slice(0, 200) ?? "",
+    userStory: normalizeDiscoverySummary(record.questionMode?.discoverySummary).slice(0, 200),
     happyPath: (record.handoffPackage?.engineeringTickets?.[0]?.acceptanceCriteria ?? []).map(
       (c) => ({ given: c, when: "run", then: "pass" })
     ),
