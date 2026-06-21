@@ -7,7 +7,6 @@ import { useOrgPathBuilder } from "../providers/OrgRouteProvider";
 import { formatRelativeTime } from "../lib/format";
 import StageRail from "./StageRail";
 import StatusPill from "../../app/components/StatusPill";
-import { PipelineBlockingAlert } from "../../widgets/pm-analysis/VirinThoughtProcessPanel";
 
 /**
  * Top-bar notifications — review queue items plus recent pipeline activity.

@@ -1,8 +1,8 @@
 import { Link } from "react-router-dom";
 import StatusPill from "../../app/components/StatusPill";
-import { formatRelativeTime } from "../lib/format";
-import { pipelineMatchesAgentStage } from "../lib/agentPipelineStages";
-import { useOrgPathBuilder } from "../providers/OrgRouteProvider";
+import { formatRelativeTime } from "../../shared/lib/format";
+import { pipelineMatchesAgentStage } from "../../shared/lib/agentPipelineStages";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 
 function stepTone(status) {
   if (status === "COMPLETED") return "bg-success";
@@ -23,9 +23,9 @@ function eventTone(event) {
  * Prominent alert when a pipeline is paused / blocked for human input.
  */
 export function PipelineBlockingAlert({ live, className = "" }) {
-  if (!live || live.status !== "PAUSED") return null;
-
   const orgPath = useOrgPathBuilder();
+
+  if (!live || live.status !== "PAUSED") return null;
 
   return (
     <div
