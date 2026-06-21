@@ -85,18 +85,20 @@ export async function inferHandoffFromPipeline(
   return handoffFromPipelineStatus(pipeline);
 }
 
-export async function resolveHandoffForRecord(
-  record: PmAnalysisRecord,
-  organizationId: string
-): Promise<EngineeringHandoff> {
-  const stored = record.engineeringHandoff;
-  const inferred = await inferHandoffFromPipeline(record.jiraKey, organizationId);
-
+export function mergeHandoffWithInferred(
+  stored: EngineeringHandoff | undefined,
+  inferred: EngineeringHandoff | null | undefined
+): EngineeringHandoff {
   if (!inferred) {
     return stored ?? { status: "not_started" };
   }
 
-  if (!stored || stored.status === "not_started" || stored.status === "pending" || stored.status === "failed") {
+  if (
+    !stored ||
+    stored.status === "not_started" ||
+    stored.status === "pending" ||
+    stored.status === "failed"
+  ) {
     if (inferred.status !== "not_started") {
       return inferred;
     }
@@ -117,6 +119,46 @@ export async function resolveHandoffForRecord(
   }
 
   return stored ?? inferred;
+}
+
+export async function batchInferHandoffsFromPipeline(
+  jiraKeys: string[],
+  organizationId: string
+): Promise<Map<string, EngineeringHandoff>> {
+  const normalized = [...new Set(jiraKeys.map((k) => k.trim().toUpperCase()).filter(Boolean))];
+  if (normalized.length === 0) return new Map();
+
+  const tickets = await prisma.ticket.findMany({
+    where: { organizationId, jiraKey: { in: normalized } },
+    select: { id: true, jiraKey: true },
+  });
+  if (tickets.length === 0) return new Map();
+
+  const ticketIdToJiraKey = new Map(tickets.map((t) => [t.id, t.jiraKey]));
+  const pipelines = await prisma.pipeline.findMany({
+    where: { organizationId, ticketId: { in: tickets.map((t) => t.id) } },
+    orderBy: { startedAt: "desc" },
+    select: { id: true, status: true, currentStage: true, ticketId: true },
+  });
+
+  const result = new Map<string, EngineeringHandoff>();
+  const seenTicketIds = new Set<string>();
+  for (const pipeline of pipelines) {
+    if (seenTicketIds.has(pipeline.ticketId)) continue;
+    seenTicketIds.add(pipeline.ticketId);
+    const jiraKey = ticketIdToJiraKey.get(pipeline.ticketId);
+    if (!jiraKey) continue;
+    result.set(jiraKey, handoffFromPipelineStatus(pipeline));
+  }
+  return result;
+}
+
+export async function resolveHandoffForRecord(
+  record: PmAnalysisRecord,
+  organizationId: string
+): Promise<EngineeringHandoff> {
+  const inferred = await inferHandoffFromPipeline(record.jiraKey, organizationId);
+  return mergeHandoffWithInferred(record.engineeringHandoff, inferred);
 }
 
 export async function resolvePipelineIdForJiraKey(

@@ -2,8 +2,10 @@ import { estimateAnalysisCost } from "./orchestrator";
 import type { PmAnalysisRecord } from "./types";
 import { pmAnalysisStore } from "./store";
 import {
+  batchInferHandoffsFromPipeline,
   isAwaitingAnanta,
   listPmAnalysesForOrg,
+  mergeHandoffWithInferred,
   resolveHandoffForRecord,
   type PmAnalysisListFilter,
   type PmAnalysisListItem,
@@ -15,10 +17,17 @@ export async function buildPmAnalysisListItems(
 ): Promise<PmAnalysisListItem[]> {
   const filter = options.filter ?? "all";
   const records = await listPmAnalysesForOrg(organizationId, options);
+  const inferredHandoffs = await batchInferHandoffsFromPipeline(
+    records.map((r) => r.jiraKey),
+    organizationId
+  );
 
   const items: PmAnalysisListItem[] = [];
   for (const record of records) {
-    let handoff = await resolveHandoffForRecord(record, organizationId);
+    let handoff = mergeHandoffWithInferred(
+      record.engineeringHandoff,
+      inferredHandoffs.get(record.jiraKey)
+    );
     const storedStatus = record.engineeringHandoff?.status ?? "not_started";
     if (
       handoff.status !== storedStatus &&
