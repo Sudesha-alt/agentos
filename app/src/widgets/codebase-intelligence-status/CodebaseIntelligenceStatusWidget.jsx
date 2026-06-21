@@ -23,10 +23,16 @@ function formatRelativeTime(iso) {
   return date.toLocaleDateString();
 }
 
-function indexStatusLabel(status) {
+function indexStatusLabel(status, index) {
   switch (status) {
-    case "running":
+    case "running": {
+      const total = index?.filesTotal;
+      const processed = index?.filesProcessed ?? 0;
+      if (total && processed < total) {
+        return `Indexing ${processed}/${total}`;
+      }
       return "Indexing";
+    }
     case "queued":
       return "Queued";
     case "completed":
@@ -200,7 +206,7 @@ export default function CodebaseIntelligenceStatusWidget({
           ? embedded
             ? "Ready"
             : "Layer ready"
-          : indexStatusLabel(indexStatus)
+          : indexStatusLabel(indexStatus, data?.index)
       }
       tone={indexStatusTone(indexStatus, ready)}
     />
