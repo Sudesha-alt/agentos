@@ -240,8 +240,30 @@ export async function getCodebaseLayerStatus(
     jiraStats.total > 0 ? Math.min(100, Math.round((jiraStats.embedded / jiraStats.total) * 100)) : 0;
 
   const progress = latestRun ? indexRunProgress(latestRun) : null;
-  const indexStatus =
+  let indexStatus =
     (progress?.status as CodebaseLayerStatus["index"]["status"]) ?? "none";
+
+  // A run can stay `running` if the process died mid-index or after all files were
+  // processed but before the final status update. Reconcile so Ananta does not
+  // show "Indexing" forever when files are already in the DB.
+  if (indexStatus === "running" && latestRun && progress) {
+    const allFilesDone =
+      progress.filesTotal != null &&
+      progress.filesTotal > 0 &&
+      progress.filesProcessed >= progress.filesTotal;
+    const lastActivityMs = fileStats.lastIndexedAt
+      ? new Date(fileStats.lastIndexedAt).getTime()
+      : latestRun.startedAt.getTime();
+    const idleMs = Date.now() - lastActivityMs;
+    const STALE_IDLE_MS = 10 * 60 * 1000;
+
+    if (allFilesDone || (fileStats.count > 0 && idleMs > STALE_IDLE_MS)) {
+      indexStatus = allFilesDone ? "completed" : "failed";
+      if (!allFilesDone) {
+        blockers.push("Index run stalled — use Re-index full repo.");
+      }
+    }
+  }
 
   if (indexStatus === "failed" && progress?.error) {
     blockers.push(`Last index failed: ${progress.error}`);
