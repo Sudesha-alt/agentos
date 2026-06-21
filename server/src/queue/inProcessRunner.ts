@@ -45,9 +45,42 @@ let mirrorBackfillRunning = false;
 let canaryRunning = false;
 let activeCanaryRunId: string | null = null;
 
-export function startDrainForOrganization(organizationId: string): void {
+/** Start or resume FIFO drain for an org when nothing is currently draining. */
+async function ensureOrgQueueDraining(
+  organizationId: string,
+  options?: { resumePipelineId?: string; preferTicketId?: string }
+): Promise<void> {
   if (drainingByOrg.has(organizationId)) return;
-  void hydrateOrganizationQueue(organizationId);
+
+  const active = await getActiveQueueItem(organizationId);
+  if (active) {
+    void drainQueue(
+      active,
+      active.ticketId === options?.preferTicketId ? options?.resumePipelineId : undefined
+    );
+    return;
+  }
+
+  let next = await dequeueNextPending(organizationId);
+  if (
+    options?.preferTicketId &&
+    next &&
+    next.ticketId !== options.preferTicketId
+  ) {
+    const pending = await listPendingQueueItems(organizationId);
+    next = pending.find((p) => p.ticketId === options.preferTicketId) ?? next;
+  }
+
+  if (next) {
+    void drainQueue(
+      next,
+      next.ticketId === options?.preferTicketId ? options?.resumePipelineId : undefined
+    );
+  }
+}
+
+export function startDrainForOrganization(organizationId: string): void {
+  void ensureOrgQueueDraining(organizationId);
 }
 
 export async function hydrateQueueFromDb(): Promise<void> {
@@ -58,26 +91,7 @@ export async function hydrateQueueFromDb(): Promise<void> {
 }
 
 async function hydrateOrganizationQueue(organizationId: string): Promise<void> {
-  if (drainingByOrg.has(organizationId)) return;
-
-  const active = await getActiveQueueItem(organizationId);
-  if (active) {
-    logger.info(
-      { ticketId: active.ticketId, jiraKey: active.jiraKey, organizationId },
-      "resuming active queue item"
-    );
-    await drainQueue(active);
-    return;
-  }
-
-  const next = await dequeueNextPending(organizationId);
-  if (next) {
-    logger.info(
-      { ticketId: next.ticketId, jiraKey: next.jiraKey, organizationId },
-      "starting queued item from Postgres on boot"
-    );
-    await drainQueue(next);
-  }
+  await ensureOrgQueueDraining(organizationId);
 }
 
 export async function getPipelineQueueState(organizationId: string): Promise<{
@@ -185,8 +199,18 @@ export async function runPipelineInBackground(
   }
 
   const orgId = queued.organizationId;
-  if (!active && !drainingByOrg.has(orgId)) {
-    void drainQueue(queued, options?.resumePipelineId);
+  const hadBlockingActive = Boolean(active);
+  await ensureOrgQueueDraining(orgId, {
+    resumePipelineId: options?.resumePipelineId,
+    preferTicketId: ticketId,
+  });
+
+  const pending = await listPendingQueueItems(organizationId);
+  const isPending = pending.some((q) => q.ticketId === ticketId);
+  const activeNow = await getActiveQueueItem(organizationId);
+
+  if (!hadBlockingActive && !isPending) {
+    logger.info({ ticketId, jiraKey: key, organizationId: orgId }, "pipeline run kicked");
     return {
       started: true,
       queued: false,
@@ -195,26 +219,23 @@ export async function runPipelineInBackground(
     };
   }
 
-  const position = (await listPendingQueueItems(organizationId)).length;
+  const position = pending.findIndex((q) => q.ticketId === ticketId) + 1;
   logger.info(
-    { ticketId, jiraKey: key, position, activeTicketId: active?.ticketId },
+    { ticketId, jiraKey: key, position, activeTicketId: activeNow?.ticketId },
     "pipeline ticket queued"
   );
   return {
     started: false,
-    queued: true,
-    position,
-    activeTicketId: active?.ticketId ?? null,
-    activeJiraKey: active?.jiraKey ?? null,
+    queued: isPending,
+    position: position || pending.length,
+    activeTicketId: activeNow?.ticketId ?? null,
+    activeJiraKey: activeNow?.jiraKey ?? null,
   };
 }
 
 async function drainQueue(item: QueueItem, resumePipelineId?: string): Promise<void> {
   const orgId = item.organizationId;
-  if (drainingByOrg.has(orgId)) {
-    const active = await getActiveQueueItem(orgId);
-    if (active?.id !== item.id) return;
-  }
+  if (drainingByOrg.has(orgId)) return;
 
   drainingByOrg.add(orgId);
   await markQueueItemActive(item.id);

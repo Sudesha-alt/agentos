@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
 import { useSearchParams } from "react-router-dom";
-import { usePipelineList } from "../../entities/pipeline";
+import { usePipelineList, usePipelineLive } from "../../entities/pipeline";
 import { usePmAnalyses } from "../../entities/pm-agents";
 import { mapPmAnalysisToPipelineSummary } from "../pm-analysis/pipelineIds";
 import PipelineCard from "./PipelineCard";
@@ -11,7 +11,7 @@ import EmptyState from "../../app/components/EmptyState";
 import { motionSafe, pageStagger, sectionFadeUp } from "../../lib/motion";
 
 const TABS = [
-  { id: "active", label: "Active", statuses: ["RUNNING"] },
+  { id: "active", label: "Active", statuses: ["RUNNING", "QUEUED"] },
   { id: "review", label: "Review queue", statuses: ["PAUSED"] },
   { id: "history", label: "History", statuses: ["COMPLETED", "FAILED"] },
 ];
@@ -25,6 +25,7 @@ export default function PipelineExplorerWidget() {
   const { items: pipelineItems, loading: pipelinesLoading } = usePipelineList(undefined, {
     pollMs: 10_000,
   });
+  const { active: liveActive, queue: liveQueue } = usePipelineLive({ pollMs: 4000 });
   const { data: pmListData, loading: pmLoading } = usePmAnalyses({
     pollMs: 3000,
   });
@@ -32,10 +33,25 @@ export default function PipelineExplorerWidget() {
   const items = useMemo(() => {
     const pmSummaries = (pmListData?.items ?? []).map(mapPmAnalysisToPipelineSummary);
     const classic = pipelineItems.map((p) => ({ ...p, kind: "pipeline" }));
-    return [...pmSummaries, ...classic].sort((a, b) =>
+
+    const runningKeys = new Set(classic.filter((p) => p.status === "RUNNING").map((p) => p.jiraKey));
+    const queuedKeys = liveQueue?.queuedJiraKeys ?? [];
+    const queuedItems = queuedKeys
+      .filter((key) => key && !runningKeys.has(key))
+      .map((jiraKey) => ({
+        id: `queued-${jiraKey}`,
+        jiraKey,
+        summary: jiraKey,
+        status: "QUEUED",
+        currentStage: "INGESTION",
+        startedAt: new Date().toISOString(),
+        kind: "queued",
+      }));
+
+    return [...pmSummaries, ...queuedItems, ...classic].sort((a, b) =>
       (b.startedAt ?? "").localeCompare(a.startedAt ?? "")
     );
-  }, [pmListData, pipelineItems]);
+  }, [pmListData, pipelineItems, liveQueue?.queuedJiraKeys]);
 
   const loading = pipelinesLoading && pmLoading && items.length === 0;
 
@@ -134,7 +150,12 @@ export default function PipelineExplorerWidget() {
 
       <div className="hidden min-w-0 flex-1 md:block">
         <PipelineDetailPanel
-          pipelineId={selectedId ?? filtered[0]?.id}
+          pipelineId={
+            selectedId && !selectedId.startsWith("queued-")
+              ? selectedId
+              : filtered.find((p) => p.kind !== "queued")?.id ??
+                liveActive?.pipelineId
+          }
           onClose={
             selectedId
               ? () => {

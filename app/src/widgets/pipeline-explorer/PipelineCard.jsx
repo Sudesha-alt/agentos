@@ -47,6 +47,8 @@ export default function PipelineCard({
             status={pipeline.status}
             compact
           />
+        ) : pipeline.kind === "queued" ? (
+          <p className="text-[11px] text-app-ink-mute">Waiting in pipeline queue…</p>
         ) : (
           <StageRail
             currentStage={pipeline.currentStage}

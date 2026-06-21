@@ -202,12 +202,13 @@ export const STAGE_LABELS: Record<PipelineStage, string> = {
   OUTPUT: "Writeback",
 };
 
-export const STATUS_LABELS: Record<PipelineStatus | StageStatus, string> = {
+export const STATUS_LABELS: Record<string, string> = {
   RUNNING: "Running",
   PAUSED: "Awaiting human",
   COMPLETED: "Completed",
   FAILED: "Failed",
   PENDING: "Pending",
+  QUEUED: "Queued",
   AWAITING_HUMAN: "Awaiting human",
 };
 

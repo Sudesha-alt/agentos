@@ -6,6 +6,7 @@ const STATUS = {
   COMPLETED: { dot: "bg-success", text: "text-success" },
   FAILED: { dot: "bg-danger", text: "text-danger" },
   PENDING: { dot: "bg-app-ink-mute", text: "text-app-ink-mute" },
+  QUEUED: { dot: "bg-warning", text: "text-warning" },
   AWAITING_HUMAN: { dot: "bg-warning", text: "text-warning" },
 };
 
