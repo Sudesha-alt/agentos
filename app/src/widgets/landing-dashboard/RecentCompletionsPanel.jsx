@@ -1,13 +1,15 @@
 import { Link } from "react-router-dom";
 import { formatRelativeTime } from "../../shared/lib/format";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 
 export default function RecentCompletionsPanel({ items, loading }) {
+  const orgPath = useOrgPathBuilder();
   return (
     <Panel className="h-full">
       <PanelHeader
         kicker="Momentum"
-        title="Recent completions"
+        title="Recent completions"
       />
       <ul className="divide-y divide-app-border">
         {loading && !items?.length ? (
@@ -22,7 +24,7 @@ export default function RecentCompletionsPanel({ items, loading }) {
           items.map((item) => (
             <li key={item.id}>
               <Link
-                to={`/app/pipelines/${item.id}`}
+                to={orgPath("pipelines", item.id)}
                 className="flex items-center justify-between gap-3 px-5 py-4 transition hover:bg-app-surface-muted"
               >
                 <div className="min-w-0">

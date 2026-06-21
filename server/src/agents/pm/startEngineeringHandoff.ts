@@ -4,7 +4,7 @@ import {
   resolvePipelineIdForJiraKey,
 } from "./handoffStatus";
 import { pmAnalysisStore } from "./store";
-import { enqueueIntakeFromJiraKey } from "../../pipeline/jira/intakeEnqueueService";
+import { tryEngineeringIntakeEnqueue } from "../../pipeline/jira/intakeOrchestrator";
 import { withOrganizationContext } from "../../api/orgRequestContext";
 import { logger } from "../../utils/logger";
 
@@ -43,7 +43,7 @@ export async function startEngineeringHandoff(
   try {
     const pmContext = buildPmPipelineContext(record);
     const intake = await withOrganizationContext(organizationId, () =>
-      enqueueIntakeFromJiraKey(key, undefined, pmContext, "manual")
+      tryEngineeringIntakeEnqueue(key, pmContext, "manual")
     );
 
     const pipelineId = await resolvePipelineIdForJiraKey(key, organizationId);

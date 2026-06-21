@@ -392,8 +392,50 @@ export async function getLivePipelineStatus(
     });
   }
 
+  if (!pipeline) {
+    if (queue.activeJiraKey) {
+      const ticket = queue.activeTicketId
+        ? await prisma.ticket.findFirst({
+            where: { id: queue.activeTicketId, organizationId },
+            select: { id: true, jiraKey: true, normalizedData: true },
+          })
+        : null;
+      const normalized = ticket?.normalizedData as { summary?: string } | null;
+
+      return {
+        active: {
+          pipelineId: "",
+          ticketId: queue.activeTicketId ?? "",
+          jiraKey: queue.activeJiraKey,
+          summary: normalized?.summary ?? queue.activeJiraKey,
+          status: "RUNNING",
+          currentStage: "INGESTION",
+          currentStageLabel: stageLabel("INGESTION"),
+          currentAction: "Starting pipeline — preparing run…",
+          runningStage: "INGESTION",
+          runningStageLabel: stageLabel("INGESTION"),
+          stageProgress: buildStageProgress("INGESTION", "RUNNING", []),
+          recentActivity: [],
+          thoughtProcess: [],
+          discoverySteps: [],
+          blockReason: null,
+          blockStage: null,
+          startedAt: new Date().toISOString(),
+          queuedCount: queue.queueLength,
+          queuedJiraKeys: queue.queuedJiraKeys,
+        },
+        queue,
+      };
+    }
+
+    return {
+      active: null,
+      queue,
+    };
+  }
+
   return {
-    active: pipeline ? mapPipelineToLive(pipeline, queue) : null,
+    active: mapPipelineToLive(pipeline, queue),
     queue,
   };
 }

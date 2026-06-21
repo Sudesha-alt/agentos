@@ -289,11 +289,6 @@ router.post("/handoff/:ticketId/start-pipeline", async (req, res, next) => {
         );
       }
 
-      const handoff =
-        record?.status === "COMPLETED"
-          ? await prepareTechAgentHandoff(jiraKey)
-          : null;
-
       const result = await startEngineeringHandoff(jiraKey, user.organizationId!);
 
       res.status(202).json({
@@ -303,12 +298,6 @@ router.post("/handoff/:ticketId/start-pipeline", async (req, res, next) => {
         message: result.message,
         pmContextAttached: Boolean(record?.generatedPrd),
         engineeringHandoff: pmAnalysisStore.get(jiraKey)?.engineeringHandoff ?? null,
-        handoff: handoff
-          ? {
-              recommendation: handoff.handoff.recommendation,
-              suggestedFirstFile: handoff.handoff.suggestedFirstFile,
-            }
-          : null,
         intake: {
           enqueued: result.enqueued,
           skipped: result.skipped,

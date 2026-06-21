@@ -1,6 +1,7 @@
 import { DATA_MODE } from "../../shared/config/app";
 import { apiPath } from "../../shared/config/apiBase";
 import { fetchJson } from "../../shared/lib/fetchJson";
+import { authHeaders } from "../../shared/lib/authHeaders";
 import { useResource } from "../../shared/lib/useResource";
 import { mockApi } from "../../app/api/mock";
 
@@ -71,65 +72,70 @@ export function getIntakeClarifyingProgress(analysis) {
 
 const pm = (path) => apiPath("/api", `/pm-agents${path}`);
 
+function pmHeaders(extra = {}) {
+  return { ...authHeaders(), ...extra };
+}
+
 const restPmAdapter = {
   listAnalyses: (params = {}) => {
     const qs = new URLSearchParams();
     if (params.filter) qs.set("filter", params.filter);
     if (params.limit) qs.set("limit", String(params.limit));
     const query = qs.toString();
-    return fetchJson(pm(`/analyses${query ? `?${query}` : ""}`));
+    return fetchJson(pm(`/analyses${query ? `?${query}` : ""}`), { headers: pmHeaders() });
   },
-  getAnalysis: (ticketId) => fetchJson(pm(`/analysis/${encodeURIComponent(ticketId)}`)),
+  getAnalysis: (ticketId) =>
+    fetchJson(pm(`/analysis/${encodeURIComponent(ticketId)}`), { headers: pmHeaders() }),
   analyze: (ticketId, body = {}) =>
     fetchJson(pm(`/analyze/${encodeURIComponent(ticketId)}`), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: pmHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(body),
     }),
   answer: (ticketId, answer) =>
     fetchJson(pm(`/analyze/${encodeURIComponent(ticketId)}/answer`), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: pmHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ answer }),
     }),
   confirm: (ticketId, body) =>
     fetchJson(pm(`/analyze/${encodeURIComponent(ticketId)}/confirm`), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: pmHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(body),
     }),
   resume: (ticketId, body = {}) =>
     fetchJson(pm(`/analyze/${encodeURIComponent(ticketId)}/resume`), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: pmHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(body),
     }),
   retrospective: (ticketId, body = {}) =>
     fetchJson(pm(`/retrospective/${encodeURIComponent(ticketId)}`), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: pmHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(body),
     }),
   postShip: (ticketId, body = {}) =>
     fetchJson(pm(`/post-ship/${encodeURIComponent(ticketId)}`), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: pmHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(body),
     }),
   exportPackage: (ticketId) =>
-    fetchJson(pm(`/analysis/${encodeURIComponent(ticketId)}/export`)),
+    fetchJson(pm(`/analysis/${encodeURIComponent(ticketId)}/export`), { headers: pmHeaders() }),
   getHandoff: (ticketId) =>
-    fetchJson(pm(`/handoff/${encodeURIComponent(ticketId)}`)),
+    fetchJson(pm(`/handoff/${encodeURIComponent(ticketId)}`), { headers: pmHeaders() }),
   runHandoff: (ticketId) =>
     fetchJson(pm(`/handoff/${encodeURIComponent(ticketId)}`), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: pmHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({}),
     }),
   startPipeline: (ticketId) =>
     fetchJson(pm(`/handoff/${encodeURIComponent(ticketId)}/start-pipeline`), {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: pmHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({}),
     }),
 };

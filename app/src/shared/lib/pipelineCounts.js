@@ -18,7 +18,10 @@ export function derivePipelineCounts(pipelines = []) {
   return { active, review, running, completedToday };
 }
 
-export function deriveReviewQueueItems(pipelines = []) {
+export function deriveReviewQueueItems(pipelines = [], orgPath = (...segments) => {
+  const tail = segments.filter(Boolean).join("/");
+  return tail ? `/app/${tail}` : "/app";
+}) {
   return pipelines
     .filter((p) => p.status === "PAUSED")
     .map((p) => {
@@ -34,10 +37,10 @@ export function deriveReviewQueueItems(pipelines = []) {
           : "Validation gate — human review required";
       const actionLabel = isPrd ? "Review PRD" : isEng ? "Review Plan" : "Review";
       const actionTo = isPrd
-        ? `/app/pipelines/${p.id}/prd`
+        ? orgPath("pipelines", p.id, "prd")
         : isEng
-          ? `/app/ananta?pipeline=${p.id}`
-          : `/app/pipelines/${p.id}/override`;
+          ? `${orgPath("ananta")}?pipeline=${encodeURIComponent(p.id)}`
+          : orgPath("pipelines", p.id, "override");
       const started = p.startedAt ? new Date(p.startedAt).getTime() : Date.now();
       const waitingMinutes = Math.max(1, Math.round((Date.now() - started) / 60_000));
 

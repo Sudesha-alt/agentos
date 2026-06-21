@@ -5,7 +5,7 @@ import {
   type PipelineJiraIssue,
   type PipelineJiraWebhookPayload,
 } from "./ticketNormalizer";
-import { decomposeForPipelineIntake } from "./taskDecomposer";
+import { decomposeForPipelineIntake, decomposeFromPipelineIssue } from "./taskDecomposer";
 import { ticketRepo } from "../../db/repositories/ticketRepo";
 import {
   enqueuePipelineBatch,
@@ -137,9 +137,9 @@ export async function tryIntakeEnqueue(
 
     const rootStatus =
       (rootIssue.fields as { status?: { name?: string } }).status?.name ?? "";
-    const configuredStatuses = await getAiWorkerIntakeStatusesLive();
-    const liveColumnStatuses = await getLiveAiWorkerColumnStatuses();
     const engineeringIntake = Boolean(pmContext);
+    const configuredStatuses = engineeringIntake ? [] : await getAiWorkerIntakeStatusesLive();
+    const liveColumnStatuses = engineeringIntake ? [] : await getLiveAiWorkerColumnStatuses();
 
     if (
       !engineeringIntake &&
@@ -165,7 +165,9 @@ export async function tryIntakeEnqueue(
       };
     }
 
-    const decomposed = await decomposeForPipelineIntake(jiraKey);
+    const decomposed = engineeringIntake
+      ? decomposeFromPipelineIssue(rootIssue)
+      : await decomposeForPipelineIntake(jiraKey);
     if (decomposed.groups.length === 0) {
       await recordSkip(
         jiraKey,
@@ -225,8 +227,11 @@ export async function tryIntakeEnqueue(
           continue;
         }
 
-        const issue = await fetchPipelineIssue(taskKey);
-        await syncJiraIssueFromFetch(issue);
+        const issue =
+          taskKey === jiraKey ? rootIssue : await fetchPipelineIssue(taskKey);
+        if (taskKey !== jiraKey) {
+          await syncJiraIssueFromFetch(issue);
+        }
 
         const issueStatus =
           (issue.fields as { status?: { name?: string } }).status?.name ?? "";
@@ -394,4 +399,91 @@ async function fetchPipelineIssue(jiraKey: string): Promise<PipelineJiraIssue> {
     jiraKey,
     [...JIRA_ISSUE_FETCH_FIELDS]
   )) as PipelineJiraIssue;
+}
+
+/** Fast path after Virin handoff — one Jira fetch, no board status checks. */
+export async function tryEngineeringIntakeEnqueue(
+  jiraKey: string,
+  pmContext: PmPipelineContext,
+  source: IntakeEventSource | "manual" = "manual"
+): Promise<IntakeEnqueueResult> {
+  const key = jiraKey.trim().toUpperCase();
+
+  try {
+    const dedup = await shouldEnqueueJiraKey(key, { source: "manual", engineeringOnly: true });
+    if (!dedup.enqueue) {
+      await recordSkip(key, source, dedup.reason!, dedup.message ?? dedup.reason!);
+      return {
+        sourceKey: key,
+        enqueued: 0,
+        skipped: 1,
+        started: false,
+        groups: [],
+      };
+    }
+
+    const rootIssue = await fetchPipelineIssue(key);
+    await syncJiraIssueFromFetch(rootIssue);
+
+    const decomposed = decomposeFromPipelineIssue(rootIssue);
+    if (decomposed.groups.length === 0) {
+      await recordSkip(
+        key,
+        source,
+        "unsupported_issue_type",
+        `${key} is ${decomposed.sourceIssueType} — not eligible for engineering pipeline`,
+        { issueType: decomposed.sourceIssueType }
+      );
+      return {
+        sourceKey: key,
+        enqueued: 0,
+        skipped: 1,
+        started: false,
+        groups: [],
+      };
+    }
+
+    const normalized = normalizePipelineIssue(rootIssue);
+    const enrichedNormalized = {
+      ...normalized,
+      createdAt: normalized.createdAt.toISOString(),
+      pmContext,
+    };
+
+    const ticket = await ticketRepo.create({
+      jiraTicketId: normalized.jiraTicketId,
+      jiraKey: normalized.jiraKey,
+      rawPayload: rootIssue as unknown as Prisma.InputJsonValue,
+      normalizedData: enrichedNormalized as unknown as Prisma.InputJsonValue,
+      status: "RECEIVED",
+    });
+
+    const batchResult = await enqueuePipelineBatch(
+      [{ ticketId: ticket.id, jiraKey: normalized.jiraKey }],
+      getActiveOrganizationId() ?? undefined
+    );
+
+    if (batchResult.enqueued > 0) {
+      await recordEnqueue(key, source, {
+        summary: normalized.summary || key,
+        issueType: decomposed.sourceIssueType,
+        pipelineStarted: batchResult.started,
+      });
+    }
+
+    return {
+      sourceKey: key,
+      enqueued: batchResult.enqueued,
+      skipped: batchResult.enqueued > 0 ? 0 : 1,
+      started: batchResult.started,
+      groups: decomposed.groups.map((g) => ({
+        storyKey: g.storyKey,
+        taskKeys: g.taskKeys,
+      })),
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await recordFailure(key, source, message);
+    throw err;
+  }
 }

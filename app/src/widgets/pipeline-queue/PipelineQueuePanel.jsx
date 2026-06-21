@@ -198,7 +198,9 @@ export default function PipelineQueuePanel({ setup, showHeader = true, onRefresh
                     ) : null}
                   </>
                 ) : (
-                  <p className="text-sm text-white/60">Pipeline running — loading live status…</p>
+                  <p className="text-sm text-white/60">
+                    {liveActive?.currentAction ?? "Starting pipeline…"}
+                  </p>
                 )}
               </div>
             ) : (

@@ -1,5 +1,6 @@
 import { getPipelineJiraClient } from "./client";
 import { isAiWorkerEligibleIssueType } from "./aiWorkerIssueTypes";
+import type { PipelineJiraIssue } from "./ticketNormalizer";
 
 export interface StoryTaskGroup {
   storyKey: string;
@@ -25,6 +26,29 @@ interface HierarchyIssue {
 
 const HIERARCHY_FIELDS = ["summary", "issuetype"];
 
+function decomposeFromIssue(root: HierarchyIssue): DecomposedIntake {
+  const sourceIssueType = root.fields?.issuetype?.name ?? "Unknown";
+  if (!isAiWorkerEligibleIssueType(sourceIssueType)) {
+    return { sourceKey: root.key, sourceIssueType, groups: [] };
+  }
+  return {
+    sourceKey: root.key,
+    sourceIssueType,
+    groups: [
+      {
+        storyKey: root.key,
+        storySummary: root.fields?.summary ?? root.key,
+        taskKeys: [root.key],
+      },
+    ],
+  };
+}
+
+/** Decompose an already-fetched Jira issue (avoids a duplicate REST call). */
+export function decomposeFromPipelineIssue(root: PipelineJiraIssue): DecomposedIntake {
+  return decomposeFromIssue(root as HierarchyIssue);
+}
+
 /** AI Worker intake — queue Task/Bug tickets directly (no epic/story decomposition). */
 export async function decomposeForPipelineIntake(
   rootKey: string
@@ -35,21 +59,5 @@ export async function decomposeForPipelineIntake(
     HIERARCHY_FIELDS
   )) as HierarchyIssue;
 
-  const sourceIssueType = root.fields?.issuetype?.name ?? "Unknown";
-
-  if (!isAiWorkerEligibleIssueType(sourceIssueType)) {
-    return { sourceKey: rootKey, sourceIssueType, groups: [] };
-  }
-
-  return {
-    sourceKey: rootKey,
-    sourceIssueType,
-    groups: [
-      {
-        storyKey: rootKey,
-        storySummary: root.fields?.summary ?? rootKey,
-        taskKeys: [rootKey],
-      },
-    ],
-  };
+  return decomposeFromIssue(root);
 }

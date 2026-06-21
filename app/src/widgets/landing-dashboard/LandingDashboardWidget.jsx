@@ -67,7 +67,10 @@ export default function LandingDashboardWidget() {
     pollMs: 10_000,
   });
   const counts = useMemo(() => derivePipelineCounts(pipelines), [pipelines]);
-  const reviewItems = useMemo(() => deriveReviewQueueItems(pipelines), [pipelines]);
+  const reviewItems = useMemo(
+    () => deriveReviewQueueItems(pipelines, orgPath),
+    [pipelines, orgPath]
+  );
   const completions = useMemo(() => deriveRecentCompletions(pipelines), [pipelines]);
 
   const { data: costsDaily, loading: costsLoading } = useCostsDaily({ pollMs: 30_000 });
