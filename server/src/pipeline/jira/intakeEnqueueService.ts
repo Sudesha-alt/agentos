@@ -3,6 +3,7 @@ import { getPipelineJiraClient } from "./client";
 import {
   normalizePipelineIssue,
   type PipelineJiraIssue,
+  type PipelineJiraWebhookPayload,
 } from "./ticketNormalizer";
 import { decomposeForPipelineIntake } from "./taskDecomposer";
 import { ticketRepo } from "../../db/repositories/ticketRepo";
@@ -16,25 +17,9 @@ import { classifyAiWorkerIntake } from "../../integrations/intentClassifier";
 import { getActiveOrganizationId } from "../../organization/context";
 import { logger } from "../../utils/logger";
 import type { PmPipelineContext } from "../../agents/pm/pmPipelineContext";
-import type { PipelineJiraWebhookPayload } from "./ticketNormalizer";
+import { JIRA_ISSUE_FETCH_FIELDS } from "../../jira-sync/issueFetcher";
 import { recordIntakeAssignment } from "./intakeNotificationStore";
 import { aiWorkerEligibleTypeLabel } from "./aiWorkerIssueTypes";
-
-const FETCH_FIELDS = [
-  "summary",
-  "description",
-  "issuetype",
-  "priority",
-  "reporter",
-  "assignee",
-  "labels",
-  "customfield_10014",
-  "customfield_10016",
-  "components",
-  "created",
-  "project",
-  "status",
-];
 
 export interface IntakeEnqueueResult {
   sourceKey: string;
@@ -47,23 +32,16 @@ export interface IntakeEnqueueResult {
 export async function enqueueIntakeFromWebhook(
   payload: PipelineJiraWebhookPayload
 ): Promise<IntakeEnqueueResult | null> {
-  const normalized = normalizePipelineIssue(payload.issue);
-  const intent = classifyAiWorkerIntake(normalized);
+  const jiraKey = payload.issue?.key?.trim();
+  if (!jiraKey) return null;
 
-  if (!intent.requiresPipeline) {
-    logger.info(
-      { jiraKey: normalized.jiraKey, reason: intent.skipReason },
-      "pipeline intake skipped"
-    );
-    return null;
-  }
-
-  return enqueueIntakeFromJiraKey(normalized.jiraKey, payload);
+  // Webhook body is only a trigger — full issue is loaded from Jira REST below.
+  return enqueueIntakeFromJiraKey(jiraKey, undefined, undefined, "webhook");
 }
 
 export async function enqueueIntakeFromJiraKey(
   jiraKey: string,
-  rawPayload?: PipelineJiraWebhookPayload,
+  _webhookPayload?: unknown,
   pmContext?: PmPipelineContext,
   logSource: "webhook" | "scan" | "poll" | "manual" | "startup" = "manual"
 ): Promise<IntakeEnqueueResult> {
@@ -173,7 +151,7 @@ export async function enqueueIntakeFromJiraKey(
       const ticket = await ticketRepo.create({
         jiraTicketId: normalized.jiraTicketId,
         jiraKey: normalized.jiraKey,
-        rawPayload: (rawPayload ?? issue) as unknown as Prisma.InputJsonValue,
+        rawPayload: issue as unknown as Prisma.InputJsonValue,
         normalizedData: enrichedNormalized as unknown as Prisma.InputJsonValue,
         status: "RECEIVED",
       });
@@ -218,6 +196,6 @@ async function fetchPipelineIssue(jiraKey: string): Promise<PipelineJiraIssue> {
   const client = getPipelineJiraClient();
   return (await client.getIssueWithFields<PipelineJiraIssue>(
     jiraKey,
-    FETCH_FIELDS
+    [...JIRA_ISSUE_FETCH_FIELDS]
   )) as PipelineJiraIssue;
 }
