@@ -12,7 +12,7 @@ import {
   extractBearerToken,
   verifyAtlassianOAuthWebhookJwt,
 } from "./jiraWebhookAuth";
-import { isPipelineIntakeStatus } from "./intakeConfig";
+import { isPipelineIntakeStatus, getPipelineIntakeStatuses } from "./intakeConfig";
 import { type PipelineJiraWebhookPayload } from "./ticketNormalizer";
 import { upsertJiraIssueFromWebhook, handleJiraIssueDeleted } from "../../jira-sync/webhookBridge";
 import { enqueueIntakeFromWebhook } from "./intakeEnqueueService";
@@ -74,7 +74,12 @@ function enteredIntakeStatus(payload: PipelineJiraWebhookPayload): boolean {
   const changelog = (
     payload as {
       changelog?: {
-        items?: Array<{ field?: string; toString?: string; fromString?: string }>;
+        items?: Array<{
+          field?: string;
+          fieldId?: string;
+          toString?: string;
+          fromString?: string;
+        }>;
       };
     }
   ).changelog;
@@ -86,13 +91,21 @@ function enteredIntakeStatus(payload: PipelineJiraWebhookPayload): boolean {
     return isPipelineIntakeStatus(currentStatus);
   }
 
-  if (changelog?.items?.length) {
-    const statusChange = changelog.items.find((i) => i.field === "status");
-    if (!statusChange) return false;
-    const entered =
-      isPipelineIntakeStatus(statusChange.toString) &&
-      !isPipelineIntakeStatus(statusChange.fromString);
-    return entered;
+  if (payload.webhookEvent === "jira:issue_updated") {
+    const statusChange = changelog?.items?.find(
+      (i) => i.field === "status" || i.fieldId === "status"
+    );
+    if (statusChange) {
+      return (
+        isPipelineIntakeStatus(statusChange.toString) &&
+        !isPipelineIntakeStatus(statusChange.fromString)
+      );
+    }
+
+    // OAuth dynamic webhooks and some board moves omit changelog — align with poll/scan.
+    if (isPipelineIntakeStatus(currentStatus)) {
+      return true;
+    }
   }
 
   return false;
@@ -142,21 +155,35 @@ async function handleIssueUpsert(
 
   await upsertJiraIssueFromWebhook(payload);
 
-  if (enteredIntakeStatus(payload)) {
-    const result = await enqueueIntakeFromWebhook(payload);
-    if (result) {
-      logger.info(
-        {
-          sourceKey: result.sourceKey,
-          enqueued: result.enqueued,
-          skipped: result.skipped,
-          started: result.started,
-          groups: result.groups,
-        },
-        result.started
-          ? "pipeline intake started after decomposition"
-          : "pipeline intake queued after decomposition"
-      );
-    }
+  if (!enteredIntakeStatus(payload)) {
+    logger.info(
+      {
+        jiraKey,
+        statusName,
+        event: payload.webhookEvent,
+        hasChangelog: Boolean(
+          (payload as { changelog?: { items?: unknown[] } }).changelog?.items?.length
+        ),
+        intakeStatuses: getPipelineIntakeStatuses(),
+      },
+      "pipeline jira webhook: issue updated but not an AI Worker intake transition"
+    );
+    return;
+  }
+
+  const result = await enqueueIntakeFromWebhook(payload);
+  if (result) {
+    logger.info(
+      {
+        sourceKey: result.sourceKey,
+        enqueued: result.enqueued,
+        skipped: result.skipped,
+        started: result.started,
+        groups: result.groups,
+      },
+      result.started
+        ? "pipeline intake started after decomposition"
+        : "pipeline intake queued after decomposition"
+    );
   }
 }

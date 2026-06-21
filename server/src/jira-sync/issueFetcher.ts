@@ -2,7 +2,8 @@ import { parseDescription } from "../jira-intake/descriptionParser";
 import { getPipelineJiraClient } from "../pipeline/jira/client";
 import { getJiraSyncConfig } from "./config";
 
-const ISSUE_FIELDS = [
+/** Fields fetched from Jira REST for sync, webhooks, and pipeline intake. */
+export const JIRA_ISSUE_FETCH_FIELDS = [
   "summary",
   "description",
   "status",
@@ -17,7 +18,9 @@ const ISSUE_FIELDS = [
   "reporter",
   "assignee",
   "comment",
-].join(",");
+  "customfield_10014",
+  "customfield_10016",
+] as const;
 
 export interface FetchedJiraIssue {
   jiraTicketId: string;
@@ -53,7 +56,7 @@ export async function fetchJiraIssueByKey(
     id: string;
     key: string;
     fields: Record<string, unknown>;
-  }>(jiraKey, ISSUE_FIELDS.split(","))) as {
+  }>(jiraKey, [...JIRA_ISSUE_FETCH_FIELDS])) as {
     id: string;
     key: string;
     fields: Record<string, unknown>;

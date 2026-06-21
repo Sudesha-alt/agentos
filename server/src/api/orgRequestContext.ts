@@ -70,6 +70,8 @@ export function bindOrganizationContextMiddleware(
   void runInOrganizationContextAsync(user.organizationId, async () => {
     await warmOrganizationJiraCredentials(user.organizationId!);
     await warmOrganizationGitCredentials(user.organizationId!);
+    const { warmOrganizationIntakeMapping } = await import("../pipeline/jira/intakeConfig");
+    await warmOrganizationIntakeMapping(user.organizationId!);
     activateOrganizationJiraContext(user.organizationId!);
     activateOrganizationGitContext(user.organizationId!);
 

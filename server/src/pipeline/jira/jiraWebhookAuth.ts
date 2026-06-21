@@ -52,7 +52,12 @@ export function verifyAtlassianOAuthWebhookJwt(
 }
 
 export function extractBearerToken(authHeader: string | undefined): string | null {
-  if (!authHeader?.startsWith("Bearer ")) return null;
-  const token = authHeader.slice("Bearer ".length).trim();
-  return token || null;
+  if (!authHeader?.trim()) return null;
+  const [scheme, token] = authHeader.trim().split(/\s+/, 2);
+  if (!token) return null;
+  const normalized = scheme.toLowerCase();
+  if (normalized === "bearer" || normalized === "jwt") {
+    return token;
+  }
+  return null;
 }
