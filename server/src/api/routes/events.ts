@@ -69,13 +69,13 @@ router.get("/recent", async (req, res, next) => {
       };
     });
 
-    const intakeRows = await listRecentIntakeEvents(user.organizationId, 25);
+    const intakeRows = await listRecentIntakeEvents(user.organizationId, 15);
     const intakeEvents = intakeRows.map((item) => ({
       id: item.id,
       pipelineId: null,
       jiraKey: item.jiraKey,
       tone: intakeTone(item.outcome),
-      live: item.outcome === "enqueued" && item.message?.includes("started"),
+      live: item.outcome === "enqueued",
       message:
         item.message ??
         (item.outcome === "skipped"
@@ -93,7 +93,7 @@ router.get("/recent", async (req, res, next) => {
 
     const merged = [...intakeEvents, ...events]
       .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
-      .slice(0, 25);
+      .slice(0, 30);
 
     res.json({ events: merged });
   } catch (err) {

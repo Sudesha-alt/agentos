@@ -406,6 +406,7 @@ router.get("/intake/status", async (req, res, next) => {
         webhook: {
           lastReceivedAt: diagnostics.lastWebhookAt,
           lastJiraKey: diagnostics.lastWebhookJiraKey,
+          lastIntake: diagnostics.lastWebhookIntake,
         },
         lastScan: diagnostics.lastScan,
         lastScanAt: diagnostics.lastScanAt,

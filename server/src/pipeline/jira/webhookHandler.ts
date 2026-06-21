@@ -13,14 +13,10 @@ import {
   extractBearerToken,
   verifyAtlassianOAuthWebhookJwt,
 } from "./jiraWebhookAuth";
-import {
-  getPipelineIntakeStatuses,
-  isPipelineIntakeStatus,
-} from "./intakeConfig";
 import { type PipelineJiraWebhookPayload } from "./ticketNormalizer";
 import { upsertJiraIssueFromWebhook, handleJiraIssueDeleted } from "../../jira-sync/webhookBridge";
-import { tryIntakeEnqueue } from "./intakeOrchestrator";
-import { recordWebhookReceipt } from "./intakeDiagnosticsStore";
+import { tryIntakeEnqueue, type IntakeEnqueueResult } from "./intakeOrchestrator";
+import { recordWebhookReceipt, recordWebhookIntakeResult } from "./intakeDiagnosticsStore";
 
 async function resolveWebhookOrganization(
   req: Request,
@@ -87,45 +83,6 @@ async function resolveWebhookOrganization(
   return null;
 }
 
-function shouldAttemptIntake(payload: PipelineJiraWebhookPayload): boolean {
-  const currentStatus =
-    (payload.issue.fields as { status?: { name?: string } }).status?.name ?? "";
-
-  if (payload.webhookEvent === "jira:issue_created") {
-    return isPipelineIntakeStatus(currentStatus) || !currentStatus.trim();
-  }
-
-  if (payload.webhookEvent !== "jira:issue_updated") {
-    return false;
-  }
-
-  const changelog = (
-    payload as {
-      changelog?: {
-        items?: Array<{
-          field?: string;
-          fieldId?: string;
-          toString?: string;
-          fromString?: string;
-        }>;
-      };
-    }
-  ).changelog;
-
-  const statusChange = changelog?.items?.find(
-    (i) => i.field === "status" || i.fieldId === "status"
-  );
-  if (statusChange) {
-    return (
-      isPipelineIntakeStatus(statusChange.toString) &&
-      !isPipelineIntakeStatus(statusChange.fromString)
-    );
-  }
-
-  // OAuth dynamic webhooks often omit changelog — verify via REST in enqueue.
-  return isPipelineIntakeStatus(currentStatus) || !currentStatus.trim();
-}
-
 /** issue_updated in AI Worker column → decompose + queued pipeline; closed/done → mirror. */
 export async function handlePipelineJiraWebhook(
   req: Request,
@@ -159,7 +116,8 @@ export async function handlePipelineJiraWebhook(
   void withOrganizationContext(organizationId, async () => {
     if (event === "jira:issue_updated" || event === "jira:issue_created") {
       recordWebhookReceipt(organizationId, payload.issue.key);
-      await handleIssueUpsert(payload);
+      const result = await handleIssueUpsert(payload);
+      if (result) recordWebhookIntakeResult(organizationId, result);
     }
 
     if (event === "jira:issue_deleted") {
@@ -172,7 +130,7 @@ export async function handlePipelineJiraWebhook(
 
 async function handleIssueUpsert(
   payload: PipelineJiraWebhookPayload
-): Promise<void> {
+): Promise<IntakeEnqueueResult> {
   const jiraKey = payload.issue.key;
   const statusName =
     (payload.issue.fields as { status?: { name?: string } }).status?.name ?? "";
@@ -181,19 +139,8 @@ async function handleIssueUpsert(
 
   await upsertJiraIssueFromWebhook(payload);
 
-  if (!shouldAttemptIntake(payload)) {
-    logger.info(
-      {
-        jiraKey,
-        statusName,
-        event: payload.webhookEvent,
-        intakeStatuses: getPipelineIntakeStatuses(),
-      },
-      "pipeline jira webhook: skipped intake — status not in AI Worker column"
-    );
-    return;
-  }
-
+  // Always verify via Jira REST — webhook payloads often omit changelog or use
+  // status names that do not match configured AI Worker statuses exactly.
   const result = await tryIntakeEnqueue(jiraKey, "webhook");
 
   logger.info(
@@ -202,9 +149,12 @@ async function handleIssueUpsert(
       enqueued: result.enqueued,
       skipped: result.skipped,
       started: result.started,
+      webhookStatus: statusName,
     },
     result.enqueued > 0
       ? "pipeline intake enqueued from webhook"
       : "pipeline intake skipped after webhook fetch"
   );
+
+  return result;
 }

@@ -23,9 +23,12 @@ export default function NotificationCenter() {
   const intakeEvents = events.filter(
     (e) => e.outcome != null || e.tone === "intake" || e.source
   );
-  const pipelineEvents = events.filter((e) => e.tone !== "intake");
+  const pipelineEvents = events.filter(
+    (e) => !(e.outcome != null || e.source) && e.tone !== "intake"
+  );
   const totalCount =
     reviewItems.length +
+    intakeEvents.length +
     events.filter((e) => e.live).length +
     (liveActive ? 1 : 0);
 
@@ -179,7 +182,7 @@ export default function NotificationCenter() {
 
             <section className="border-t border-app-border px-4 py-3">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-app-ink-mute">
-                AI Worker assignments
+                Intake activity
               </p>
               {intakeEvents.length === 0 ? (
                 <p className="py-2 text-xs text-app-ink-dim">
@@ -187,7 +190,7 @@ export default function NotificationCenter() {
                 </p>
               ) : (
                 <ul className="space-y-1.5">
-                  {intakeEvents.slice(0, 5).map((event) => (
+                  {intakeEvents.slice(0, 8).map((event) => (
                     <li key={event.id}>
                       <Link
                         to={orgPath("pipelines")}
@@ -211,8 +214,14 @@ export default function NotificationCenter() {
                             <span className="font-mono text-app-ink-dim">{event.jiraKey}</span>{" "}
                             {event.message}
                           </p>
+                          {event.skipReason ? (
+                            <p className="truncate text-[11px] text-app-ink-mute">
+                              {event.skipReason}
+                            </p>
+                          ) : null}
                           <p className="text-[11px] text-app-ink-mute">
                             {formatRelativeTime(event.timestamp)}
+                            {event.source ? ` · ${event.source}` : ""}
                           </p>
                         </div>
                       </Link>

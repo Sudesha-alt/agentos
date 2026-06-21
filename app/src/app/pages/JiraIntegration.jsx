@@ -1069,6 +1069,13 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
                       ).toLocaleString()}`
                     : "No webhook received yet"}
                 </p>
+                {intakeStatus?.webhook?.lastIntake ? (
+                  <p className="mt-1 text-xs text-app-ink-mute">
+                    Intake: {intakeStatus.webhook.lastIntake.enqueued} enqueued,{" "}
+                    {intakeStatus.webhook.lastIntake.skipped} skipped
+                    {intakeStatus.webhook.lastIntake.started ? " · pipeline started" : ""}
+                  </p>
+                ) : null}
               </div>
               <div className="rounded-app-sm border border-app-border px-3 py-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-app-ink-mute">

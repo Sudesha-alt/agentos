@@ -221,6 +221,12 @@ export async function tryIntakeEnqueue(
 
         if (!taskIntent.requiresPipeline) {
           skipped += 1;
+          await recordSkip(
+            taskKey,
+            source,
+            "unsupported_issue_type",
+            taskIntent.skipReason ?? `${taskKey} does not require pipeline processing`
+          );
           logger.info(
             { jiraKey: taskKey, reason: taskIntent.skipReason },
             "decomposed task skipped"
@@ -266,6 +272,13 @@ export async function tryIntakeEnqueue(
         issueType: decomposed.sourceIssueType,
         pipelineStarted: batchResult.started,
       });
+    } else if (skipped > 0) {
+      await recordSkip(
+        decomposed.sourceKey,
+        source,
+        "intake_skipped",
+        `${decomposed.sourceKey} was not enqueued (${skipped} skip${skipped === 1 ? "" : "s"}) — see intake diagnostics for details`
+      );
     }
 
     return {
