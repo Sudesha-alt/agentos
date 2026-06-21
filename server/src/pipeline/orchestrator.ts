@@ -652,7 +652,22 @@ export class PipelineOrchestrator {
       } as unknown as Prisma.InputJsonValue,
     });
 
-    const discovery = await runDiscovery(ticket, pipelineId);
+    let discovery;
+    try {
+      discovery = await runDiscovery(ticket, pipelineId);
+    } catch (err) {
+      if (err instanceof DiscoveryPausedError) {
+        await pipelineRepo.completeStage({
+          stageLogId: stageLog.id,
+          output: {
+            paused: true,
+            blockingGaps: err.blockingGaps,
+          } as unknown as Prisma.InputJsonValue,
+          status: "AWAITING_HUMAN",
+        });
+      }
+      throw err;
+    }
 
     const output: AgentOutput<PrdOutput> = {
       raw: JSON.stringify(discovery.prd),

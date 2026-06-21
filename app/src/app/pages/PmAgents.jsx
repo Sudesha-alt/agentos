@@ -22,6 +22,7 @@ import { VirinWorkspace } from "../../widgets/pm-analysis/VirinWorkspace";
 import { VirinStageStepper } from "../../widgets/pm-analysis/VirinStageStepper";
 import { AgentPageWithChat } from "../../widgets/agent-chat/AgentPageWithChat";
 import { AgentPageHeader } from "../../widgets/agent-chat/AgentPageHeader";
+import VirinPipelineLivePanel from "../../widgets/pm-analysis/VirinPipelineLivePanel";
 import { PageIntro, Panel, PanelHeader } from "../../shared/ui/Panel";
 import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
 import Spinner from "../components/Spinner";
@@ -188,6 +189,8 @@ export default function PmAgents() {
     <AnimatedAppPage wide>
       <AgentPageWithChat domain="virin" contextKey={activeKey ?? ""}>
       <AgentPageHeader domain="virin" />
+
+      <VirinPipelineLivePanel jiraKey={activeKey} />
 
       {!companyConfigured && (
         <Panel className="border-warning/30 bg-warning/5">

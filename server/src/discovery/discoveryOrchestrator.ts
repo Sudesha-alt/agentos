@@ -4,7 +4,6 @@ import { attachPRDToJira } from "../prd/prdAttacher";
 import { generatePRD, type GeneratedPRD } from "../prd/prdGenerator";
 import { generatedPrdToPrdOutput } from "../prd/toPrdOutput";
 import { embedder } from "../rag/embedder";
-import { retriever } from "../rag/retriever";
 import { unifiedRetriever } from "../rag/unifiedRetriever";
 import type { PrdOutput } from "../types/agents";
 import type { NormalizedTicket } from "../types/ticket";
@@ -63,23 +62,39 @@ export async function runDiscovery(
   const usages: LlmUsage[] = [];
 
   logger.info({ jiraKey: ticket.jiraKey, pipelineId }, "discovery started");
+  await auditRepo.log(pipelineId, "PRODUCT_AGENT_STARTED", { jiraKey: ticket.jiraKey });
 
-  await embedder.embedTicket(
-    ticket.jiraTicketId,
-    ticket.jiraKey,
-    ticket
-  );
-  await auditRepo.log(pipelineId, "TICKET_EMBEDDED", { jiraKey: ticket.jiraKey });
-
-  const retrievedContext = await retriever.retrieveForProductAgent(
-    ticket,
-    ticket.jiraKey
-  );
-  await auditRepo.log(pipelineId, "CONTEXT_RETRIEVED", {
-    chunksFound: retrievedContext.length,
-    topSimilarity: retrievedContext[0]?.similarity ?? 0,
+  // Ingestion already embedded the ticket — skip duplicate embed work here.
+  await auditRepo.log(pipelineId, "DISCOVERY_STEP_STARTED", {
+    step: "context_retrieval",
+    label: "Retrieving similar tickets and codebase context",
   });
 
+  const scope = await import("../codebaseIntelligence/repoScope").then((m) =>
+    m.resolveRepoScope()
+  );
+  const unifiedQuery = `${ticket.summary} ${ticket.description}`;
+  const unified = await unifiedRetriever.retrieveUnified(unifiedQuery, {
+    ticketTypes: ["ticket", "prd", "implementation", "qa_report", "canary_finding"],
+    codebase: { branchName: scope?.defaultBranch ?? "main", topK: 8 },
+    includeCodebase: Boolean(scope),
+    topKTotal: 12,
+    currentJiraKey: ticket.jiraKey,
+    queryComponents: ticket.components,
+    similarityThreshold: 0.7,
+  });
+
+  const historicalContext = unified.retrievedContext;
+  await auditRepo.log(pipelineId, "CONTEXT_RETRIEVED", {
+    chunksFound: historicalContext.length,
+    codebaseHits: unified.items.filter((i) => i.kind === "codebase").length,
+    topSimilarity: historicalContext[0]?.similarity ?? 0,
+  });
+
+  await auditRepo.log(pipelineId, "DISCOVERY_STEP_STARTED", {
+    step: "ticket_analysis",
+    label: "Analyzing ticket requirements",
+  });
   const { analysis: ticketAnalysis, usage: u1 } = await analyseTicket(
     ticket,
     pipelineId
@@ -90,24 +105,10 @@ export async function runDiscovery(
     ambiguities: ticketAnalysis.ambiguities.length,
   });
 
-  const scope = await import("../codebaseIntelligence/repoScope").then((m) =>
-    m.resolveRepoScope()
-  );
-  const unifiedQuery = `${ticket.summary} ${ticket.description} ${ticketAnalysis.coreIntent}`;
-  const unified = await unifiedRetriever.retrieveUnified(unifiedQuery, {
-    ticketTypes: ["ticket", "prd", "implementation", "qa_report", "canary_finding"],
-    codebase: { branchName: scope?.defaultBranch ?? "main", topK: 8 },
-    topKTotal: 12,
-    currentJiraKey: ticket.jiraKey,
-    queryComponents: ticket.components,
-    similarityThreshold: 0.7,
+  await auditRepo.log(pipelineId, "DISCOVERY_STEP_STARTED", {
+    step: "historical_intelligence",
+    label: "Extracting historical patterns and precedents",
   });
-
-  const historicalContext =
-    unified.retrievedContext.length > 0
-      ? unified.retrievedContext
-      : retrievedContext;
-
   const { intelligence: historicalIntelligence, usage: u2 } =
     await extractHistoricalIntelligence(
       ticketAnalysis,
@@ -122,6 +123,10 @@ export async function runDiscovery(
     implied: historicalIntelligence.impliedRequirements.length,
   });
 
+  await auditRepo.log(pipelineId, "DISCOVERY_STEP_STARTED", {
+    step: "gap_analysis",
+    label: "Identifying requirement gaps",
+  });
   const { analysis: gapAnalysis, usage: u3 } = await analyseGaps(
     ticketAnalysis,
     historicalIntelligence,
@@ -146,6 +151,10 @@ export async function runDiscovery(
     );
   }
 
+  await auditRepo.log(pipelineId, "DISCOVERY_STEP_STARTED", {
+    step: "complexity_scoring",
+    label: "Scoring implementation complexity",
+  });
   const { assessment: complexityAssessment, usage: u4 } = await scoreComplexity(
     ticketAnalysis,
     historicalIntelligence,
@@ -159,6 +168,10 @@ export async function runDiscovery(
     priority: complexityAssessment.priorityAssessment.recommendedPriority,
   });
 
+  await auditRepo.log(pipelineId, "DISCOVERY_STEP_STARTED", {
+    step: "prd_generation",
+    label: "Virin is drafting the PRD",
+  });
   const { prd, usage: u5, toolCallLog } = await generatePRD(
     ticket,
     ticketAnalysis,
@@ -175,7 +188,7 @@ export async function runDiscovery(
     gapAnalysis,
     complexityAssessment,
     prd,
-    retrievedContext,
+    retrievedContext: historicalContext,
   });
   applyComputedScores(scores, {
     ticketAnalysis,
@@ -201,7 +214,11 @@ export async function runDiscovery(
     gateFailureReasons: scores.gateFailureReasons,
   });
 
-  await attachPRDToJira(ticket.jiraKey, prd);
+  try {
+    await attachPRDToJira(ticket.jiraKey, prd);
+  } catch (err) {
+    logger.warn({ err, jiraKey: ticket.jiraKey }, "PRD Jira attach failed — continuing pipeline");
+  }
 
   const prdOutput = generatedPrdToPrdOutput(prd, scores);
   await embedder.embedPRD(ticket.jiraTicketId, ticket.jiraKey, prdOutput);

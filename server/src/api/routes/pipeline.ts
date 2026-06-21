@@ -9,6 +9,7 @@ import {
   resumePipelineInBackground,
 } from "../../queue/inProcessRunner";
 import { enqueueIntakeFromJiraKey } from "../../pipeline/jira/intakeEnqueueService";
+import { getLivePipelineStatus } from "../../pipeline/liveStatus";
 import { NotFoundError, ValidationError } from "../../utils/errors";
 import {
   requireOrganizationUser,
@@ -16,6 +17,22 @@ import {
 } from "../orgRequestContext";
 
 const router = Router();
+
+router.get("/live", async (req, res, next) => {
+  try {
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
+
+    await withOrganizationContext(user.organizationId, async () => {
+      const jiraKey =
+        typeof req.query.jiraKey === "string" ? req.query.jiraKey : undefined;
+      const live = await getLivePipelineStatus(user.organizationId!, { jiraKey });
+      res.json(live);
+    });
+  } catch (err) {
+    next(err);
+  }
+});
 
 router.get("/", async (req, res) => {
   const user = requireOrganizationUser(req, res);

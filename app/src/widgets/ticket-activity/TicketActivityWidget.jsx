@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
-import { formatStageLabel } from "../../shared/lib/format";
+import { formatStageLabel, formatAuditInline, formatRelativeTime } from "../../shared/lib/format";
+import { formatAuditEventLabel, formatAuditEventDetail } from "../../shared/lib/auditLabels";
 
 function inferActionsFromStage(stage) {
   const output = stage?.output;
@@ -68,7 +69,8 @@ function inferActionsFromStage(stage) {
 }
 
 function inferActionsFromAudit(auditLogs = []) {
-  return auditLogs
+  return [...auditLogs]
+    .reverse()
     .map((audit, idx) => {
       const metadata =
         audit?.metadata && typeof audit.metadata === "object" ? audit.metadata : {};
@@ -80,20 +82,19 @@ function inferActionsFromAudit(auditLogs = []) {
         metadata.before ||
         metadata.after;
 
+      const detail = formatAuditEventDetail(metadata) ?? formatAuditInline(audit);
+
       return {
-        id: `audit-${audit.timestamp}-${idx}`,
+        id: audit.id ?? `audit-${audit.timestamp}-${idx}`,
         stage: metadata.stage ?? null,
-        title: audit.event?.replaceAll("_", " ") ?? "Audit event",
+        title: formatAuditEventLabel(audit.event, metadata),
         kind: hasEditPayload ? "code-edit" : "audit",
-        description:
-          metadata.reason ??
-          metadata.message ??
-          `Event recorded at ${new Date(audit.timestamp).toLocaleString()}`,
+        description: detail || `Recorded ${formatRelativeTime(audit.timestamp)}`,
         payload: metadata,
         edits: hasEditPayload ? [metadata] : [],
+        timestamp: audit.timestamp,
       };
-    })
-    .filter((item) => item.kind === "code-edit" || /TOOL|CODE|EDIT|PATCH|WRITE/i.test(item.title));
+    });
 }
 
 function normalizeEdit(edit) {
@@ -140,7 +141,7 @@ export default function TicketActivityWidget({
     <Panel>
       <PanelHeader
         kicker="Interactive trace"
-        title="Ticket live activity"
+        title="Ticket live activity"
       />
 
       <div className="space-y-4 px-5 py-4 sm:px-6">
@@ -182,6 +183,7 @@ export default function TicketActivityWidget({
                 <p className="text-[13px] text-ink">{action.title}</p>
                 <p className="mt-1 text-xs text-ink-dim">
                   {action.stage ? formatStageLabel(action.stage) : "Pipeline audit"}
+                  {action.timestamp ? ` · ${formatRelativeTime(action.timestamp)}` : ""}
                 </p>
               </button>
             ))}

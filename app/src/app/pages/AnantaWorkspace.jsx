@@ -6,6 +6,7 @@ import { AGENT_NAMES } from "../../shared/config/app";
 import AnantaTicketWorkspace from "../../widgets/ananta/AnantaTicketWorkspace";
 import { AgentPageWithChat } from "../../widgets/agent-chat/AgentPageWithChat";
 import { AgentPageHeader } from "../../widgets/agent-chat/AgentPageHeader";
+import AgentPipelineLiveStatus from "../../shared/components/AgentPipelineLiveStatus";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
 import { useOrg } from "../../shared/providers/OrgRouteProvider";
@@ -120,6 +121,8 @@ export default function AnantaWorkspace() {
     <AnimatedAppPage wide>
       <AgentPageWithChat domain="ananta" contextKey={activeKey ?? ""}>
         <AgentPageHeader domain="ananta" />
+
+        <AgentPipelineLiveStatus agentKey="ananta" />
 
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
           <aside className="w-full shrink-0 lg:w-64">

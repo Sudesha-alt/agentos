@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { usePipelineList } from "../../entities/pipeline";
+import { usePipelineList, usePipelineLive } from "../../entities/pipeline";
 import { useActivityEvents } from "../../entities/workspace";
 import { deriveReviewQueueItems } from "../../shared/lib/pipelineCounts";
 import { useOrgPathBuilder } from "../providers/OrgRouteProvider";
 import { formatRelativeTime } from "../lib/format";
+import StageRail from "./StageRail";
+import StatusPill from "../../app/components/StatusPill";
+import { PipelineBlockingAlert } from "../../widgets/pm-analysis/VirinThoughtProcessPanel";
 
 /**
  * Top-bar notifications — review queue items plus recent pipeline activity.
@@ -14,12 +17,16 @@ export default function NotificationCenter() {
   const [open, setOpen] = useState(false);
   const panelRef = useRef(null);
   const { items: pipelines } = usePipelineList(undefined, { pollMs: 30_000 });
+  const { active: liveActive } = usePipelineLive({ pollMs: 3000 });
   const { data: eventsData } = useActivityEvents({ pollMs: 12_000 });
   const reviewItems = deriveReviewQueueItems(pipelines);
   const events = eventsData?.events ?? [];
   const intakeEvents = events.filter((e) => e.tone === "intake");
   const pipelineEvents = events.filter((e) => e.tone !== "intake");
-  const totalCount = reviewItems.length + events.filter((e) => e.live).length;
+  const totalCount =
+    reviewItems.length +
+    events.filter((e) => e.live).length +
+    (liveActive ? 1 : 0);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -70,6 +77,67 @@ export default function NotificationCenter() {
           </div>
 
           <div className="max-h-[min(24rem,60vh)] overflow-y-auto">
+            {liveActive ? (
+              <section className="border-b border-app-border px-4 py-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-app-ink-mute">
+                    Agent in progress
+                  </p>
+                  <StatusPill status={liveActive.status} />
+                </div>
+                <Link
+                  to={orgPath("pipelines", liveActive.pipelineId)}
+                  onClick={() => setOpen(false)}
+                  className={`block rounded-app-sm border px-3 py-2.5 transition ${
+                    liveActive.status === "PAUSED"
+                      ? "border-warning/35 bg-warning/[0.06] hover:bg-warning/10"
+                      : "border-indigo/25 bg-indigo/[0.04] hover:bg-indigo/[0.08]"
+                  }`}
+                >
+                  {liveActive.status === "PAUSED" ? (
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-warning">
+                      Blocked
+                    </p>
+                  ) : null}
+                  <div className="flex items-start gap-2">
+                    <span
+                      className={`mt-1.5 size-2 shrink-0 rounded-full ${
+                        liveActive.status === "PAUSED"
+                          ? "bg-warning"
+                          : "animate-pulse bg-indigo"
+                      }`}
+                      aria-hidden
+                    />
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-medium text-app-ink">
+                        <span className="font-mono text-app-ink-dim">{liveActive.jiraKey}</span>{" "}
+                        {liveActive.summary}
+                      </p>
+                      <p className="mt-1 text-[12px] leading-relaxed text-app-ink-dim">
+                        <span className="font-medium text-app-ink">
+                          {liveActive.currentStageLabel}
+                        </span>
+                        {" · "}
+                        {liveActive.blockReason ?? liveActive.currentAction}
+                      </p>
+                      <div className="mt-2">
+                        <StageRail
+                          currentStage={liveActive.currentStage}
+                          status={liveActive.status}
+                          compact
+                        />
+                      </div>
+                      {liveActive.recentActivity[0] ? (
+                        <p className="mt-2 text-[11px] text-app-ink-mute">
+                          Last update {formatRelativeTime(liveActive.recentActivity[0].timestamp)}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                </Link>
+              </section>
+            ) : null}
+
             <section className="px-4 py-3">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-app-ink-mute">

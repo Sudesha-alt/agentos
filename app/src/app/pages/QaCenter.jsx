@@ -18,6 +18,7 @@ import { Link } from "react-router-dom";
 import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
 import { AgentPageWithChat } from "../../widgets/agent-chat/AgentPageWithChat";
 import { AgentPageHeader } from "../../widgets/agent-chat/AgentPageHeader";
+import AgentPipelineLiveStatus from "../../shared/components/AgentPipelineLiveStatus";
 
 const HEATMAP_CELL = {
   pass: "bg-success",
@@ -89,6 +90,8 @@ export default function QaCenter() {
     <AnimatedAppPage wide>
       <AgentPageWithChat domain="neel" contextKey={qaContextKey}>
       <AgentPageHeader domain="neel" />
+
+      <AgentPipelineLiveStatus agentKey="neel" />
 
       <div className="flex flex-wrap gap-2">
         {TABS.map((t) => (

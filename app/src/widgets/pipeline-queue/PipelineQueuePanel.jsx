@@ -2,8 +2,11 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import LabelPill from "../../app/components/LabelPill";
 import EmptyState from "../../app/components/EmptyState";
+import StageRail from "../../shared/components/StageRail";
 import { scanPipelineIntake } from "../../entities/pipeline-jira";
+import { usePipelineLive } from "../../entities/pipeline";
 import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
+import { formatRelativeTime } from "../../shared/lib/format";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 
 function formatIntakeTrigger(intake) {
@@ -59,14 +62,17 @@ export function PipelineQueueSummary({ setup, className = "" }) {
 
 export default function PipelineQueuePanel({ setup, showHeader = true, onRefreshSetup }) {
   const orgPath = useOrgPathBuilder();
+  const { active: liveActive } = usePipelineLive({ pollMs: 3000 });
   const [scanning, setScanning] = useState(false);
   const [scanMessage, setScanMessage] = useState(null);
   const intake = setup?.intake;
   const queue = setup?.queue ?? {};
-  const activeKey = queue.activeJiraKey;
-  const queuedKeys = queue.queuedJiraKeys ?? [];
+  const activeKey = liveActive?.jiraKey ?? queue.activeJiraKey;
+  const queuedKeys = liveActive?.queuedJiraKeys?.length
+    ? liveActive.queuedJiraKeys
+    : queue.queuedJiraKeys ?? [];
   const trigger = formatIntakeTrigger(intake);
-  const isActive = Boolean(activeKey);
+  const isActive = Boolean(activeKey || liveActive);
   const hasQueue = queuedKeys.length > 0;
 
   async function handleIntakeScan() {
@@ -129,14 +135,62 @@ export default function PipelineQueuePanel({ setup, showHeader = true, onRefresh
               Now running
             </p>
             {isActive ? (
-              <div className="mt-2 flex flex-wrap items-center gap-3 rounded-lg border border-violet-500/30 bg-violet-500/10 px-4 py-3">
-                <span className="font-mono text-base text-violet-200">{activeKey}</span>
-                <LabelPill label="Active" tone="indigo" />
-                {queue.activeTicketId ? (
-                  <span className="text-xs text-white/40">
-                    ticket {queue.activeTicketId.slice(0, 8)}…
-                  </span>
-                ) : null}
+              <div className="mt-2 space-y-3 rounded-lg border border-violet-500/30 bg-violet-500/10 px-4 py-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Link
+                    to={
+                      liveActive?.pipelineId
+                        ? orgPath("pipelines", liveActive.pipelineId)
+                        : orgPath("pipelines")
+                    }
+                    className="font-mono text-base text-violet-200 hover:underline"
+                  >
+                    {activeKey}
+                  </Link>
+                  <LabelPill label={liveActive?.status === "PAUSED" ? "Paused" : "Active"} tone="indigo" />
+                </div>
+                {liveActive ? (
+                  <>
+                    <p className="text-sm text-white/80">{liveActive.summary}</p>
+                    <p className="text-[13px] leading-relaxed text-white/60">
+                      <span className="font-medium text-white/80">{liveActive.currentStageLabel}</span>
+                      {" · "}
+                      {liveActive.currentAction}
+                    </p>
+                    <StageRail
+                      currentStage={liveActive.currentStage}
+                      status={liveActive.status}
+                      compact
+                    />
+                    {liveActive.recentActivity?.length ? (
+                      <div>
+                        <p className="text-[10px] font-mono uppercase tracking-[0.14em] text-white/40">
+                          Recent activity
+                        </p>
+                        <ol className="mt-2 max-h-36 space-y-1.5 overflow-y-auto">
+                          {liveActive.recentActivity.slice(0, 5).map((entry) => (
+                            <li
+                              key={entry.id}
+                              className="flex items-start justify-between gap-2 text-[12px] text-white/65"
+                            >
+                              <span>
+                                {entry.label}
+                                {entry.detail ? (
+                                  <span className="text-white/45"> — {entry.detail}</span>
+                                ) : null}
+                              </span>
+                              <span className="shrink-0 text-[10px] text-white/35">
+                                {formatRelativeTime(entry.timestamp)}
+                              </span>
+                            </li>
+                          ))}
+                        </ol>
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="text-sm text-white/60">Pipeline running — loading live status…</p>
+                )}
               </div>
             ) : (
               <p className="mt-2 text-sm text-white/50">No pipeline run in progress.</p>
@@ -170,7 +224,7 @@ export default function PipelineQueuePanel({ setup, showHeader = true, onRefresh
               </ol>
             ) : (
               <p className="mt-2 text-sm text-white/50">
-                Queue is empty. Move an epic or story into AI Worker to enqueue subtasks.
+                Queue is empty. Move a Task or Bug into AI Worker to enqueue work.
               </p>
             )}
           </div>

@@ -2055,6 +2055,100 @@ export const mockApi = {
     await delay(140);
     return { ticketId, started: true };
   },
+  async getPipelineLive(options = {}) {
+    markUsed();
+    await delay(80);
+    const jiraKey = options.jiraKey?.trim().toUpperCase();
+    let activePipeline =
+      (jiraKey &&
+        MOCK_PIPELINES.find(
+          (p) =>
+            p.ticket?.jiraKey === jiraKey && (p.status === "RUNNING" || p.status === "PAUSED")
+        )) ??
+      MOCK_PIPELINES.find((p) => p.status === "RUNNING") ??
+      MOCK_PIPELINES.find((p) => p.status === "PAUSED");
+    if (!activePipeline) {
+      return { active: null, queue: { queueLength: 0, queuedJiraKeys: [], activeTicketId: null, activeJiraKey: null } };
+    }
+
+    const detail = fullPipelineDetail(activePipeline.id);
+    const STAGE_LABELS = {
+      INGESTION: "Ingestion",
+      PRODUCT_AGENT: "Virin (Product)",
+      PRD_VALIDATION: "PRD validation gate",
+      ENGINEERING_AGENT: "Ananta (Engineering)",
+      IMPLEMENTATION_VALIDATION: "Implementation gate",
+      QA_AGENT: "Neel (QA)",
+      QA_VALIDATION: "QA validation gate",
+      OUTPUT: "Jira writeback",
+    };
+    const formatEntry = (log, idx) => ({
+      id: `audit-${idx}-${log.event}`,
+      event: log.event,
+      label: log.metadata?.label ??
+        log.event?.replace(/_/g, " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase()) ??
+        "Event",
+      detail: log.metadata?.reason ?? log.metadata?.tool ?? log.metadata?.filePath ?? null,
+      timestamp: log.timestamp,
+    });
+    const auditLogs = detail.auditLogs ?? MOCK_AUDIT;
+    const recentActivity = auditLogs.slice().reverse().slice(0, 12).map(formatEntry);
+    const thoughtProcess = auditLogs.map(formatEntry);
+    const awaiting = auditLogs.find((log) => log.event === "AWAITING_HUMAN");
+    const blockReason = awaiting?.metadata?.reason ?? null;
+    const blockStage = awaiting?.metadata?.stage ?? null;
+    const latest = recentActivity[0];
+    const queued = MOCK_PIPELINES.filter((p) => p.status === "RUNNING" && p.id !== activePipeline.id);
+    const discoverySteps =
+      activePipeline.currentStage === "PRODUCT_AGENT" || activePipeline.status === "PAUSED"
+        ? [
+            { step: "context_retrieval", label: "Retrieving similar tickets and codebase context", status: "COMPLETED" },
+            { step: "ticket_analysis", label: "Analyzing ticket requirements", status: "COMPLETED" },
+            { step: "historical_intelligence", label: "Extracting historical patterns and precedents", status: "RUNNING" },
+            { step: "gap_analysis", label: "Identifying requirement gaps", status: "PENDING" },
+            { step: "complexity_scoring", label: "Scoring implementation complexity", status: "PENDING" },
+            { step: "prd_generation", label: "Drafting the PRD", status: "PENDING" },
+          ]
+        : [];
+
+    return {
+      active: {
+        pipelineId: activePipeline.id,
+        ticketId: activePipeline.ticketId,
+        jiraKey: activePipeline.ticket?.jiraKey,
+        summary: activePipeline.ticket?.normalizedData?.summary ?? activePipeline.ticket?.jiraKey,
+        status: activePipeline.status,
+        currentStage: activePipeline.currentStage,
+        currentStageLabel: STAGE_LABELS[activePipeline.currentStage] ?? activePipeline.currentStage,
+        currentAction: blockReason
+          ? `Blocked — ${blockReason}`
+          : latest?.detail
+            ? `${latest.label} — ${latest.detail}`
+            : latest?.label ?? "Running…",
+        runningStage: activePipeline.currentStage,
+        runningStageLabel: STAGE_LABELS[activePipeline.currentStage] ?? activePipeline.currentStage,
+        stageProgress: detail.stages.map((s) => ({
+          stage: s.stage,
+          label: STAGE_LABELS[s.stage] ?? s.stage,
+          status: s.status,
+        })),
+        recentActivity,
+        thoughtProcess,
+        discoverySteps,
+        blockReason,
+        blockStage,
+        startedAt: activePipeline.startedAt,
+        queuedCount: queued.length,
+        queuedJiraKeys: queued.map((p) => p.ticket?.jiraKey).filter(Boolean),
+      },
+      queue: {
+        queueLength: queued.length,
+        queuedJiraKeys: queued.map((p) => p.ticket?.jiraKey).filter(Boolean),
+        activeTicketId: activePipeline.ticketId,
+        activeJiraKey: activePipeline.ticket?.jiraKey,
+      },
+    };
+  },
   async submitOverride(pipelineId, payload) {
     markUsed();
     await delay(180);

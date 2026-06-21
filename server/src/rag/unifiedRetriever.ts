@@ -2,8 +2,13 @@ import { buildEnrichedCodebaseContext } from "../codebaseIntelligence/enrichedCo
 import { resolveRepoScope } from "../codebaseIntelligence/repoScope";
 import type { RetrievedContext, VectorContentType } from "../types/pipeline";
 import { logger } from "../utils/logger";
+import { withTimeout } from "../utils/withTimeout";
 import { getBoostedPatternTags } from "./retrievalLearning";
 import { retriever, RETRIEVAL_CONFIGS } from "./retriever";
+
+const CODEBASE_CONTEXT_TIMEOUT_MS = Number(
+  process.env.CODEBASE_CONTEXT_TIMEOUT_MS ?? "45000"
+);
 
 export interface UnifiedRetrieveOptions {
   ticketTypes?: readonly VectorContentType[];
@@ -70,13 +75,17 @@ export const unifiedRetriever = {
     const boostedQuery = appendBoostedTerms(query, options.queryComponents ?? []);
 
     const codebasePromise = includeCodebase
-      ? buildEnrichedCodebaseContext({
-          query: boostedQuery,
-          branchName,
-          components: options.queryComponents ?? [],
-          topN: options.codebase?.topK ?? 10,
-          fetchFreshContent: options.includeContext === true,
-        })
+      ? withTimeout(
+          buildEnrichedCodebaseContext({
+            query: boostedQuery,
+            branchName,
+            components: options.queryComponents ?? [],
+            topN: options.codebase?.topK ?? 10,
+            fetchFreshContent: options.includeContext === true,
+          }),
+          CODEBASE_CONTEXT_TIMEOUT_MS,
+          "codebase context retrieval"
+        )
           .then((bundle) =>
             bundle.files.map(
               (f): CodebaseSearchRow => ({

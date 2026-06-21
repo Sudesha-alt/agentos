@@ -39,6 +39,12 @@ const restPipelineAdapter = {
       })
     );
   },
+  async live(options = {}) {
+    const params = options.jiraKey
+      ? `?jiraKey=${encodeURIComponent(options.jiraKey)}`
+      : "";
+    return fetchJson(pipelines(`/pipelines/live${params}`), { headers: headers() });
+  },
 };
 
 const mockPipelineAdapter = {
@@ -53,6 +59,9 @@ const mockPipelineAdapter = {
   },
   async run(ticketId) {
     return RunPipelineResponseSchema.parse(await mockApi.runPipeline(ticketId));
+  },
+  async live(options = {}) {
+    return mockApi.getPipelineLive?.(options) ?? { active: null, queue: {} };
   },
 };
 
@@ -135,5 +144,24 @@ export function usePipelineDetail(id, options = {}) {
   return {
     ...query,
     item: query.data ? mapPipelineDetail(query.data) : null,
+  };
+}
+
+export function usePipelineLive(options = {}) {
+  const pollMs = options.pollMs ?? 3000;
+  const jiraKey = options.jiraKey?.trim().toUpperCase() || undefined;
+  const query = useResource(
+    () => pipelineAdapter.live({ jiraKey }),
+    [jiraKey],
+    {
+      pollMs: options.enabled === false ? undefined : pollMs,
+      skip: options.skip,
+    }
+  );
+
+  return {
+    ...query,
+    active: query.data?.active ?? null,
+    queue: query.data?.queue ?? null,
   };
 }
