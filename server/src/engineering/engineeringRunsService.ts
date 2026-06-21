@@ -70,6 +70,15 @@ function resolveBranchName(): string {
   return process.env.ENGINEERING_CODING_BRANCH ?? "agentos/engineering";
 }
 
+function ticketSummary(ticket: Ticket): string {
+  const normalized = ticket.normalizedData as { summary?: string } | null;
+  return normalized?.summary?.trim() || ticket.jiraKey;
+}
+
+function mapFileChange(action: "create" | "modify"): "created" | "modified" {
+  return action === "create" ? "created" : "modified";
+}
+
 function mapRunStatus(pipeline: Pipeline): string {
   if (pipeline.status === "RUNNING") return "RUNNING";
   if (pipeline.status === "PAUSED") return "PAUSED";
@@ -122,7 +131,7 @@ function buildFiles(
       const original = getCachedReadSourceFile(pipelineId, f.filePath);
       return {
         path: f.filePath,
-        change: f.action,
+        change: mapFileChange(f.action),
         summary: f.summary,
         content: f.content,
         diff:
@@ -136,7 +145,7 @@ function buildFiles(
 
   return (impl?.codeChanges ?? []).map((c) => ({
     path: c.filePath,
-    change: c.action,
+    change: mapFileChange(c.action),
     summary: c.summary,
     content: c.summary,
     humanModified: false,
@@ -275,7 +284,7 @@ function buildDetail(
   return {
     pipelineId: pipeline.id,
     jiraKey: pipeline.ticket.jiraKey,
-    summary: pipeline.ticket.summary ?? pipeline.ticket.jiraKey,
+    summary: ticketSummary(pipeline.ticket),
     status: mapRunStatus(pipeline),
     currentStage: pipeline.currentStage,
     branch: resolveBranchName(),
@@ -316,7 +325,7 @@ export async function listEngineeringRuns(
   const items = pipelines.map((p) => ({
     pipelineId: p.id,
     jiraKey: p.ticket.jiraKey,
-    summary: p.ticket.summary ?? p.ticket.jiraKey,
+    summary: ticketSummary(p.ticket),
     status: mapRunStatus(p),
     currentStage: p.currentStage,
     branch: resolveBranchName(),
@@ -344,7 +353,7 @@ export async function getEngineeringRun(
   if (prInfo) {
     detail.prNumber = prInfo.prNumber;
     detail.pr = {
-      title: `${pipeline.ticket.jiraKey}: ${pipeline.ticket.summary ?? "Engineering changes"}`,
+      title: `${pipeline.ticket.jiraKey}: ${ticketSummary(pipeline.ticket)}`,
       description: impl?.codingSummary ?? impl?.summary ?? "",
       labels: ["agent-generated"],
       draft: prInfo.draft,
