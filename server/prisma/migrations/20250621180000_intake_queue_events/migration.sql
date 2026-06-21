@@ -1,8 +1,12 @@
--- CreateEnum
-CREATE TYPE "PipelineQueueStatus" AS ENUM ('PENDING', 'ACTIVE', 'COMPLETED', 'FAILED');
+-- Idempotent: safe to re-run after a partial apply (enum exists but migration marked failed).
 
--- CreateTable
-CREATE TABLE "PipelineQueueItem" (
+DO $$ BEGIN
+  CREATE TYPE "PipelineQueueStatus" AS ENUM ('PENDING', 'ACTIVE', 'COMPLETED', 'FAILED');
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE TABLE IF NOT EXISTS "PipelineQueueItem" (
     "id" TEXT NOT NULL,
     "organizationId" TEXT NOT NULL,
     "ticketId" TEXT NOT NULL,
@@ -16,8 +20,7 @@ CREATE TABLE "PipelineQueueItem" (
     CONSTRAINT "PipelineQueueItem_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
-CREATE TABLE "IntakeEvent" (
+CREATE TABLE IF NOT EXISTS "IntakeEvent" (
     "id" TEXT NOT NULL,
     "organizationId" TEXT NOT NULL,
     "jiraKey" TEXT NOT NULL,
@@ -32,23 +35,24 @@ CREATE TABLE "IntakeEvent" (
     CONSTRAINT "IntakeEvent_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
-CREATE INDEX "PipelineQueueItem_organizationId_status_position_idx" ON "PipelineQueueItem"("organizationId", "status", "position");
+CREATE INDEX IF NOT EXISTS "PipelineQueueItem_organizationId_status_position_idx" ON "PipelineQueueItem"("organizationId", "status", "position");
 
--- CreateIndex
-CREATE INDEX "PipelineQueueItem_organizationId_jiraKey_idx" ON "PipelineQueueItem"("organizationId", "jiraKey");
+CREATE INDEX IF NOT EXISTS "PipelineQueueItem_organizationId_jiraKey_idx" ON "PipelineQueueItem"("organizationId", "jiraKey");
 
--- CreateIndex
-CREATE INDEX "PipelineQueueItem_ticketId_idx" ON "PipelineQueueItem"("ticketId");
+CREATE INDEX IF NOT EXISTS "PipelineQueueItem_ticketId_idx" ON "PipelineQueueItem"("ticketId");
 
--- CreateIndex
-CREATE INDEX "IntakeEvent_organizationId_createdAt_idx" ON "IntakeEvent"("organizationId", "createdAt");
+CREATE INDEX IF NOT EXISTS "IntakeEvent_organizationId_createdAt_idx" ON "IntakeEvent"("organizationId", "createdAt");
 
--- CreateIndex
-CREATE INDEX "IntakeEvent_organizationId_jiraKey_idx" ON "IntakeEvent"("organizationId", "jiraKey");
+CREATE INDEX IF NOT EXISTS "IntakeEvent_organizationId_jiraKey_idx" ON "IntakeEvent"("organizationId", "jiraKey");
 
--- AddForeignKey
-ALTER TABLE "PipelineQueueItem" ADD CONSTRAINT "PipelineQueueItem_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "PipelineQueueItem" ADD CONSTRAINT "PipelineQueueItem_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
 
--- AddForeignKey
-ALTER TABLE "IntakeEvent" ADD CONSTRAINT "IntakeEvent_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE "IntakeEvent" ADD CONSTRAINT "IntakeEvent_organizationId_fkey" FOREIGN KEY ("organizationId") REFERENCES "Organization"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+EXCEPTION
+  WHEN duplicate_object THEN NULL;
+END $$;
