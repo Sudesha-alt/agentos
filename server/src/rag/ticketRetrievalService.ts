@@ -49,14 +49,18 @@ export async function retrieveSimilarTickets(
   );
 
   const queries = await expandTicketQueries(input);
+  const queryEmbeddings = await embedder.embedBatch(queries);
   const vectorRows = await Promise.all(
-    queries.map(async (query) => {
-      const embedding = await embedder.embed(query);
+    queries.map(async (query, index) => {
+      const embedding = queryEmbeddings[index];
+      if (!embedding) return [];
       return vectorStore.similaritySearch(embedding, {
         contentTypes: [...contentTypes],
         topK: TICKET_CHUNK_FETCH_TOP_K,
         similarityThreshold: fetchThreshold,
         excludeJiraKeys: [input.currentJiraKey],
+        queryText: query,
+        useHybrid: true,
       });
     })
   );

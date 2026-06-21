@@ -1,4 +1,6 @@
-import { chunkTextByParagraphs, hashContent } from "./contentHash";
+import { hashContent } from "./contentHash";
+import { chunkTextByTokens, countTokens } from "./chunking";
+import { recordEmbedChunksDropped } from "./embedMetrics";
 import type { NormalizedTicket } from "../types/ticket";
 import type { FetchedJiraIssue } from "../jira-sync/issueFetcher";
 
@@ -14,6 +16,14 @@ export interface TicketEmbedFields {
   resolution?: string | null;
   commentsText?: string;
   gitContext?: string;
+}
+
+/** ~450 tokens body budget; header repeated on overflow chunks. */
+const TICKET_BODY_MAX_TOKENS = 450;
+const TICKET_BODY_OVERLAP_TOKENS = 60;
+
+function headerBudgetTokens(header: string): number {
+  return countTokens(header) + 32;
 }
 
 export function ticketFieldsFromFetched(issue: FetchedJiraIssue, gitContext?: string): TicketEmbedFields {
@@ -64,7 +74,10 @@ export function buildTicketHeader(fields: TicketEmbedFields): string {
 
 export function buildTicketBodyParts(fields: TicketEmbedFields): string[] {
   const parts: string[] = [];
-  const descChunks = chunkTextByParagraphs(fields.description, 2200);
+  const descChunks = chunkTextByTokens(fields.description, {
+    maxTokens: TICKET_BODY_MAX_TOKENS,
+    overlapTokens: TICKET_BODY_OVERLAP_TOKENS,
+  });
   if (descChunks.length <= 1) {
     parts.push(`DESCRIPTION: ${fields.description}`);
   } else {
@@ -81,20 +94,31 @@ export function buildTicketBodyParts(fields: TicketEmbedFields): string[] {
   return parts;
 }
 
-/** Chunk texts for embedding — header on chunk 0, body split across chunks. */
+/** Max tokens per embed chunk including repeated header. */
+const TICKET_CHUNK_MAX_TOKENS = 600;
+
+function chunkTokenBudget(header: string): number {
+  return Math.max(200, TICKET_CHUNK_MAX_TOKENS - headerBudgetTokens(header));
+}
+
+/** Chunk texts for embedding — header on chunk 0, body split across chunks (token-aware). */
 export function buildTicketEmbedChunks(fields: TicketEmbedFields, maxChunks = 8): string[] {
   const header = buildTicketHeader(fields);
   const bodyParts = buildTicketBodyParts(fields);
   const chunks: string[] = [];
+  const bodyTokenBudget = chunkTokenBudget(header);
 
   let current = header;
   for (const part of bodyParts) {
     const candidate = current ? `${current}\n\n${part}` : part;
-    if (candidate.length > 7500 && current !== header) {
+    if (countTokens(candidate) > bodyTokenBudget && current !== header) {
       chunks.push(current.trim());
       current = `${header}\n\n${part}`;
-    } else if (candidate.length > 7500) {
-      const sub = chunkTextByParagraphs(part, 2200);
+    } else if (countTokens(candidate) > bodyTokenBudget) {
+      const sub = chunkTextByTokens(part, {
+        maxTokens: TICKET_BODY_MAX_TOKENS,
+        overlapTokens: TICKET_BODY_OVERLAP_TOKENS,
+      });
       for (const s of sub) {
         chunks.push(`${header}\n\n${s}`.trim());
       }
@@ -109,7 +133,11 @@ export function buildTicketEmbedChunks(fields: TicketEmbedFields, maxChunks = 8)
     chunks.push(header);
   }
 
-  return chunks.slice(0, maxChunks);
+  const limited = chunks.slice(0, maxChunks);
+  if (chunks.length > maxChunks) {
+    recordEmbedChunksDropped();
+  }
+  return limited;
 }
 
 export function buildTicketEmbedHash(fields: TicketEmbedFields): string {

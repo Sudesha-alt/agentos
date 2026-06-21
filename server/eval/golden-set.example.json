@@ -1,0 +1,11 @@
+[
+  {
+    "query": "authentication login session JWT",
+    "summary": "Fix user login timeout",
+    "description": "Users are logged out after 5 minutes instead of session expiry",
+    "components": ["auth"],
+    "currentJiraKey": "EVAL-001",
+    "expectedJiraKeys": [],
+    "expectedFiles": []
+  }
+]

@@ -1,7 +1,8 @@
 import { prisma } from "../db/client";
 import { requireActiveOrganizationId } from "../organization/orgScope";
 import { logger } from "../utils/logger";
-import { embedder } from "./embedder";
+import { createEmbeddingVectors } from "../llm/embeddings";
+import { prepareTextForEmbedding } from "./chunking";
 import {
   buildTicketEmbedChunks,
   buildTicketEmbedHash,
@@ -10,6 +11,7 @@ import {
   type TicketEmbedFields,
 } from "./ticketEmbeddingText";
 import { shouldSkipTicketEmbed } from "./ticketEmbedCache";
+import { buildEmbeddingMetadata } from "./embeddingMetadata";
 import { vectorStore } from "./vectorStore";
 import type { NormalizedTicket } from "../types/ticket";
 import type { FetchedJiraIssue } from "../jira-sync/issueFetcher";
@@ -43,7 +45,7 @@ export async function embedTicketFields(
   const organizationId = requireActiveOrganizationId();
   const contentHash = buildTicketEmbedHash(fields);
 
-  if (await shouldSkipTicketEmbed(fields.jiraKey, contentHash)) {
+  if (await shouldSkipTicketEmbed(fields.jiraKey, contentHash, organizationId)) {
     logger.info({ jiraKey: fields.jiraKey, contentHash }, "ticket embed skipped — content unchanged");
     return false;
   }
@@ -51,8 +53,16 @@ export async function embedTicketFields(
   const chunks = buildTicketEmbedChunks(fields, MAX_TICKET_EMBED_CHUNKS);
   await vectorStore.deleteByJiraKeyAndContentType(fields.jiraKey, "ticket", organizationId);
 
+  const prepared = chunks.map((c) => prepareTextForEmbedding(c));
+  const embeddings = await createEmbeddingVectors(prepared, {
+    operation: "ticket_embedding",
+    jiraKey: fields.jiraKey,
+    chunkCount: chunks.length,
+  });
+
   for (let i = 0; i < chunks.length; i++) {
-    const embedding = await embedder.embed(chunks[i]!);
+    const embedding = embeddings[i];
+    if (!embedding) continue;
     await vectorStore.upsert({
       jiraTicketId,
       jiraKey: fields.jiraKey,
@@ -61,7 +71,7 @@ export async function embedTicketFields(
       embedding,
       chunkIndex: i,
       organizationId,
-      metadata: {
+      metadata: buildEmbeddingMetadata({
         source: "unified_ticket_embed",
         summary: fields.summary,
         issueType: fields.issueType,
@@ -72,12 +82,11 @@ export async function embedTicketFields(
         contentHash,
         chunkIndex: i,
         chunkCount: chunks.length,
-        embeddedAt: new Date().toISOString(),
-      },
+      }),
     });
   }
 
-  logger.info({ jiraKey: fields.jiraKey, chunks: chunks.length }, "ticket embedded (multi-chunk)");
+  logger.info({ jiraKey: fields.jiraKey, chunks: chunks.length }, "ticket embedded (multi-chunk batch)");
   return true;
 }
 
@@ -99,7 +108,7 @@ export async function embedSyncedIssueRecord(
     existing?.embeddedAt &&
     issue.jiraUpdatedAt &&
     issue.jiraUpdatedAt <= existing.embeddedAt &&
-    (await shouldSkipTicketEmbed(issue.jiraKey, contentHash))
+    (await shouldSkipTicketEmbed(issue.jiraKey, contentHash, organizationId))
   ) {
     logger.info(
       { jiraKey: issue.jiraKey, embeddedAt: existing.embeddedAt.toISOString() },

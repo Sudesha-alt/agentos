@@ -1,12 +1,12 @@
 /**
- * One-shot Supabase bootstrap: vector_store SQL, Prisma migrations, optional re-index + Jira sync.
+ * One-shot Supabase bootstrap: vector SQL migrations, Prisma migrations, optional re-index + Jira sync.
  * Usage: npx tsx scripts/setup-supabase.ts [--skip-index] [--skip-jira]
  */
 import "dotenv/config";
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import pg from "pg";
 import { execSync } from "node:child_process";
+import { runSqlMigrations } from "./runSqlMigrations";
 
 const args = new Set(process.argv.slice(2));
 const skipIndex = args.has("--skip-index");
@@ -21,33 +21,52 @@ function pgPool() {
   });
 }
 
-async function runVectorStoreSql(pool: pg.Pool) {
-  const sqlPath = join(__dirname, "..", "sql", "vector_store.sql");
-  const sql = readFileSync(sqlPath, "utf8");
-  await pool.query(sql);
-  const check = await pool.query(
-    `SELECT COUNT(*)::int AS c FROM information_schema.tables WHERE table_schema='public' AND table_name='vector_store'`
-  );
-  if (check.rows[0]?.c !== 1) {
-    throw new Error("vector_store table was not created");
-  }
-  console.log("[ok] vector_store table + RPCs");
-}
-
 async function verifyRpcs(pool: pg.Pool) {
   const zeroVec = JSON.stringify(Array(1536).fill(0));
-  await pool.query(`SELECT * FROM similarity_search($1::text, $2::text[], 1, 0, $3::text[])`, [
-    zeroVec,
-    ["ticket"],
-    [],
-  ]);
-  console.log("[ok] similarity_search RPC");
+  const orgId = "__setup_org__";
+
   await pool.query(
-    `SELECT upsert_vector($1,$2,$3,$4,$5,$6)`,
-    ["__setup__", "__SETUP__", "ticket", "setup probe", zeroVec, { setup: true }]
+    `SELECT * FROM similarity_search($1::text, $2::text[], 1, 0, $3::text[], $4::text)`,
+    [zeroVec, ["ticket"], [], orgId]
   );
-  await pool.query(`DELETE FROM vector_store WHERE jira_key = '__SETUP__'`);
+  console.log("[ok] similarity_search RPC");
+
+  await pool.query(
+    `SELECT upsert_vector($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [
+      "__setup__",
+      "__SETUP__",
+      "ticket",
+      "setup probe",
+      zeroVec,
+      { setup: true },
+      0,
+      orgId,
+    ]
+  );
+  await pool.query(
+    `DELETE FROM vector_store WHERE jira_key = '__SETUP__' AND organization_id = $1`,
+    [orgId]
+  );
   console.log("[ok] upsert_vector RPC");
+
+  await pool.query(
+    `SELECT * FROM search_codebase($1::text, $2, $3, $4, 1, 0, $5)`,
+    [zeroVec, "__owner__", "__repo__", "main", orgId]
+  );
+  console.log("[ok] search_codebase RPC");
+
+  await pool.query(
+    `SELECT * FROM hybrid_similarity_search($1::text, $2, $3::text[], 1, 0, $4::text[], $5)`,
+    [zeroVec, "setup", ["ticket"], [], orgId]
+  );
+  console.log("[ok] hybrid_similarity_search RPC");
+
+  await pool.query(
+    `SELECT * FROM hybrid_search_codebase($1::text, $2, $3, $4, $5, 1, 0, $6)`,
+    [zeroVec, "setup", "__owner__", "__repo__", "main", orgId]
+  );
+  console.log("[ok] hybrid_search_codebase RPC");
 }
 
 async function printCounts(pool: pg.Pool) {
@@ -69,8 +88,8 @@ async function printCounts(pool: pg.Pool) {
 async function main() {
   const pool = pgPool();
   try {
-    console.log("Step 1: vector_store SQL");
-    await runVectorStoreSql(pool);
+    console.log("Step 1: vector SQL migrations");
+    await runSqlMigrations(pool);
     await verifyRpcs(pool);
 
     console.log("\nStep 2: Prisma migrate deploy");

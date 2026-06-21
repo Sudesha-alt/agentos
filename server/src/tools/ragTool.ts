@@ -43,6 +43,8 @@ export const ragTool = {
       topK: input.topK,
       similarityThreshold: input.similarityThreshold,
       excludeJiraKeys: [input.excludeJiraKey],
+      queryText: input.query,
+      useHybrid: true,
     });
 
     const scored = results

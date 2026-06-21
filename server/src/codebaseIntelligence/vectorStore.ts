@@ -19,7 +19,7 @@ function warnMissingEmbeddingsTable(): void {
   warnedMissingEmbeddingsTable = true;
   logger.warn(
     "codebase_embeddings table is missing in Supabase — semantic search and embedding writes are skipped. " +
-      "Run server/sql/codebase_embeddings.sql in the Supabase SQL Editor (Dashboard → SQL → New query)."
+      "Run server/sql/migrations via: npx tsx scripts/setup-supabase.ts"
   );
 }
 
@@ -44,10 +44,12 @@ export interface CodebaseEmbeddingRecord {
   embedding: number[];
   metadata: Record<string, unknown>;
   contentHash: string;
+  organizationId: string;
 }
 
 export const codebaseVectorStore = {
   async replaceFileEmbeddings(
+    organizationId: string,
     repoOwner: string,
     repoName: string,
     branchName: string,
@@ -57,6 +59,7 @@ export const codebaseVectorStore = {
     const { error: deleteError } = await supabase
       .from("codebase_embeddings")
       .delete()
+      .eq("organization_id", organizationId)
       .eq("repo_owner", repoOwner)
       .eq("repo_name", repoName)
       .eq("branch_name", branchName)
@@ -82,6 +85,7 @@ export const codebaseVectorStore = {
       embedding: row.embedding,
       metadata: row.metadata,
       content_hash: row.contentHash,
+      organization_id: row.organizationId,
     }));
 
     const { error: insertError } = await supabase
@@ -98,6 +102,7 @@ export const codebaseVectorStore = {
   },
 
   async deleteFile(
+    organizationId: string,
     repoOwner: string,
     repoName: string,
     branchName: string,
@@ -106,6 +111,7 @@ export const codebaseVectorStore = {
     const { error } = await supabase
       .from("codebase_embeddings")
       .delete()
+      .eq("organization_id", organizationId)
       .eq("repo_owner", repoOwner)
       .eq("repo_name", repoName)
       .eq("branch_name", branchName)

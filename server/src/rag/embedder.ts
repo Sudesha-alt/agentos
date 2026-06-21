@@ -2,14 +2,15 @@ import type { ImplementationOutput, PrdOutput, QaOutput } from "../types/agents"
 import type { NormalizedTicket } from "../types/ticket";
 import { requireActiveOrganizationId } from "../organization/orgScope";
 import { createEmbeddingVectors } from "../llm/embeddings";
+import { prepareTextForEmbedding as normalizeForEmbedding } from "./chunking";
 import { logger } from "../utils/logger";
 import { embedNormalizedTicket } from "./ticketEmbedService";
 import { vectorStore } from "./vectorStore";
-
+import { buildEmbeddingMetadata } from "./embeddingMetadata";
 
 export const embedder = {
   async embed(text: string): Promise<number[]> {
-    const cleanedText = prepareTextForEmbedding(text);
+    const cleanedText = normalizeForEmbedding(text);
     const [embedding] = await createEmbeddingVectors([cleanedText], {
       operation: "ticket_embedding",
     });
@@ -17,6 +18,11 @@ export const embedder = {
       throw new Error("embedding returned empty result");
     }
     return embedding;
+  },
+
+  async embedBatch(texts: string[]): Promise<number[][]> {
+    const cleaned = texts.map((t) => normalizeForEmbedding(t));
+    return createEmbeddingVectors(cleaned, { operation: "ticket_embedding_batch" });
   },
 
   async embedTicket(
@@ -185,14 +191,7 @@ async function upsertSingleVector(
     embedding,
     chunkIndex: 0,
     organizationId,
-    metadata: {
-      ...metadata,
-      embeddedAt: new Date().toISOString(),
-    },
+    metadata: buildEmbeddingMetadata(metadata),
   });
   logger.info({ jiraKey, contentType }, "artifact embedded");
-}
-
-export function prepareTextForEmbedding(text: string): string {
-  return text.replace(/\r\n/g, "\n").replace(/\s+/g, " ").trim().slice(0, 8000);
 }

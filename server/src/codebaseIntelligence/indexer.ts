@@ -16,12 +16,14 @@ import { getActiveOrganizationId } from "../organization/context";
 import { requireActiveOrganizationId } from "../organization/orgScope";
 import { logger } from "../utils/logger";
 import { withRetry } from "../utils/retry";
+import { buildEmbeddingMetadata } from "../rag/embeddingMetadata";
+import { prepareTextForEmbedding } from "../rag/chunking";
 import { codebaseVectorStore } from "./vectorStore";
 import { visualizationCache } from "./visualizationCache";
 import { generateKnowledge } from "./knowledgeService";
 import { generateTour } from "./tourService";
 import { recordOversizedSkipped } from "./indexSkipStats";
-import { MAX_HEADER_ONLY_FILE_SIZE, CODEBASE_EMBEDDING_INPUT_MAX_CHARS } from "./retrievalConfig";
+import { MAX_HEADER_ONLY_FILE_SIZE } from "./retrievalConfig";
 import { buildEmbeddingChunks } from "./astChunker";
 import type { LayoutFileInput } from "./layoutComputer";
 
@@ -778,11 +780,9 @@ async function updateFileEmbeddings(
     return;
   }
 
-  const { repoOwner, repoName } = repoIds();
+  const { organizationId, repoOwner, repoName } = repoIds();
   const chunks = buildEmbeddingChunks(filePath, content, intelligence);
-  const texts = chunks.map((chunk) =>
-    chunk.text.slice(0, CODEBASE_EMBEDDING_INPUT_MAX_CHARS)
-  );
+  const texts = chunks.map((chunk) => prepareTextForEmbedding(chunk.text));
   const rows = [];
   const vectors = await embedFileChunks(texts, filePath, branchName);
 
@@ -795,10 +795,11 @@ async function updateFileEmbeddings(
       repoOwner: repoOwner,
       repoName: repoName,
       branchName,
+      organizationId,
       chunkIndex: i,
       chunkContent: chunk.text,
       embedding: vector,
-      metadata: {
+      metadata: buildEmbeddingMetadata({
         filePath,
         language,
         summary: intelligence.summary,
@@ -811,7 +812,7 @@ async function updateFileEmbeddings(
         endLine: chunk.metadata.endLine,
         chunkStrategy: chunk.metadata.chunkStrategy,
         isHeader: chunk.metadata.isHeader,
-      },
+      }),
       contentHash: sha256(chunk.text),
     });
   }
@@ -823,6 +824,7 @@ async function updateFileEmbeddings(
 
   try {
     await codebaseVectorStore.replaceFileEmbeddings(
+      organizationId,
       repoOwner,
       repoName,
       branchName,
@@ -853,7 +855,7 @@ async function markDeletedFiles(activeFilePaths: string[], branchName: string): 
 }
 
 async function removeFileFromIndex(filePath: string, branchName: string): Promise<void> {
-  const { repoOwner, repoName } = repoIds();
+  const { organizationId, repoOwner, repoName } = repoIds();
   await visualizationCache.onFileRemoved(branchName, filePath).catch(() => undefined);
   await prismaAny.codebaseFile.updateMany({
     where: {
@@ -864,7 +866,7 @@ async function removeFileFromIndex(filePath: string, branchName: string): Promis
     },
     data: { isDeleted: true },
   });
-  await codebaseVectorStore.deleteFile(repoOwner, repoName, branchName, filePath);
+  await codebaseVectorStore.deleteFile(organizationId, repoOwner, repoName, branchName, filePath);
 }
 
 function parseIncludeGlobs(): string[] | null {

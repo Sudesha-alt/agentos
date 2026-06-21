@@ -70,6 +70,7 @@ function fileIntelligenceAvailable(): boolean {
 }
 
 async function countEmbeddings(
+  organizationId: string,
   repoOwner: string,
   repoName: string,
   branchName: string
@@ -83,6 +84,7 @@ async function countEmbeddings(
     const { count, error } = await supabase
       .from("codebase_embeddings")
       .select("*", { count: "exact", head: true })
+      .eq("organization_id", organizationId)
       .eq("repo_owner", repoOwner)
       .eq("repo_name", repoName)
       .eq("branch_name", branchName);
@@ -225,7 +227,7 @@ export async function getCodebaseLayerStatus(
     }),
     getLastCompletedRun(scope.organizationId, scope.repoOwner, scope.repoName, branch),
     countIndexedFiles(scope.repoOwner, scope.repoName, branch),
-    countEmbeddings(scope.repoOwner, scope.repoName, branch),
+    countEmbeddings(scope.organizationId, scope.repoOwner, scope.repoName, branch),
     getGraphStatus(scope.organizationId, scope.repoOwner, scope.repoName, branch),
     getJiraIssueStats(scope.organizationId).catch(() => ({
       total: 0,

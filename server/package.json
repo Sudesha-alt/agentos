@@ -19,7 +19,9 @@
     "test:discovery": "tsx scripts/testDiscovery.ts",
     "test:scoring": "tsx --test src/discovery/scoring.test.ts",
     "test:roi": "tsx --test src/roi/estimatedRoi.test.ts",
-    "test:chunker": "tsx --test src/codebaseIntelligence/astChunker.test.ts"
+    "test:chunker": "tsx --test src/codebaseIntelligence/astChunker.test.ts",
+    "test:chunking": "tsx --test src/rag/chunking.test.ts",
+    "eval:retrieval": "tsx scripts/eval-retrieval.ts"
   },
   "dependencies": {
     "@anthropic-ai/bedrock-sdk": "^0.29.2",
@@ -35,6 +37,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
     "helmet": "^8.0.0",
+    "js-tiktoken": "^1.0.19",
     "openai": "^4.71.0",
     "pg": "^8.16.0",
     "pino": "^9.5.0",

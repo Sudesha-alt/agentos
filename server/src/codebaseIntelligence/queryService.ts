@@ -22,31 +22,45 @@ export const codebaseQueryService = {
     branchName: string;
     topK?: number;
     similarityThreshold?: number;
+    useHybrid?: boolean;
   }) {
-    const { repoOwner, repoName } = requireRepoScope();
+    const { repoOwner, repoName, organizationId } = requireRepoScope();
     const embedding = await getOpenAIClient().embeddings.create({
       model: "text-embedding-3-small",
       input: input.query,
     });
 
-    const { data, error } = await getSupabase().rpc("search_codebase", {
+    const rpcName = input.useHybrid !== false ? "hybrid_search_codebase" : "search_codebase";
+    const baseArgs = {
       query_embedding: JSON.stringify(embedding.data[0].embedding),
       p_repo_owner: repoOwner,
       p_repo_name: repoName,
       p_branch_name: input.branchName,
       top_k: input.topK ?? 8,
       similarity_threshold: input.similarityThreshold ?? 0.7,
-    });
+      p_organization_id: organizationId,
+    };
+
+    if (rpcName === "hybrid_search_codebase") {
+      const { data, error } = await getSupabase().rpc("hybrid_search_codebase", {
+        ...baseArgs,
+        query_text: input.query,
+      });
+      if (!error) return data ?? [];
+    }
+
+    const { data, error } = await getSupabase().rpc("search_codebase", baseArgs);
 
     if (error) throw new Error(error.message);
     return data ?? [];
   },
 
   async getFileWithContext(branchName: string, filePath: string) {
-    const { repoOwner, repoName } = requireRepoScope();
+    const { repoOwner, repoName, organizationId } = requireRepoScope();
     return prismaAny.codebaseFile.findUnique({
       where: {
-        repoOwner_repoName_filePath_branchName: {
+        organizationId_repoOwner_repoName_filePath_branchName: {
+          organizationId,
           repoOwner,
           repoName,
           filePath,
@@ -61,7 +75,7 @@ export const codebaseQueryService = {
     filePath: string,
     includeContent = false
   ) {
-    const { repoOwner, repoName } = requireRepoScope();
+    const { repoOwner, repoName, organizationId } = requireRepoScope();
     const select: Record<string, boolean> = {
       id: true,
       filePath: true,
@@ -84,7 +98,8 @@ export const codebaseQueryService = {
 
     return prismaAny.codebaseFile.findUnique({
       where: {
-        repoOwner_repoName_filePath_branchName: {
+        organizationId_repoOwner_repoName_filePath_branchName: {
+          organizationId,
           repoOwner,
           repoName,
           filePath,
@@ -114,9 +129,10 @@ export const codebaseQueryService = {
   },
 
   async getFilesTouchingFeature(pattern: string, branchName: string) {
-    const { repoOwner, repoName } = requireRepoScope();
+    const { repoOwner, repoName, organizationId } = requireRepoScope();
     return prismaAny.codebaseFile.findMany({
       where: {
+        organizationId,
         repoOwner,
         repoName,
         branchName,

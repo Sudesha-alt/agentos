@@ -33,6 +33,8 @@ export interface SearchOptions {
   similarityThreshold: number;
   excludeJiraKeys?: string[];
   organizationId?: string;
+  queryText?: string;
+  useHybrid?: boolean;
 }
 
 interface SimilaritySearchRow {
@@ -54,6 +56,7 @@ interface VectorTableRow {
   content: string;
   metadata: Record<string, unknown>;
   chunk_index?: number;
+  organization_id?: string | null;
 }
 
 function resolveOrganizationId(explicit?: string): string | undefined {
@@ -62,6 +65,19 @@ function resolveOrganizationId(explicit?: string): string | undefined {
   } catch {
     return explicit;
   }
+}
+
+function mapSearchRows(data: SimilaritySearchRow[] | null): VectorRecord[] {
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    jiraTicketId: row.jira_ticket_id,
+    jiraKey: row.jira_key,
+    contentType: row.content_type,
+    content: row.content,
+    metadata: row.metadata,
+    similarity: row.similarity,
+    chunkIndex: row.chunk_index ?? 0,
+  }));
 }
 
 export const vectorStore = {
@@ -131,9 +147,28 @@ export const vectorStore = {
       similarityThreshold,
       excludeJiraKeys = [],
       organizationId,
+      queryText,
+      useHybrid = true,
     } = options;
 
     const orgId = resolveOrganizationId(organizationId);
+
+    if (useHybrid && queryText?.trim()) {
+      const { data, error } = await supabase.rpc("hybrid_similarity_search", {
+        query_embedding: JSON.stringify(queryEmbedding),
+        query_text: queryText,
+        content_types: contentTypes,
+        top_k: topK,
+        similarity_threshold: similarityThreshold,
+        exclude_keys: excludeJiraKeys,
+        p_organization_id: orgId ?? null,
+      });
+
+      if (!error) {
+        return mapSearchRows(data as SimilaritySearchRow[] | null);
+      }
+      logger.debug({ err: error }, "hybrid_similarity_search unavailable — falling back to vector-only");
+    }
 
     const { data, error } = await supabase.rpc("similarity_search", {
       query_embedding: JSON.stringify(queryEmbedding),
@@ -149,31 +184,26 @@ export const vectorStore = {
       throw new Error(`Similarity search failed: ${error.message}`);
     }
 
-    return ((data ?? []) as SimilaritySearchRow[]).map((row) => ({
-      id: row.id,
-      jiraTicketId: row.jira_ticket_id,
-      jiraKey: row.jira_key,
-      contentType: row.content_type,
-      content: row.content,
-      metadata: row.metadata,
-      similarity: row.similarity,
-      chunkIndex: row.chunk_index ?? 0,
-    }));
+    return mapSearchRows(data as SimilaritySearchRow[] | null);
   },
 
-  async deleteByJiraKey(jiraKey: string): Promise<void> {
-    const { error } = await supabase.from("vector_store").delete().eq("jira_key", jiraKey);
+  async deleteByJiraKey(jiraKey: string, organizationId?: string): Promise<void> {
+    const orgId = resolveOrganizationId(organizationId);
+    const q = supabase.from("vector_store").delete().eq("jira_key", jiraKey);
+    if (orgId) q.eq("organization_id", orgId);
+    const { error } = await q;
     if (error) {
       logger.error({ err: error, jiraKey }, "vector delete failed");
       throw new Error(`Vector delete failed: ${error.message}`);
     }
   },
 
-  async getByJiraKey(jiraKey: string): Promise<VectorRecord[]> {
-    const { data, error } = await supabase
-      .from("vector_store")
-      .select("*")
-      .eq("jira_key", jiraKey);
+  async getByJiraKey(jiraKey: string, organizationId?: string): Promise<VectorRecord[]> {
+    const orgId = resolveOrganizationId(organizationId);
+    let q = supabase.from("vector_store").select("*").eq("jira_key", jiraKey);
+    if (orgId) q = q.eq("organization_id", orgId);
+
+    const { data, error } = await q;
 
     if (error) {
       throw new Error(error.message);

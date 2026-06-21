@@ -2,6 +2,7 @@ import { getOpenAIClient, resetOpenAIClient } from "./openaiClient";
 import { withRetry } from "../utils/retry";
 
 export const DEFAULT_EMBEDDING_MODEL = "text-embedding-3-small";
+export const DEFAULT_EMBEDDING_DIMENSIONS = 1536;
 
 function isConnectionResetError(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
