@@ -1,10 +1,10 @@
-import { getDb } from "../jira-intake/sqliteStore";
+import { prisma } from "../db/client";
 import { requireActiveOrganizationId } from "../organization/orgScope";
 
 export type QueueItemStatus = "PENDING" | "ACTIVE" | "COMPLETED" | "FAILED";
 
 export interface PipelineQueueRow {
-  id: number;
+  id: string;
   ticket_id: string;
   jira_key: string;
   organization_id: string;
@@ -16,7 +16,7 @@ export interface PipelineQueueRow {
 }
 
 export interface QueueItem {
-  id: number;
+  id: string;
   ticketId: string;
   jiraKey: string;
   organizationId: string;
@@ -31,176 +31,238 @@ function rowToItem(row: PipelineQueueRow): QueueItem {
   };
 }
 
+function mapRow(item: {
+  id: string;
+  ticketId: string;
+  jiraKey: string;
+  organizationId: string;
+  position: number;
+  status: QueueItemStatus;
+  enqueuedAt: Date;
+  startedAt: Date | null;
+  completedAt: Date | null;
+}): PipelineQueueRow {
+  return {
+    id: item.id,
+    ticket_id: item.ticketId,
+    jira_key: item.jiraKey,
+    organization_id: item.organizationId,
+    position: item.position,
+    status: item.status,
+    enqueued_at: item.enqueuedAt.toISOString(),
+    started_at: item.startedAt?.toISOString() ?? null,
+    completed_at: item.completedAt?.toISOString() ?? null,
+  };
+}
+
 function resolveOrgId(organizationId?: string): string {
   return organizationId ?? requireActiveOrganizationId();
 }
 
-export function enqueueQueueItem(
+export async function enqueueQueueItem(
   ticketId: string,
   jiraKey: string,
   organizationId?: string
-): QueueItem | null {
+): Promise<QueueItem | null> {
   const orgId = resolveOrgId(organizationId);
-  const db = getDb();
-  const existing = db
-    .prepare(
-      `SELECT id FROM pipeline_queue_items
-       WHERE organization_id = ? AND (ticket_id = ? OR jira_key = ?) AND status IN ('PENDING', 'ACTIVE')`
-    )
-    .get(orgId, ticketId, jiraKey) as { id: number } | undefined;
+  const existing = await prisma.pipelineQueueItem.findFirst({
+    where: {
+      organizationId: orgId,
+      OR: [{ ticketId }, { jiraKey }],
+      status: { in: ["PENDING", "ACTIVE"] },
+    },
+    select: { id: true },
+  });
   if (existing) return null;
 
-  const maxPos = db
-    .prepare(
-      `SELECT COALESCE(MAX(position), 0) AS m FROM pipeline_queue_items WHERE organization_id = ? AND status = 'PENDING'`
-    )
-    .get(orgId) as { m: number };
-  const position = maxPos.m + 1;
-  const now = new Date().toISOString();
+  const maxPos = await prisma.pipelineQueueItem.aggregate({
+    where: { organizationId: orgId, status: "PENDING" },
+    _max: { position: true },
+  });
+  const position = (maxPos._max.position ?? 0) + 1;
 
-  const result = db
-    .prepare(
-      `INSERT INTO pipeline_queue_items (ticket_id, jira_key, organization_id, position, status, enqueued_at)
-       VALUES (?, ?, ?, ?, 'PENDING', ?)`
-    )
-    .run(ticketId, jiraKey, orgId, position, now);
+  const created = await prisma.pipelineQueueItem.create({
+    data: {
+      organizationId: orgId,
+      ticketId,
+      jiraKey,
+      position,
+      status: "PENDING",
+    },
+  });
 
   return {
-    id: Number(result.lastInsertRowid),
+    id: created.id,
     ticketId,
     jiraKey,
     organizationId: orgId,
   };
 }
 
-export function markQueueItemActive(id: number): void {
-  const now = new Date().toISOString();
-  getDb()
-    .prepare(
-      `UPDATE pipeline_queue_items SET status = 'ACTIVE', started_at = ? WHERE id = ?`
-    )
-    .run(now, id);
+export async function markQueueItemActive(id: string): Promise<void> {
+  await prisma.pipelineQueueItem.update({
+    where: { id },
+    data: { status: "ACTIVE", startedAt: new Date() },
+  });
 }
 
-export function markQueueItemCompleted(id: number, status: "COMPLETED" | "FAILED" = "COMPLETED"): void {
-  const now = new Date().toISOString();
-  getDb()
-    .prepare(
-      `UPDATE pipeline_queue_items SET status = ?, completed_at = ? WHERE id = ?`
-    )
-    .run(status, now, id);
+export async function markQueueItemCompleted(
+  id: string,
+  status: "COMPLETED" | "FAILED" = "COMPLETED"
+): Promise<void> {
+  await prisma.pipelineQueueItem.update({
+    where: { id },
+    data: { status, completedAt: new Date() },
+  });
 }
 
-export function getActiveQueueItem(organizationId?: string): QueueItem | null {
-  const orgId = organizationId ? resolveOrgId(organizationId) : undefined;
-  const row = orgId
-    ? (getDb()
-        .prepare(
-          `SELECT * FROM pipeline_queue_items WHERE organization_id = ? AND status = 'ACTIVE' ORDER BY started_at ASC LIMIT 1`
-        )
-        .get(orgId) as PipelineQueueRow | undefined)
-    : (getDb()
-        .prepare(
-          `SELECT * FROM pipeline_queue_items WHERE status = 'ACTIVE' ORDER BY started_at ASC LIMIT 1`
-        )
-        .get() as PipelineQueueRow | undefined);
-  return row ? rowToItem(row) : null;
+export async function getActiveQueueItem(
+  organizationId?: string
+): Promise<QueueItem | null> {
+  const row = await prisma.pipelineQueueItem.findFirst({
+    where: {
+      ...(organizationId ? { organizationId } : {}),
+      status: "ACTIVE",
+    },
+    orderBy: { startedAt: "asc" },
+  });
+  return row
+    ? {
+        id: row.id,
+        ticketId: row.ticketId,
+        jiraKey: row.jiraKey,
+        organizationId: row.organizationId,
+      }
+    : null;
 }
 
-export function listPendingQueueItems(organizationId?: string): QueueItem[] {
+export async function listPendingQueueItems(
+  organizationId?: string
+): Promise<QueueItem[]> {
   const orgId = resolveOrgId(organizationId);
-  const rows = getDb()
-    .prepare(
-      `SELECT * FROM pipeline_queue_items WHERE organization_id = ? AND status = 'PENDING' ORDER BY position ASC`
-    )
-    .all(orgId) as PipelineQueueRow[];
-  return rows.map(rowToItem);
+  const rows = await prisma.pipelineQueueItem.findMany({
+    where: { organizationId: orgId, status: "PENDING" },
+    orderBy: { position: "asc" },
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    ticketId: row.ticketId,
+    jiraKey: row.jiraKey,
+    organizationId: row.organizationId,
+  }));
 }
 
-export function dequeueNextPending(organizationId?: string): QueueItem | null {
-  const orgId = organizationId ? resolveOrgId(organizationId) : undefined;
-  const row = orgId
-    ? (getDb()
-        .prepare(
-          `SELECT * FROM pipeline_queue_items WHERE organization_id = ? AND status = 'PENDING' ORDER BY position ASC LIMIT 1`
-        )
-        .get(orgId) as PipelineQueueRow | undefined)
-    : (getDb()
-        .prepare(
-          `SELECT * FROM pipeline_queue_items WHERE status = 'PENDING' ORDER BY position ASC LIMIT 1`
-        )
-        .get() as PipelineQueueRow | undefined);
-  return row ? rowToItem(row) : null;
+export async function dequeueNextPending(
+  organizationId?: string
+): Promise<QueueItem | null> {
+  const row = await prisma.pipelineQueueItem.findFirst({
+    where: {
+      ...(organizationId ? { organizationId } : {}),
+      status: "PENDING",
+    },
+    orderBy: { position: "asc" },
+  });
+  return row
+    ? {
+        id: row.id,
+        ticketId: row.ticketId,
+        jiraKey: row.jiraKey,
+        organizationId: row.organizationId,
+      }
+    : null;
 }
 
-export function isTicketOrKeyQueued(
+export async function isTicketOrKeyQueued(
   ticketId: string,
   jiraKey: string,
   organizationId?: string
-): boolean {
+): Promise<boolean> {
   const orgId = resolveOrgId(organizationId);
-  const row = getDb()
-    .prepare(
-      `SELECT 1 FROM pipeline_queue_items
-       WHERE organization_id = ? AND (ticket_id = ? OR jira_key = ?) AND status IN ('PENDING', 'ACTIVE')`
-    )
-    .get(orgId, ticketId, jiraKey);
+  const row = await prisma.pipelineQueueItem.findFirst({
+    where: {
+      organizationId: orgId,
+      OR: [{ ticketId }, { jiraKey }],
+      status: { in: ["PENDING", "ACTIVE"] },
+    },
+    select: { id: true },
+  });
   return Boolean(row);
 }
 
-export function isJiraKeyInDbQueue(jiraKey: string, organizationId?: string): boolean {
+export async function isJiraKeyInDbQueue(
+  jiraKey: string,
+  organizationId?: string
+): Promise<boolean> {
   const orgId = resolveOrgId(organizationId);
-  const row = getDb()
-    .prepare(
-      `SELECT 1 FROM pipeline_queue_items WHERE organization_id = ? AND jira_key = ? AND status IN ('PENDING', 'ACTIVE')`
-    )
-    .get(orgId, jiraKey);
+  const row = await prisma.pipelineQueueItem.findFirst({
+    where: {
+      organizationId: orgId,
+      jiraKey,
+      status: { in: ["PENDING", "ACTIVE"] },
+    },
+    select: { id: true },
+  });
   return Boolean(row);
 }
 
-export function resetStaleActiveItems(): number {
-  const result = getDb()
-    .prepare(
-      `UPDATE pipeline_queue_items SET status = 'PENDING', started_at = NULL
-       WHERE status = 'ACTIVE'`
-    )
-    .run();
-  return result.changes;
+export async function resetStaleActiveItems(): Promise<number> {
+  const result = await prisma.pipelineQueueItem.updateMany({
+    where: { status: "ACTIVE" },
+    data: { status: "PENDING", startedAt: null },
+  });
+  return result.count;
 }
 
-export function getQueueStats(organizationId?: string): {
+export async function listOrganizationIdsWithPendingQueue(): Promise<string[]> {
+  const rows = await prisma.pipelineQueueItem.findMany({
+    where: { status: { in: ["PENDING", "ACTIVE"] } },
+    select: { organizationId: true },
+    distinct: ["organizationId"],
+  });
+  return rows.map((r) => r.organizationId);
+}
+
+export async function getQueueStats(organizationId?: string): Promise<{
   pending: number;
   active: number;
   completed: number;
-} {
-  const db = getDb();
+}> {
   if (organizationId) {
     const orgId = resolveOrgId(organizationId);
-    const pending =
-      (db.prepare(`SELECT COUNT(*) AS c FROM pipeline_queue_items WHERE organization_id = ? AND status = 'PENDING'`).get(orgId) as { c: number }).c;
-    const active =
-      (db.prepare(`SELECT COUNT(*) AS c FROM pipeline_queue_items WHERE organization_id = ? AND status = 'ACTIVE'`).get(orgId) as { c: number }).c;
-    const completed =
-      (db.prepare(`SELECT COUNT(*) AS c FROM pipeline_queue_items WHERE organization_id = ? AND status = 'COMPLETED'`).get(orgId) as { c: number }).c;
+    const [pending, active, completed] = await Promise.all([
+      prisma.pipelineQueueItem.count({
+        where: { organizationId: orgId, status: "PENDING" },
+      }),
+      prisma.pipelineQueueItem.count({
+        where: { organizationId: orgId, status: "ACTIVE" },
+      }),
+      prisma.pipelineQueueItem.count({
+        where: { organizationId: orgId, status: "COMPLETED" },
+      }),
+    ]);
     return { pending, active, completed };
   }
-  const pending =
-    (db.prepare(`SELECT COUNT(*) AS c FROM pipeline_queue_items WHERE status = 'PENDING'`).get() as { c: number }).c;
-  const active =
-    (db.prepare(`SELECT COUNT(*) AS c FROM pipeline_queue_items WHERE status = 'ACTIVE'`).get() as { c: number }).c;
-  const completed =
-    (db.prepare(`SELECT COUNT(*) AS c FROM pipeline_queue_items WHERE status = 'COMPLETED'`).get() as { c: number }).c;
+
+  const [pending, active, completed] = await Promise.all([
+    prisma.pipelineQueueItem.count({ where: { status: "PENDING" } }),
+    prisma.pipelineQueueItem.count({ where: { status: "ACTIVE" } }),
+    prisma.pipelineQueueItem.count({ where: { status: "COMPLETED" } }),
+  ]);
   return { pending, active, completed };
 }
 
-export function listQueueItems(organizationId?: string, limit = 50): PipelineQueueRow[] {
+export async function listQueueItems(
+  organizationId?: string,
+  limit = 50
+): Promise<PipelineQueueRow[]> {
   const orgId = resolveOrgId(organizationId);
-  return getDb()
-    .prepare(
-      `SELECT * FROM pipeline_queue_items
-       WHERE organization_id = ? AND status IN ('PENDING', 'ACTIVE')
-       ORDER BY CASE status WHEN 'ACTIVE' THEN 0 ELSE 1 END, position ASC
-       LIMIT ?`
-    )
-    .all(orgId, limit) as PipelineQueueRow[];
+  const rows = await prisma.pipelineQueueItem.findMany({
+    where: {
+      organizationId: orgId,
+      status: { in: ["PENDING", "ACTIVE"] },
+    },
+    orderBy: [{ status: "asc" }, { position: "asc" }],
+    take: limit,
+  });
+  return rows.map(mapRow);
 }

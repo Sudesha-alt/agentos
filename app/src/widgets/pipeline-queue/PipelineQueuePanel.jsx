@@ -62,15 +62,18 @@ export function PipelineQueueSummary({ setup, className = "" }) {
 
 export default function PipelineQueuePanel({ setup, showHeader = true, onRefreshSetup }) {
   const orgPath = useOrgPathBuilder();
-  const { active: liveActive } = usePipelineLive({ pollMs: 3000 });
+  const { active: liveActive, queue: liveQueue } = usePipelineLive({ pollMs: 3000 });
   const [scanning, setScanning] = useState(false);
   const [scanMessage, setScanMessage] = useState(null);
   const intake = setup?.intake;
-  const queue = setup?.queue ?? {};
+  const queue = liveQueue ?? setup?.queue ?? {};
   const activeKey = liveActive?.jiraKey ?? queue.activeJiraKey;
-  const queuedKeys = liveActive?.queuedJiraKeys?.length
-    ? liveActive.queuedJiraKeys
-    : queue.queuedJiraKeys ?? [];
+  const queuedKeys =
+    liveQueue?.queuedJiraKeys?.length > 0
+      ? liveQueue.queuedJiraKeys
+      : liveActive?.queuedJiraKeys?.length
+        ? liveActive.queuedJiraKeys
+        : queue.queuedJiraKeys ?? [];
   const trigger = formatIntakeTrigger(intake);
   const isActive = Boolean(activeKey || liveActive);
   const hasQueue = queuedKeys.length > 0;
@@ -83,10 +86,16 @@ export default function PipelineQueuePanel({ setup, showHeader = true, onRefresh
       const errors = result.errors?.length ?? 0;
       const skipped = result.skipped ?? 0;
       setScanMessage(
-        `Scanned ${result.scanned ?? 0} AI Worker ticket(s), enqueued ${result.enqueued ?? 0}` +
-          (skipped ? `, skipped ${skipped}` : "") +
-          (errors ? ` (${errors} error${errors === 1 ? "" : "s"})` : "") +
-          (result.source ? ` via ${result.source}` : "")
+        [
+          `Scanned ${result.scanned ?? 0} AI Worker ticket(s), enqueued ${result.enqueued ?? 0}`,
+          skipped ? `skipped ${skipped}` : null,
+          errors ? `${errors} error${errors === 1 ? "" : "s"}` : null,
+          result.source ? `via ${result.source}` : null,
+          result.errors?.[0]?.message ? `— ${result.errors[0].message}` : null,
+          result.skipReasons?.[0]?.message ? `— ${result.skipReasons[0].message}` : null,
+        ]
+          .filter(Boolean)
+          .join(", ")
       );
       onRefreshSetup?.();
     } catch (err) {

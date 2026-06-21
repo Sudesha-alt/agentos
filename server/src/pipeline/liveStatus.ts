@@ -100,7 +100,7 @@ export interface LivePipelineStatus {
 
 export interface LivePipelineResponse {
   active: LivePipelineStatus | null;
-  queue: ReturnType<typeof getPipelineQueueState>;
+  queue: Awaited<ReturnType<typeof getPipelineQueueState>>;
 }
 
 function stageLabel(stage: PipelineStage): string {
@@ -300,7 +300,7 @@ function mapPipelineToLive(
     auditLogs: AuditLog[];
     stages: PipelineStageLog[];
   },
-  queue: ReturnType<typeof getPipelineQueueState>
+  queue: Awaited<ReturnType<typeof getPipelineQueueState>>
 ): LivePipelineStatus {
   const normalized = pipeline.ticket.normalizedData as { summary?: string } | null;
   const formattedLogs = pipeline.auditLogs.map(formatAuditEntry);
@@ -347,7 +347,7 @@ export async function getLivePipelineStatus(
   organizationId: string,
   options?: { jiraKey?: string }
 ): Promise<LivePipelineResponse> {
-  const queue = getPipelineQueueState(organizationId);
+  const queue = await getPipelineQueueState(organizationId);
   const jiraKey = options?.jiraKey?.trim().toUpperCase();
 
   const include = {

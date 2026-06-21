@@ -27,8 +27,10 @@ import {
   getPipelineCompletionSettings,
   getPipelineIntakeMapping,
   savePipelineCompletionSettings,
-  savePipelineIntakeColumn,
 } from "../../pipeline/jira/intakeConfig";
+import { getIntakeDiagnosticsSnapshot } from "../../pipeline/jira/intakeDiagnosticsStore";
+import { getQueueStats } from "../../queue/pipelineQueueStore";
+import { listRecentIntakeEvents } from "../../db/repositories/intakeEventRepo";
 import { reconcileOrganizationJiraIntegration } from "../../pipeline/jira/reconcileIntegration";
 import { getJiraIssueStats } from "../../jira-sync/issueRepository";
 import { getLatestSyncRun, isJiraSyncRunning } from "../../jira-sync/syncService";
@@ -116,7 +118,7 @@ router.get("/setup", async (req, res) => {
       webhookHint:
         "All project tickets sync automatically. Move a ticket into the AI Worker column/status to start the agent pipeline.",
       intake,
-      queue: getPipelineQueueState(user.organizationId!),
+      queue: await getPipelineQueueState(user.organizationId!),
       mirror: getPipelineJiraMirrorConfig(),
       mirrorJql: pipelineReady
         ? buildMirrorBackfillJql(jiraAfter.projectKeys)
@@ -385,23 +387,83 @@ router.get("/intake/tickets", async (req, res, next) => {
   }
 });
 
-router.get("/completion-settings", (_req, res) => {
-  res.json(getPipelineCompletionSettings());
+router.get("/intake/status", async (req, res, next) => {
+  try {
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
+
+    await withOrganizationContext(user.organizationId, async () => {
+      const intake = getPipelineIntakeMapping();
+      const diagnostics = getIntakeDiagnosticsSnapshot(user.organizationId!);
+      const queueStats = await getQueueStats(user.organizationId!);
+      const recentEvents = await listRecentIntakeEvents(user.organizationId!, 10);
+
+      res.json({
+        intake: {
+          aiWorkerColumnName: intake.aiWorkerColumnName,
+          aiWorkerStatuses: intake.aiWorkerStatuses,
+        },
+        webhook: {
+          lastReceivedAt: diagnostics.lastWebhookAt,
+          lastJiraKey: diagnostics.lastWebhookJiraKey,
+        },
+        lastScan: diagnostics.lastScan,
+        lastScanAt: diagnostics.lastScanAt,
+        queue: queueStats,
+        recentEvents: recentEvents.map((event) => ({
+          id: event.id,
+          jiraKey: event.jiraKey,
+          source: event.source,
+          outcome: event.outcome,
+          skipReason: event.skipReason,
+          message: event.message,
+          createdAt: event.createdAt.toISOString(),
+        })),
+      });
+    });
+  } catch (err) {
+    next(normalizePipelineError(err));
+  }
 });
 
-router.put("/completion-settings", (req, res) => {
-  const settings = savePipelineCompletionSettings({
-    completionStatusName: req.body?.completionStatusName
-      ? String(req.body.completionStatusName).trim()
-      : undefined,
-    attachPrdComment: req.body?.attachPrdComment,
-    attachQaComment: req.body?.attachQaComment,
-    attachEngineeringComment: req.body?.attachEngineeringComment,
-    attachRcaComment: req.body?.attachRcaComment,
-    updateDescription: req.body?.updateDescription,
-    attachJsonArtifact: req.body?.attachJsonArtifact,
-  });
-  res.json(settings);
+router.get("/completion-settings", async (req, res, next) => {
+  try {
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
+
+    await withOrganizationContext(user.organizationId, async () => {
+      res.json(getPipelineCompletionSettings());
+    });
+  } catch (err) {
+    next(normalizePipelineError(err));
+  }
+});
+
+router.put("/completion-settings", async (req, res, next) => {
+  try {
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
+
+    await withOrganizationContext(user.organizationId, async () => {
+      const settings = await savePipelineCompletionSettings(
+        {
+          completionStatusName: req.body?.completionStatusName
+            ? String(req.body.completionStatusName).trim()
+            : undefined,
+          attachPrdComment: req.body?.attachPrdComment,
+          attachQaComment: req.body?.attachQaComment,
+          attachEngineeringComment: req.body?.attachEngineeringComment,
+          attachRcaComment: req.body?.attachRcaComment,
+          updateDescription: req.body?.updateDescription,
+          attachJsonArtifact: req.body?.attachJsonArtifact,
+        },
+        user.organizationId!
+      );
+      res.json(settings);
+    });
+  } catch (err) {
+    next(normalizePipelineError(err));
+  }
 });
 
 router.post("/intake/scan", async (req, res, next) => {
@@ -414,7 +476,7 @@ router.post("/intake/scan", async (req, res, next) => {
       const result = await scanIntakeFromSyncedIssues("manual");
       res.json({
         ...result,
-        queue: getPipelineQueueState(user.organizationId!),
+        queue: await getPipelineQueueState(user.organizationId!),
       });
     });
   } catch (err) {

@@ -117,6 +117,40 @@ model JiraMirror {
   @@index([jiraUpdatedAt])
 }
 
+model PipelineQueueItem {
+  id             String              @id @default(cuid())
+  organizationId String
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  ticketId       String
+  jiraKey        String
+  position       Int
+  status         PipelineQueueStatus @default(PENDING)
+  enqueuedAt     DateTime            @default(now())
+  startedAt      DateTime?
+  completedAt    DateTime?
+
+  @@index([organizationId, status, position])
+  @@index([organizationId, jiraKey])
+  @@index([ticketId])
+}
+
+model IntakeEvent {
+  id             String       @id @default(cuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  jiraKey        String
+  source         String
+  outcome        String
+  skipReason     String?
+  message        String?
+  summary        String?
+  issueType      String?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([organizationId, jiraKey])
+}
+
 model Pipeline {
   id             String             @id @default(cuid())
   organizationId String
@@ -302,6 +336,8 @@ model Organization {
   jiraSyncRuns   JiraSyncRun[]
   jiraMirrors    JiraMirror[]
   pipelines      Pipeline[]
+  pipelineQueueItems PipelineQueueItem[]
+  intakeEvents   IntakeEvent[]
   orgIntelligence OrgIntelligenceRecord[]
   codebaseFiles  CodebaseFile[]
   codebaseIndexRuns CodebaseIndexRun[]
@@ -675,6 +711,13 @@ enum PipelineStage {
   QA_AGENT
   QA_VALIDATION
   OUTPUT
+}
+
+enum PipelineQueueStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  FAILED
 }
 
 enum PipelineStatus {

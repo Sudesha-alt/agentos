@@ -85,10 +85,22 @@ export async function scanPipelineIntake() {
   });
 }
 
+export async function getPipelineIntakeStatus() {
+  return fetchJson(root("/intake/status"), { headers: requestHeaders() });
+}
+
 export function usePipelineJiraSetup(options = {}) {
   return useResource(() => getPipelineJiraSetup(), [], {
     pollMs: options.pollMs ?? 30000,
   });
+}
+
+export function usePipelineIntakeStatus(enabled, options = {}) {
+  return useResource(
+    () => (enabled ? getPipelineIntakeStatus() : Promise.resolve(null)),
+    [enabled],
+    { pollMs: enabled ? (options.pollMs ?? 15000) : undefined }
+  );
 }
 
 export function usePipelineIntakeTickets(enabled, options = {}) {

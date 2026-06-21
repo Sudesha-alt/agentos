@@ -20,6 +20,7 @@ import {
   startIntakePollScheduler,
   startJiraSyncScheduler,
 } from "./queue/inProcessRunner";
+import { recoverPipelineStateOnBoot } from "./queue/bootRecovery";
 import { logger } from "./utils/logger";
 import { runMigrationsOnStartup } from "./db/migrateOnStartup";
 import { disconnectPrisma } from "./db/client";
@@ -56,7 +57,13 @@ async function bootstrap(): Promise<void> {
   startJiraSyncScheduler();
   startIntakePollScheduler();
   startCanaryScheduler();
-  hydrateQueueFromDb();
+
+  await recoverPipelineStateOnBoot().catch((err) => {
+    logger.warn({ err }, "startup pipeline queue recovery failed");
+  });
+  await hydrateQueueFromDb().catch((err) => {
+    logger.warn({ err }, "startup queue drain failed");
+  });
 
   await scanIntakeFromSyncedIssues().catch((err) => {
     logger.warn({ err }, "startup AI Worker intake scan failed");
