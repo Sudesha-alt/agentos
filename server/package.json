@@ -58,6 +58,7 @@
     "tree-sitter-swift": "^0.7.1",
     "tree-sitter-typescript": "^0.21.2",
     "tree-sitter-yaml": "^0.5.0",
+    "undici": "^7.16.0",
     "ws": "^8.21.0",
     "zod": "^3.23.8"
   },

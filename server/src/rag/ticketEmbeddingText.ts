@@ -1,6 +1,6 @@
 import { hashContent } from "./contentHash";
 import { chunkTextByTokens, countTokens } from "./chunking";
-import { recordEmbedChunksDropped } from "./embedMetrics";
+import { recordEmbedTruncation } from "./embedMetrics";
 import type { NormalizedTicket } from "../types/ticket";
 import type { FetchedJiraIssue } from "../jira-sync/issueFetcher";
 
@@ -135,7 +135,7 @@ export function buildTicketEmbedChunks(fields: TicketEmbedFields, maxChunks = 8)
 
   const limited = chunks.slice(0, maxChunks);
   if (chunks.length > maxChunks) {
-    recordEmbedChunksDropped();
+    recordEmbedTruncation("chunks");
   }
   return limited;
 }

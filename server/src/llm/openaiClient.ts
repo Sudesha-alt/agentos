@@ -1,4 +1,4 @@
-import { Agent, fetch as undiciFetch } from "node:undici";
+import { Agent, fetch as undiciFetch, type RequestInit as UndiciRequestInit } from "undici";
 import OpenAI from "openai";
 import type {
   ChatCompletion,
@@ -16,7 +16,7 @@ export function resetOpenAIClient(): void {
 }
 
 /** Fresh TCP per request — avoids stale keep-alive gzip streams on Render. */
-function openaiFetch(url: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+function openaiFetch(url: string | URL, init?: RequestInit): Promise<Response> {
   if (!openaiDispatcher) {
     openaiDispatcher = new Agent({
       pipelining: 0,
@@ -25,7 +25,7 @@ function openaiFetch(url: RequestInfo | URL, init?: RequestInit): Promise<Respon
     });
   }
   return undiciFetch(url, {
-    ...init,
+    ...(init as UndiciRequestInit | undefined),
     dispatcher: openaiDispatcher,
   }) as unknown as Promise<Response>;
 }
