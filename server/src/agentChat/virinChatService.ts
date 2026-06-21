@@ -1,4 +1,5 @@
 import { pmAnalysisStore } from "../agents/pm/store";
+import { normalizeDiscoverySummary } from "../agents/virin/normalizeDiscoverySummary";
 import { buildAgentChatSystemPrompt } from "./chatPrompts";
 import { lookupJiraTicketForChat } from "./ticketLookup";
 import { runAgenticChatTurn } from "../agenticLoop/chatTurn";
@@ -27,7 +28,7 @@ async function buildVirinContextBlock(contextKey: string): Promise<string> {
           `Status: ${record.status}`,
           `Stage: ${record.currentStage ?? "—"}`,
           record.questionMode?.discoverySummary
-            ? `Discovery summary: ${record.questionMode.discoverySummary}`
+            ? `Discovery summary: ${normalizeDiscoverySummary(record.questionMode.discoverySummary)}`
             : "",
           record.competitorAnalysis?.summaryMarkdown
             ? `Competitor analysis: ${record.competitorAnalysis.summaryMarkdown.slice(0, 800)}`

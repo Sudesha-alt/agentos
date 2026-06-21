@@ -7,6 +7,18 @@ import {
   VIRIN_MAX_DISCOVERY_TURNS,
 } from "../../entities/pm-agents";
 
+function formatDiscoverySummary(summary) {
+  if (!summary) return "";
+  if (typeof summary === "string") return summary;
+  if (typeof summary === "object" && !Array.isArray(summary)) {
+    return Object.entries(summary)
+      .filter(([, v]) => v != null && String(v).trim())
+      .map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`)
+      .join("\n\n");
+  }
+  return String(summary);
+}
+
 export function DiscoveryQuestionProgress({ analysis, compact = false }) {
   const discovery = getDiscoveryQuestionProgress(analysis);
   const intake = getIntakeClarifyingProgress(analysis);
@@ -406,7 +418,7 @@ export function VirinDiscoverySection({ questionMode, analysis, expanded = false
         <div className="border-t border-app-border bg-indigo/[0.03] px-5 py-5 sm:px-6">
           <p className="type-kicker">Discovery summary</p>
           <p className="mt-3 whitespace-pre-wrap text-[14px] leading-relaxed text-app-ink-dim">
-            {questionMode.discoverySummary}
+            {formatDiscoverySummary(questionMode.discoverySummary)}
           </p>
         </div>
       )}

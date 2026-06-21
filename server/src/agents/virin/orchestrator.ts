@@ -43,6 +43,7 @@ import type {
   PostShipOutput,
 } from "./types";
 import { VIRIN_STAGE_ORDER } from "./types";
+import { normalizeDiscoverySummary } from "./normalizeDiscoverySummary";
 import { getPipelineSettings } from "../../pipeline/settingsStore";
 
 export type { VirinRunMode };
@@ -258,7 +259,9 @@ function syncLegacyFields(
   codebase?: CodebaseAnalysisOutput,
   solution?: SolutioningOutput
 ): void {
-  const discovery = qm?.discoverySummary ?? record.questionMode?.discoverySummary ?? "";
+  const discovery = normalizeDiscoverySummary(
+    qm?.discoverySummary ?? record.questionMode?.discoverySummary ?? ""
+  );
   pmAnalysisStore.update(jiraKey, {
     neelIntake: intake ?? record.neelIntake,
     questionMode: qm ?? record.questionMode,
@@ -603,7 +606,7 @@ async function runQuestionMode(
     }
 
     if (next.action === "ready" && next.discoverySummary) {
-      state.discoverySummary = next.discoverySummary;
+      state.discoverySummary = normalizeDiscoverySummary(next.discoverySummary);
       state.readyToProceed = true;
       state.pendingQuestion = null;
       break;
@@ -666,7 +669,7 @@ async function runCompetitorAnalysis(
   const profile = await companyIntelligence.getProfile();
   const competitors = profile.competitors ?? [];
   const featureSummary =
-    record.questionMode?.discoverySummary?.trim() || ticket.summary;
+    normalizeDiscoverySummary(record.questionMode?.discoverySummary) || ticket.summary;
 
   let state: CompetitorAnalysisState = record.competitorAnalysis ?? {
     decision: "pending",
@@ -742,7 +745,7 @@ async function runCodebaseAnalysis(
   record: PmAnalysisRecord
 ): Promise<void> {
   const prompt = renderTemplate(PROMPT_CODEBASE_ANALYSIS, {
-    discovery_summary: record.questionMode?.discoverySummary ?? "",
+    discovery_summary: normalizeDiscoverySummary(record.questionMode?.discoverySummary),
     ticket_type: record.neelIntake?.ticketType ?? "task",
     candidate_files_list: ctx.candidateFilesList,
     recent_commit_summary: ctx.recentCommitSummary,
@@ -795,7 +798,7 @@ async function runSystemDesign(
   if (record.systemDesign) return;
 
   const prompt = renderTemplate(PROMPT_SYSTEM_DESIGN, {
-    discovery_summary: record.questionMode?.discoverySummary ?? "",
+    discovery_summary: normalizeDiscoverySummary(record.questionMode?.discoverySummary),
     codebase_analysis_json: JSON.stringify(record.codebaseAnalysis ?? {}, null, 2),
     system_design_scope: record.neelIntake?.ticketType ?? "task",
   });
@@ -835,7 +838,7 @@ async function runTaskPlanning(
     renderTemplate(PROMPT_TASK_PLANNING, {
       system_design_json: JSON.stringify(record.systemDesign ?? {}, null, 2),
       codebase_analysis_json: JSON.stringify(record.codebaseAnalysis ?? {}, null, 2),
-      discovery_summary: record.questionMode?.discoverySummary ?? "",
+      discovery_summary: normalizeDiscoverySummary(record.questionMode?.discoverySummary),
     }),
     STAGE_TOKENS.TASK_PLANNING
   );
@@ -854,7 +857,7 @@ async function runSolutioning(
 
   const prompt = renderTemplate(PROMPT_SOLUTIONING, {
     company_context: companyContextFromRecord(record, ctx),
-    discovery_summary: record.questionMode?.discoverySummary ?? "",
+    discovery_summary: normalizeDiscoverySummary(record.questionMode?.discoverySummary),
     competitor_analysis: competitorBlock(record),
     codebase_analysis_json: JSON.stringify(record.codebaseAnalysis ?? {}, null, 2),
     flags: (record.questionMode?.flagsRaised ?? []).join("\n") || "none",
@@ -883,7 +886,7 @@ async function runPrdGeneration(
   const prompt = renderTemplate(PROMPT_PRD, {
     company_context: companyContextFromRecord(record, ctx),
     solution_summary: record.solutioning?.summaryMarkdown ?? "",
-    discovery_summary: record.questionMode?.discoverySummary ?? "",
+    discovery_summary: normalizeDiscoverySummary(record.questionMode?.discoverySummary),
     competitor_analysis: competitorBlock(record),
     codebase_analysis_json: JSON.stringify(record.codebaseAnalysis ?? {}, null, 2),
     jira_key: jiraKey,

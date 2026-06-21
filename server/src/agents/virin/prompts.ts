@@ -130,7 +130,7 @@ Output JSON:
   "options": ["3-4 distinct answer choices when action is ask"],
   "flag": "required if action is flag",
   "reason": "which gap this question fills OR why ready OR why flag — cite what is still unknown or what was already covered",
-  "discoverySummary": "required if action is ready — structured summary: problem, user, evidence, success, MVP scope, out of scope"
+  "discoverySummary": "required if action is ready — a single plain-text string (NOT a nested JSON object) covering problem, user, evidence, success, MVP scope, and out of scope"
 }${JSON_ONLY}`;
 
 export const PROMPT_NEXT_QUESTION_RETRY = `Your previous discovery question overlapped with an earlier question or was too generic.
