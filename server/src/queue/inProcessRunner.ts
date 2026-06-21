@@ -19,11 +19,11 @@ import {
   listQueueItems,
   markQueueItemActive,
   markQueueItemCompleted,
-  resetStaleActiveItems,
   isTicketOrKeyQueued,
   getQueueStats,
   type QueueItem,
 } from "./pipelineQueueStore";
+import { listBootRecoveryOrganizationIds } from "./bootRecovery";
 
 export { getQueueStats };
 
@@ -40,40 +40,55 @@ export interface PipelineBatchEnqueueResult {
   enqueued: number;
 }
 
-let draining = false;
+const drainingByOrg = new Set<string>();
 let mirrorBackfillRunning = false;
 let canaryRunning = false;
 let activeCanaryRunId: string | null = null;
 
-export function hydrateQueueFromDb(): void {
-  const reset = resetStaleActiveItems();
-  if (reset > 0) {
-    logger.warn({ count: reset }, "reset stale ACTIVE queue items to PENDING after restart");
-  }
+export function startDrainForOrganization(organizationId: string): void {
+  if (drainingByOrg.has(organizationId)) return;
+  void hydrateOrganizationQueue(organizationId);
+}
 
-  const active = getActiveQueueItem();
-  if (active) {
-    logger.info({ ticketId: active.ticketId, jiraKey: active.jiraKey }, "resuming active queue item");
-    if (!draining) void drainQueue(active);
-    return;
-  }
-
-  const next = dequeueNextPending();
-  if (next && !draining) {
-    logger.info({ ticketId: next.ticketId, jiraKey: next.jiraKey }, "starting queued item from DB on boot");
-    void drainQueue(next);
+export async function hydrateQueueFromDb(): Promise<void> {
+  const orgIds = await listBootRecoveryOrganizationIds();
+  for (const organizationId of orgIds) {
+    startDrainForOrganization(organizationId);
   }
 }
 
-export function getPipelineQueueState(organizationId: string): {
+async function hydrateOrganizationQueue(organizationId: string): Promise<void> {
+  if (drainingByOrg.has(organizationId)) return;
+
+  const active = await getActiveQueueItem(organizationId);
+  if (active) {
+    logger.info(
+      { ticketId: active.ticketId, jiraKey: active.jiraKey, organizationId },
+      "resuming active queue item"
+    );
+    await drainQueue(active);
+    return;
+  }
+
+  const next = await dequeueNextPending(organizationId);
+  if (next) {
+    logger.info(
+      { ticketId: next.ticketId, jiraKey: next.jiraKey, organizationId },
+      "starting queued item from Postgres on boot"
+    );
+    await drainQueue(next);
+  }
+}
+
+export async function getPipelineQueueState(organizationId: string): Promise<{
   activeTicketId: string | null;
   activeJiraKey: string | null;
   queuedTicketIds: string[];
   queuedJiraKeys: string[];
   queueLength: number;
-  items: ReturnType<typeof listQueueItems>;
-} {
-  const items = listQueueItems(organizationId);
+  items: Awaited<ReturnType<typeof listQueueItems>>;
+}> {
+  const items = await listQueueItems(organizationId);
   const active = items.find((i) => i.status === "ACTIVE");
   const pending = items.filter((i) => i.status === "PENDING");
   return {
@@ -86,30 +101,39 @@ export function getPipelineQueueState(organizationId: string): {
   };
 }
 
-export function isTicketInPipelineQueue(ticketId: string, organizationId?: string): boolean {
+export async function isTicketInPipelineQueue(
+  ticketId: string,
+  organizationId?: string
+): Promise<boolean> {
   return isTicketOrKeyQueued(ticketId, ticketId, organizationId);
 }
 
-export function isJiraKeyInPipelineQueue(jiraKey: string, organizationId?: string): boolean {
-  const active = getActiveQueueItem(organizationId);
+export async function isJiraKeyInPipelineQueue(
+  jiraKey: string,
+  organizationId?: string
+): Promise<boolean> {
+  const active = await getActiveQueueItem(organizationId);
   if (active?.jiraKey === jiraKey) return true;
-  return listPendingQueueItems(organizationId).some((i) => i.jiraKey === jiraKey);
+  const pending = await listPendingQueueItems(organizationId);
+  return pending.some((i) => i.jiraKey === jiraKey);
 }
 
 /** Enqueue a story group block — items stay contiguous in FIFO order. */
-export function enqueuePipelineBatch(
+export async function enqueuePipelineBatch(
   items: Array<{ ticketId: string; jiraKey: string }>,
   organizationId?: string
-): PipelineBatchEnqueueResult {
+): Promise<PipelineBatchEnqueueResult> {
   let enqueued = 0;
   let started = false;
 
   for (const item of items) {
-    if (isTicketOrKeyQueued(item.ticketId, item.jiraKey, organizationId)) {
+    if (await isTicketOrKeyQueued(item.ticketId, item.jiraKey, organizationId)) {
       continue;
     }
 
-    const result = runPipelineInBackground(item.ticketId, item.jiraKey, { organizationId });
+    const result = await runPipelineInBackground(item.ticketId, item.jiraKey, {
+      organizationId,
+    });
     if (result.started) started = true;
     enqueued += 1;
   }
@@ -117,15 +141,15 @@ export function enqueuePipelineBatch(
   return { started, enqueued };
 }
 
-/** FIFO queue — only one pipeline run active at a time per org. Backed by SQLite. */
-export function runPipelineInBackground(
+/** FIFO queue — one pipeline run active at a time per org. Backed by Postgres. */
+export async function runPipelineInBackground(
   ticketId: string,
   jiraKey?: string,
   options?: { resumePipelineId?: string; organizationId?: string }
-): PipelineRunResult {
+): Promise<PipelineRunResult> {
   const key = jiraKey ?? ticketId;
   const organizationId = options?.organizationId;
-  const active = getActiveQueueItem(organizationId);
+  const active = await getActiveQueueItem(organizationId);
 
   if (active?.ticketId === ticketId) {
     logger.warn({ ticketId }, "pipeline already running for this ticket");
@@ -137,8 +161,8 @@ export function runPipelineInBackground(
     };
   }
 
-  if (isTicketOrKeyQueued(ticketId, key, organizationId)) {
-    const pending = listPendingQueueItems(organizationId);
+  if (await isTicketOrKeyQueued(ticketId, key, organizationId)) {
+    const pending = await listPendingQueueItems(organizationId);
     const position = pending.findIndex((q) => q.ticketId === ticketId) + 1;
     logger.info({ ticketId, position }, "pipeline ticket already queued");
     return {
@@ -150,7 +174,7 @@ export function runPipelineInBackground(
     };
   }
 
-  const queued = enqueueQueueItem(ticketId, key, organizationId);
+  const queued = await enqueueQueueItem(ticketId, key, organizationId);
   if (!queued) {
     return {
       started: false,
@@ -160,7 +184,8 @@ export function runPipelineInBackground(
     };
   }
 
-  if (!active && !draining) {
+  const orgId = queued.organizationId;
+  if (!active && !drainingByOrg.has(orgId)) {
     void drainQueue(queued, options?.resumePipelineId);
     return {
       started: true,
@@ -170,7 +195,7 @@ export function runPipelineInBackground(
     };
   }
 
-  const position = listPendingQueueItems(organizationId).length;
+  const position = (await listPendingQueueItems(organizationId)).length;
   logger.info(
     { ticketId, jiraKey: key, position, activeTicketId: active?.ticketId },
     "pipeline ticket queued"
@@ -185,41 +210,50 @@ export function runPipelineInBackground(
 }
 
 async function drainQueue(item: QueueItem, resumePipelineId?: string): Promise<void> {
-  if (draining && getActiveQueueItem(item.organizationId)?.id !== item.id) {
-    return;
+  const orgId = item.organizationId;
+  if (drainingByOrg.has(orgId)) {
+    const active = await getActiveQueueItem(orgId);
+    if (active?.id !== item.id) return;
   }
-  draining = true;
-  markQueueItemActive(item.id);
-  logger.info({ ticketId: item.ticketId, jiraKey: item.jiraKey, organizationId: item.organizationId }, "pipeline run started");
+
+  drainingByOrg.add(orgId);
+  await markQueueItemActive(item.id);
+  logger.info(
+    { ticketId: item.ticketId, jiraKey: item.jiraKey, organizationId: orgId },
+    "pipeline run started"
+  );
 
   try {
-    await withOrganizationContext(item.organizationId, async () => {
+    await withOrganizationContext(orgId, async () => {
       if (resumePipelineId) {
         await orchestrator.resume(resumePipelineId);
       } else {
         await orchestrator.run(item.ticketId);
       }
     });
-    markQueueItemCompleted(item.id, "COMPLETED");
+    await markQueueItemCompleted(item.id, "COMPLETED");
   } catch (err) {
-    markQueueItemCompleted(item.id, "FAILED");
+    await markQueueItemCompleted(item.id, "FAILED");
     logger.error({ err, ticketId: item.ticketId }, "in-process pipeline failed");
   } finally {
-    draining = false;
-    const next = dequeueNextPending(item.organizationId);
+    drainingByOrg.delete(orgId);
+    const next = await dequeueNextPending(orgId);
     if (next) {
       await drainQueue(next);
     }
   }
 }
 
-export function resumePipelineInBackground(
+export async function resumePipelineInBackground(
   ticketId: string,
   jiraKey: string,
   pipelineId: string,
   organizationId?: string
-): PipelineRunResult {
-  return runPipelineInBackground(ticketId, jiraKey, { resumePipelineId: pipelineId, organizationId });
+): Promise<PipelineRunResult> {
+  return runPipelineInBackground(ticketId, jiraKey, {
+    resumePipelineId: pipelineId,
+    organizationId,
+  });
 }
 
 /** Fire-and-forget Jira mirror backfill on the API process event loop. */

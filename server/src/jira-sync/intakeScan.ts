@@ -5,12 +5,14 @@ import {
 import { isAiWorkerEligibleIssueType } from "../pipeline/jira/aiWorkerIssueTypes";
 import { isPipelineJiraConfigured } from "../pipeline/jira/credentialsStore";
 import { listIntakeColumnTickets } from "../pipeline/jira/boardService";
-import { enqueueIntakeFromJiraKey } from "../pipeline/jira/intakeEnqueueService";
-import { shouldEnqueueJiraKey, logIntakeSkipped } from "../pipeline/jira/intakeDedup";
+import { tryIntakeEnqueue } from "../pipeline/jira/intakeOrchestrator";
+import { shouldEnqueueJiraKey } from "../pipeline/jira/intakeDedup";
 import { isJiraKeyInPipelineQueue } from "../queue/inProcessRunner";
 import { logger } from "../utils/logger";
 import { listJiraIssuesByStatus } from "./issueRepository";
 import { syncReferenceColumnTickets } from "./referenceSyncService";
+import { recordIntakeScanResult } from "../pipeline/jira/intakeDiagnosticsStore";
+import { getActiveOrganizationId } from "../organization/context";
 
 export type IntakeScanSource = "live-jira" | "synced-db" | "startup" | "poll" | "manual";
 
@@ -66,7 +68,7 @@ async function enqueueIssueKeys(
   const logSource = intakeLogSource(source);
 
   for (const jiraKey of keys) {
-    if (isJiraKeyInPipelineQueue(jiraKey)) {
+    if (await isJiraKeyInPipelineQueue(jiraKey)) {
       skipped += 1;
       continue;
     }
@@ -74,12 +76,6 @@ async function enqueueIssueKeys(
     const dedup = await shouldEnqueueJiraKey(jiraKey);
     if (!dedup.enqueue) {
       skipped += 1;
-      await logIntakeSkipped(
-        jiraKey,
-        dedup.reason!,
-        dedup.message ?? dedup.reason!,
-        logSource
-      );
       skipReasons.push({
         jiraKey,
         reason: dedup.reason!,
@@ -89,7 +85,7 @@ async function enqueueIssueKeys(
     }
 
     try {
-      const result = await enqueueIntakeFromJiraKey(jiraKey, undefined, undefined, logSource);
+      const result = await tryIntakeEnqueue(jiraKey, logSource);
       if (result.enqueued > 0) enqueued += result.enqueued;
       skipped += result.skipped;
     } catch (err) {
@@ -106,7 +102,10 @@ async function enqueueIssueKeys(
     );
   }
 
-  return { scanned: keys.length, enqueued, skipped, source, errors, skipReasons };
+  const result = { scanned: keys.length, enqueued, skipped, source, errors, skipReasons };
+  const orgId = getActiveOrganizationId();
+  if (orgId) recordIntakeScanResult(orgId, result);
+  return result;
 }
 
 /** Enqueue pipeline intake for issues in AI Worker — live Jira first, synced DB fallback. */

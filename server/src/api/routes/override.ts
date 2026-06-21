@@ -63,7 +63,7 @@ router.post("/:pipelineId/override", async (req, res, next) => {
     // pick up the most recent stage output, which now reflects the override
     // because we wrote it as a new HumanOverride row.
     await stateManager.advance(pipeline.id, nextStageAfter(parsed.data.stage));
-    runPipelineInBackground(pipeline.ticketId);
+    void runPipelineInBackground(pipeline.ticketId);
 
     res.status(202).json({ ok: true });
   } catch (err) {

@@ -1,5 +1,11 @@
 import crypto from "node:crypto";
 
+function decodeBase64Url(value: string): Buffer {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
+  return Buffer.from(padded, "base64");
+}
+
 /** Verify JWT bearer on OAuth 2.0 dynamic webhooks (signed with app client secret). */
 export function verifyAtlassianOAuthWebhookJwt(
   token: string,
@@ -11,9 +17,9 @@ export function verifyAtlassianOAuthWebhookJwt(
   const [headerPart, payloadPart, signaturePart] = segments;
   let header: { alg?: string };
   try {
-    header = JSON.parse(
-      Buffer.from(headerPart, "base64url").toString("utf8")
-    ) as { alg?: string };
+    header = JSON.parse(decodeBase64Url(headerPart).toString("utf8")) as {
+      alg?: string;
+    };
   } catch {
     return false;
   }
@@ -25,22 +31,26 @@ export function verifyAtlassianOAuthWebhookJwt(
   const expected = crypto
     .createHmac(hashAlg, clientSecret)
     .update(`${headerPart}.${payloadPart}`)
-    .digest("base64url");
+    .digest();
 
+  let actual: Buffer;
   try {
-    if (
-      !crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signaturePart))
-    ) {
-      return false;
-    }
+    actual = decodeBase64Url(signaturePart);
   } catch {
     return false;
   }
 
   try {
-    const payload = JSON.parse(
-      Buffer.from(payloadPart, "base64url").toString("utf8")
-    ) as { exp?: number };
+    if (expected.length !== actual.length) return false;
+    if (!crypto.timingSafeEqual(expected, actual)) return false;
+  } catch {
+    return false;
+  }
+
+  try {
+    const payload = JSON.parse(decodeBase64Url(payloadPart).toString("utf8")) as {
+      exp?: number;
+    };
     if (typeof payload.exp === "number" && payload.exp * 1000 < Date.now()) {
       return false;
     }

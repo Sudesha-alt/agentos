@@ -34,7 +34,7 @@ export default function IntakeAssignmentListener() {
     const events = data?.events ?? [];
     const fresh = events.filter(
       (event) =>
-        event.tone === "intake" &&
+        (event.tone === "intake" || event.outcome === "enqueued") &&
         event.timestamp > mountedAt.current &&
         !seenIds.current.has(event.id)
     );

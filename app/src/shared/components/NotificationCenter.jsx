@@ -20,7 +20,9 @@ export default function NotificationCenter() {
   const { data: eventsData } = useActivityEvents({ pollMs: 12_000 });
   const reviewItems = deriveReviewQueueItems(pipelines);
   const events = eventsData?.events ?? [];
-  const intakeEvents = events.filter((e) => e.tone === "intake");
+  const intakeEvents = events.filter(
+    (e) => e.outcome != null || e.tone === "intake" || e.source
+  );
   const pipelineEvents = events.filter((e) => e.tone !== "intake");
   const totalCount =
     reviewItems.length +
@@ -194,7 +196,13 @@ export default function NotificationCenter() {
                       >
                         <span
                           className={`mt-1.5 size-2 shrink-0 rounded-full ${
-                            event.live ? "animate-pulse bg-indigo" : "bg-success"
+                            event.outcome === "failed"
+                              ? "bg-danger"
+                              : event.outcome === "skipped"
+                                ? "bg-app-ink-mute"
+                                : event.live
+                                  ? "animate-pulse bg-indigo"
+                                  : "bg-success"
                           }`}
                           aria-hidden
                         />

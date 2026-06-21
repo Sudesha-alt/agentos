@@ -314,6 +314,41 @@ export async function saveOrganizationReferenceColumns(
   await warmOrganizationIntakeMapping(organizationId);
 }
 
+export async function saveOrganizationCompletionSettings(
+  organizationId: string,
+  settings: Partial<import("../pipeline/jira/intakeConfig").PipelineCompletionSettings>
+): Promise<import("../pipeline/jira/intakeConfig").PipelineCompletionSettings> {
+  const existing = await prisma.organizationJiraConfig.findUnique({
+    where: { organizationId },
+    select: { completionSettingsJson: true },
+  });
+  if (!existing) {
+    throw new ValidationError(
+      "Jira is not connected for this workspace. Connect via OAuth or API token first."
+    );
+  }
+
+  const { parseCompletionJson } = await import("../pipeline/jira/intakeConfig");
+  const merged = {
+    ...parseCompletionJson(existing.completionSettingsJson),
+    ...settings,
+  };
+
+  await prisma.organizationJiraConfig.update({
+    where: { organizationId },
+    data: {
+      completionSettingsJson: merged,
+      updatedAt: new Date(),
+    },
+  });
+
+  const { warmOrganizationIntakeMapping } = await import(
+    "../pipeline/jira/intakeConfig"
+  );
+  await warmOrganizationIntakeMapping(organizationId);
+  return merged;
+}
+
 export async function getPublicOrganizationJiraConfig(organizationId: string) {
   const row = await prisma.organizationJiraConfig.findUnique({
     where: { organizationId },

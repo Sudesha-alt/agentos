@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../../db/client";
-import { listPipelineArtifacts, ENG_QA_ARTIFACT_TYPES } from "../../pipeline/artifacts";
+import { ENG_QA_ARTIFACT_TYPES } from "../../pipeline/artifacts";
+import { listArtifactsFromStageLogs } from "../../pipeline/artifacts/stageLogArtifacts";
 import { pipelineRepo } from "../../db/repositories/pipelineRepo";
 import { ticketRepo } from "../../db/repositories/ticketRepo";
 import {
@@ -61,7 +62,7 @@ router.get("/:pipelineId/artifacts", async (req, res, next) => {
     await withOrganizationContext(user.organizationId, async () => {
       const pipeline = await pipelineRepo.findById(req.params.pipelineId);
       if (!pipeline) throw new NotFoundError("Pipeline not found");
-      const artifacts = listPipelineArtifacts(pipeline.id).filter((a) =>
+      const artifacts = (await listArtifactsFromStageLogs(pipeline.id)).filter((a) =>
         ENG_QA_ARTIFACT_TYPES.includes(a.type)
       );
       res.json({ pipelineId: pipeline.id, artifacts });
@@ -95,7 +96,10 @@ router.post("/:pipelineId/resume", async (req, res, next) => {
       const pipeline = await pipelineRepo.findById(req.params.pipelineId);
       if (!pipeline) throw new NotFoundError("Pipeline not found");
       const ticket = pipeline.ticket;
-      if (isTicketInPipelineQueue(ticket.id) || isJiraKeyInPipelineQueue(ticket.jiraKey)) {
+      if (
+        (await isTicketInPipelineQueue(ticket.id)) ||
+        (await isJiraKeyInPipelineQueue(ticket.jiraKey))
+      ) {
         throw new ValidationError("Ticket already active or queued");
       }
       const result = resumePipelineInBackground(
@@ -119,7 +123,10 @@ router.post("/:ticketId/run", async (req, res, next) => {
     await withOrganizationContext(user.organizationId, async () => {
       const ticket = await ticketRepo.findById(req.params.ticketId);
       if (!ticket) throw new NotFoundError("Ticket not found");
-      if (isTicketInPipelineQueue(ticket.id) || isJiraKeyInPipelineQueue(ticket.jiraKey)) {
+      if (
+        (await isTicketInPipelineQueue(ticket.id)) ||
+        (await isJiraKeyInPipelineQueue(ticket.jiraKey))
+      ) {
         throw new ValidationError("Ticket already active or queued");
       }
       const result = await enqueueIntakeFromJiraKey(ticket.jiraKey);

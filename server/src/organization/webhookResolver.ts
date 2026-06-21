@@ -46,6 +46,14 @@ function parseProjectKeysJson(raw: unknown): string[] {
   return raw.map(String).filter(Boolean);
 }
 
+/** PROJ-123 → PROJ */
+export function projectKeyFromIssueKey(jiraKey: string | undefined): string | null {
+  if (!jiraKey?.trim()) return null;
+  const dash = jiraKey.lastIndexOf("-");
+  if (dash <= 0) return null;
+  return jiraKey.slice(0, dash).trim().toUpperCase();
+}
+
 /** Match org by Jira project key (OAuth dynamic webhooks share one app client secret). */
 export async function resolveOrganizationByJiraProjectKey(
   projectKey: string
@@ -59,10 +67,14 @@ export async function resolveOrganizationByJiraProjectKey(
 
   for (const row of rows) {
     const keys = parseProjectKeysJson(row.projectKeysJson);
+    if (keys.length === 0) continue;
     if (keys.some((k) => k.trim().toUpperCase() === normalized)) {
       return row.organizationId;
     }
   }
+
+  const connected = await listOrganizationIdsWithJiraConfig();
+  if (connected.length === 1) return connected[0]!;
   return null;
 }
 

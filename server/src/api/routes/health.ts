@@ -4,8 +4,8 @@ import { getQueueStats } from "../../queue/inProcessRunner";
 
 const router = Router();
 
-router.get("/healthz", (_req, res) => {
-  const stats = getQueueStats();
+router.get("/healthz", async (_req, res) => {
+  const stats = await getQueueStats();
   res.json({
     status: "ok",
     timestamp: new Date().toISOString(),

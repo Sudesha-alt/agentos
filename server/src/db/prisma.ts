@@ -11,6 +11,7 @@ export {
   JiraSyncStatus,
   PipelineStage,
   PipelineStatus,
+  PipelineQueueStatus,
   StageStatus,
   TicketStatus,
 } from "../generated/prisma/client";

@@ -1,6 +1,8 @@
 import { prisma } from "../../db/client";
 import { ticketRepo } from "../../db/repositories/ticketRepo";
 import { isJiraKeyInDbQueue } from "../../queue/pipelineQueueStore";
+import { recordIntakeEvent } from "../../db/repositories/intakeEventRepo";
+import { getActiveOrganizationId } from "../../organization/context";
 import { logger } from "../../utils/logger";
 
 export type IntakeSkipReason =
@@ -18,7 +20,7 @@ export interface ShouldEnqueueResult {
 }
 
 export async function shouldEnqueueJiraKey(jiraKey: string): Promise<ShouldEnqueueResult> {
-  if (isJiraKeyInDbQueue(jiraKey)) {
+  if (await isJiraKeyInDbQueue(jiraKey)) {
     return {
       enqueue: false,
       reason: "already_queued",
@@ -73,4 +75,16 @@ export async function logIntakeSkipped(
   source: "webhook" | "scan" | "poll" | "manual" | "startup"
 ): Promise<void> {
   logger.info({ jiraKey, reason, message, source }, "INTAKE_SKIPPED");
+  const organizationId = getActiveOrganizationId();
+  if (!organizationId) return;
+  await recordIntakeEvent({
+    organizationId,
+    jiraKey,
+    source,
+    outcome: "skipped",
+    skipReason: reason,
+    message,
+  }).catch((err) => {
+    logger.warn({ err, jiraKey }, "failed to persist intake skip event");
+  });
 }

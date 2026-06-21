@@ -5,6 +5,7 @@ import { withOrganizationContext } from "../../api/orgRequestContext";
 import { logger } from "../../utils/logger";
 import {
   listOrganizationIdsWithJiraConfig,
+  projectKeyFromIssueKey,
   resolveOrganizationByJiraProjectKey,
   resolveOrganizationByJiraWebhookSecret,
 } from "../../organization/webhookResolver";
@@ -12,12 +13,19 @@ import {
   extractBearerToken,
   verifyAtlassianOAuthWebhookJwt,
 } from "./jiraWebhookAuth";
-import { isPipelineIntakeStatus, getPipelineIntakeStatuses } from "./intakeConfig";
+import {
+  getPipelineIntakeStatuses,
+  isPipelineIntakeStatus,
+} from "./intakeConfig";
 import { type PipelineJiraWebhookPayload } from "./ticketNormalizer";
 import { upsertJiraIssueFromWebhook, handleJiraIssueDeleted } from "../../jira-sync/webhookBridge";
-import { enqueueIntakeFromWebhook } from "./intakeEnqueueService";
+import { tryIntakeEnqueue } from "./intakeOrchestrator";
+import { recordWebhookReceipt } from "./intakeDiagnosticsStore";
 
-async function resolveWebhookOrganization(req: Request): Promise<string | null> {
+async function resolveWebhookOrganization(
+  req: Request,
+  payload?: PipelineJiraWebhookPayload
+): Promise<string | null> {
   const agentosSecret = req.header("x-agentos-secret")?.trim();
   if (agentosSecret) {
     return resolveOrganizationByJiraWebhookSecret(agentosSecret);
@@ -51,14 +59,16 @@ async function resolveWebhookOrganization(req: Request): Promise<string | null> 
     }
   }
 
-  // OAuth 2.0 dynamic webhooks: Authorization Bearer JWT signed with app client secret.
   const clientSecret = process.env.ATLASSIAN_CLIENT_SECRET?.trim();
   const bearer = extractBearerToken(req.header("authorization"));
-  if (bearer && clientSecret && verifyAtlassianOAuthWebhookJwt(bearer, clientSecret)) {
-    const payload = req.body as PipelineJiraWebhookPayload | undefined;
-    const projectKey = (
-      payload?.issue?.fields as { project?: { key?: string } } | undefined
-    )?.project?.key;
+  const jwtOk = Boolean(
+    bearer && clientSecret && verifyAtlassianOAuthWebhookJwt(bearer, clientSecret)
+  );
+
+  if (jwtOk) {
+    const projectKey =
+      (payload?.issue?.fields as { project?: { key?: string } } | undefined)
+        ?.project?.key ?? projectKeyFromIssueKey(payload?.issue?.key);
     if (projectKey) {
       const orgId = await resolveOrganizationByJiraProjectKey(projectKey);
       if (orgId) return orgId;
@@ -67,10 +77,28 @@ async function resolveWebhookOrganization(req: Request): Promise<string | null> 
     if (orgIds.length === 1) return orgIds[0]!;
   }
 
+  if (bearer && clientSecret && !jwtOk) {
+    logger.warn(
+      { hasAuthorization: true, jiraKey: payload?.issue?.key },
+      "pipeline jira webhook JWT verification failed"
+    );
+  }
+
   return null;
 }
 
-function enteredIntakeStatus(payload: PipelineJiraWebhookPayload): boolean {
+function shouldAttemptIntake(payload: PipelineJiraWebhookPayload): boolean {
+  const currentStatus =
+    (payload.issue.fields as { status?: { name?: string } }).status?.name ?? "";
+
+  if (payload.webhookEvent === "jira:issue_created") {
+    return isPipelineIntakeStatus(currentStatus) || !currentStatus.trim();
+  }
+
+  if (payload.webhookEvent !== "jira:issue_updated") {
+    return false;
+  }
+
   const changelog = (
     payload as {
       changelog?: {
@@ -84,31 +112,18 @@ function enteredIntakeStatus(payload: PipelineJiraWebhookPayload): boolean {
     }
   ).changelog;
 
-  const currentStatus =
-    (payload.issue.fields as { status?: { name?: string } }).status?.name ?? "";
-
-  if (payload.webhookEvent === "jira:issue_created") {
-    return isPipelineIntakeStatus(currentStatus);
-  }
-
-  if (payload.webhookEvent === "jira:issue_updated") {
-    const statusChange = changelog?.items?.find(
-      (i) => i.field === "status" || i.fieldId === "status"
+  const statusChange = changelog?.items?.find(
+    (i) => i.field === "status" || i.fieldId === "status"
+  );
+  if (statusChange) {
+    return (
+      isPipelineIntakeStatus(statusChange.toString) &&
+      !isPipelineIntakeStatus(statusChange.fromString)
     );
-    if (statusChange) {
-      return (
-        isPipelineIntakeStatus(statusChange.toString) &&
-        !isPipelineIntakeStatus(statusChange.fromString)
-      );
-    }
-
-    // OAuth dynamic webhooks and some board moves omit changelog — align with poll/scan.
-    if (isPipelineIntakeStatus(currentStatus)) {
-      return true;
-    }
   }
 
-  return false;
+  // OAuth dynamic webhooks often omit changelog — verify via REST in enqueue.
+  return isPipelineIntakeStatus(currentStatus) || !currentStatus.trim();
 }
 
 /** issue_updated in AI Worker column → decompose + queued pipeline; closed/done → mirror. */
@@ -116,14 +131,22 @@ export async function handlePipelineJiraWebhook(
   req: Request,
   res: Response
 ): Promise<void> {
-  const organizationId = await resolveWebhookOrganization(req);
+  const payload = req.body as PipelineJiraWebhookPayload | undefined;
+  const organizationId = await resolveWebhookOrganization(req, payload);
   if (!organizationId) {
-    logger.warn({ ip: req.ip }, "rejected pipeline jira webhook — unknown org or bad secret");
+    logger.warn(
+      {
+        ip: req.ip,
+        hasHubSignature: Boolean(req.header("x-hub-signature")),
+        hasAuthorization: Boolean(req.header("authorization")),
+        jiraKey: payload?.issue?.key,
+      },
+      "rejected pipeline jira webhook — unknown org or bad secret"
+    );
     res.status(401).json({ error: "unauthorized" });
     return;
   }
 
-  const payload = req.body as PipelineJiraWebhookPayload | undefined;
   const event = payload?.webhookEvent;
 
   if (!payload?.issue?.key || !event) {
@@ -135,13 +158,16 @@ export async function handlePipelineJiraWebhook(
 
   void withOrganizationContext(organizationId, async () => {
     if (event === "jira:issue_updated" || event === "jira:issue_created") {
+      recordWebhookReceipt(organizationId, payload.issue.key);
       await handleIssueUpsert(payload);
     }
 
     if (event === "jira:issue_deleted") {
       await handleJiraIssueDeleted(payload.issue.key);
     }
-  }).catch((err) => logger.error({ err, event, organizationId }, "pipeline jira webhook failed"));
+  }).catch((err) =>
+    logger.error({ err, event, organizationId, jiraKey: payload.issue.key }, "pipeline jira webhook failed")
+  );
 }
 
 async function handleIssueUpsert(
@@ -151,39 +177,34 @@ async function handleIssueUpsert(
   const statusName =
     (payload.issue.fields as { status?: { name?: string } }).status?.name ?? "";
 
-  logger.info({ jiraKey, statusName }, "pipeline jira webhook: issue upsert");
+  logger.info({ jiraKey, statusName, event: payload.webhookEvent }, "pipeline jira webhook: issue upsert");
 
   await upsertJiraIssueFromWebhook(payload);
 
-  if (!enteredIntakeStatus(payload)) {
+  if (!shouldAttemptIntake(payload)) {
     logger.info(
       {
         jiraKey,
         statusName,
         event: payload.webhookEvent,
-        hasChangelog: Boolean(
-          (payload as { changelog?: { items?: unknown[] } }).changelog?.items?.length
-        ),
         intakeStatuses: getPipelineIntakeStatuses(),
       },
-      "pipeline jira webhook: issue updated but not an AI Worker intake transition"
+      "pipeline jira webhook: skipped intake — status not in AI Worker column"
     );
     return;
   }
 
-  const result = await enqueueIntakeFromWebhook(payload);
-  if (result) {
-    logger.info(
-      {
-        sourceKey: result.sourceKey,
-        enqueued: result.enqueued,
-        skipped: result.skipped,
-        started: result.started,
-        groups: result.groups,
-      },
-      result.started
-        ? "pipeline intake started after decomposition"
-        : "pipeline intake queued after decomposition"
-    );
-  }
+  const result = await tryIntakeEnqueue(jiraKey, "webhook");
+
+  logger.info(
+    {
+      jiraKey,
+      enqueued: result.enqueued,
+      skipped: result.skipped,
+      started: result.started,
+    },
+    result.enqueued > 0
+      ? "pipeline intake enqueued from webhook"
+      : "pipeline intake skipped after webhook fetch"
+  );
 }

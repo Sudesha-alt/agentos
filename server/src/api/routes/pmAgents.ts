@@ -310,7 +310,7 @@ router.post("/handoff/:ticketId/start-pipeline", async (req, res, next) => {
             }
           : null,
         intake,
-        queue: getPipelineQueueState(user.organizationId!),
+        queue: await getPipelineQueueState(user.organizationId!),
       });
     });
   } catch (err) {

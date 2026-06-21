@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../../db/client";
 import type { PipelineStage, PipelineStatus } from "../../generated/prisma/client";
-import { listIntakeNotifications } from "../../pipeline/jira/intakeNotificationStore";
+import { listRecentIntakeEvents } from "../../db/repositories/intakeEventRepo";
 import { requireOrganizationUser } from "../orgRequestContext";
 
 const router = Router();
@@ -26,6 +26,12 @@ function pipelineMessage(
   if (status === "PAUSED") return `${stageLabel} — awaiting human review`;
   if (status === "FAILED") return `${stageLabel} failed`;
   return `${stageLabel} running…`;
+}
+
+function intakeTone(outcome: string): string {
+  if (outcome === "enqueued") return "intake";
+  if (outcome === "failed") return "attention";
+  return "muted";
 }
 
 router.get("/recent", async (req, res, next) => {
@@ -63,16 +69,26 @@ router.get("/recent", async (req, res, next) => {
       };
     });
 
-    const intakeEvents = listIntakeNotifications(user.organizationId).map((item) => ({
+    const intakeRows = await listRecentIntakeEvents(user.organizationId, 25);
+    const intakeEvents = intakeRows.map((item) => ({
       id: item.id,
       pipelineId: null,
       jiraKey: item.jiraKey,
-      tone: item.tone,
-      live: item.live,
-      message: item.message,
+      tone: intakeTone(item.outcome),
+      live: item.outcome === "enqueued" && item.message?.includes("started"),
+      message:
+        item.message ??
+        (item.outcome === "skipped"
+          ? `${item.jiraKey} skipped${item.skipReason ? `: ${item.skipReason}` : ""}`
+          : item.outcome === "failed"
+            ? `${item.jiraKey} intake failed`
+            : `${item.jiraKey} enqueued`),
       summary: item.summary,
       issueType: item.issueType,
-      timestamp: item.timestamp,
+      outcome: item.outcome,
+      skipReason: item.skipReason,
+      source: item.source,
+      timestamp: item.createdAt.toISOString(),
     }));
 
     const merged = [...intakeEvents, ...events]

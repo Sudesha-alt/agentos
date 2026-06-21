@@ -1,4 +1,3 @@
-import { getDb } from "../../jira-intake/sqliteStore";
 import { getActiveOrganizationId } from "../../organization/context";
 import { prisma } from "../../db/client";
 
@@ -80,7 +79,7 @@ function parseStatusesJson(raw: unknown): string[] {
   return defaultStatuses();
 }
 
-function parseCompletionJson(raw: unknown): PipelineCompletionSettings {
+export function parseCompletionJson(raw: unknown): PipelineCompletionSettings {
   if (!raw) return { ...DEFAULT_COMPLETION };
   try {
     const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
@@ -142,47 +141,25 @@ export function getPipelineIntakeMapping(): PipelineIntakeMapping {
     return orgIntakeCache.get(orgId)!;
   }
 
-  const row = getDb()
-    .prepare(
-      `SELECT board_id, ai_worker_column_name, ai_worker_statuses_json, completion_settings_json
-       FROM pipeline_jira_credentials WHERE singleton_id = 1`
-    )
-    .get() as
-    | {
-        board_id: string | null;
-        ai_worker_column_name: string | null;
-        ai_worker_statuses_json: string | null;
-        completion_settings_json: string | null;
-      }
-    | undefined;
-
-  return buildMappingFromParts({
-    boardId: row?.board_id,
-    aiWorkerColumnName: row?.ai_worker_column_name,
-    aiWorkerStatusesJson: row?.ai_worker_statuses_json,
-    completionSettingsJson: row?.completion_settings_json,
-  });
+  return buildMappingFromParts({});
 }
 
 export function getPipelineCompletionSettings(): PipelineCompletionSettings {
   return getPipelineIntakeMapping().completionSettings;
 }
 
-export function savePipelineCompletionSettings(
-  settings: Partial<PipelineCompletionSettings>
-): PipelineCompletionSettings {
-  const existing = getPipelineIntakeMapping();
-  const merged = { ...existing.completionSettings, ...settings };
-  const now = new Date().toISOString();
-
-  getDb()
-    .prepare(
-      `UPDATE pipeline_jira_credentials SET completion_settings_json = @json, updated_at = @now
-       WHERE singleton_id = 1`
-    )
-    .run({ json: JSON.stringify(merged), now });
-
-  return merged;
+export async function savePipelineCompletionSettings(
+  settings: Partial<PipelineCompletionSettings>,
+  organizationId?: string
+): Promise<PipelineCompletionSettings> {
+  const orgId = organizationId ?? getActiveOrganizationId();
+  if (!orgId) {
+    throw new Error("Organization context required to save completion settings");
+  }
+  const { saveOrganizationCompletionSettings } = await import(
+    "../../organization/jiraConfigStore"
+  );
+  return saveOrganizationCompletionSettings(orgId, settings);
 }
 
 export function getPipelineIntakeStatuses(): string[] {
@@ -230,40 +207,9 @@ export function savePipelineIntakeColumn(input: {
   boardId?: string;
   columnName: string;
   statuses: string[];
-}): PipelineIntakeMapping {
-  const now = new Date().toISOString();
-  const existing = getPipelineIntakeMapping();
-  const boardId = input.boardId?.trim() || existing.boardId;
-  const statuses =
-    input.statuses.length > 0 ? input.statuses : defaultStatuses();
-
-  const row = getDb()
-    .prepare(`SELECT 1 FROM pipeline_jira_credentials WHERE singleton_id = 1`)
-    .get();
-  if (!row) {
-    throw new Error("Connect Jira first before mapping the intake column");
-  }
-
-  getDb()
-    .prepare(
-      `UPDATE pipeline_jira_credentials SET
-        board_id = COALESCE(@boardId, board_id),
-        ai_worker_column_name = @columnName,
-        ai_worker_statuses_json = @statusesJson,
-        updated_at = @now
-       WHERE singleton_id = 1`
-    )
-    .run({
-      boardId: boardId || null,
-      columnName: input.columnName,
-      statusesJson: JSON.stringify(statuses),
-      now,
-    });
-
-  return {
-    ...existing,
-    boardId,
-    aiWorkerColumnName: input.columnName,
-    aiWorkerStatuses: statuses,
-  };
+}): never {
+  void input;
+  throw new Error(
+    "savePipelineIntakeColumn is deprecated — use saveOrganizationPipelineIntake via PUT /pipeline-jira/intake-column"
+  );
 }

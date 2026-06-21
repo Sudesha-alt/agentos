@@ -10,6 +10,7 @@ import {
   savePipelineReferenceColumns,
   syncPipelineReferenceColumns,
   usePipelineIntakeTickets,
+  usePipelineIntakeStatus,
   usePipelineJiraSetup,
 } from "../../entities/pipeline-jira";
 import {
@@ -86,6 +87,10 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
     loading: intakeLoading,
     refetch: refetchIntake,
   } = usePipelineIntakeTickets(connected && intakeConfigured, { pollMs: 10000 });
+
+  const { data: intakeStatus } = usePipelineIntakeStatus(connected && pipelineReady, {
+    pollMs: 15000,
+  });
 
   const [baseUrl, setBaseUrl] = useState(() => setup?.jira?.baseUrl || "");
   const [email, setEmail] = useState(() => setup?.jira?.email || "");
@@ -1043,6 +1048,65 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
           <JiraSyncStatusPanel setupSync={setup?.sync} connected={pipelineReady} />
           <JiraTicketBrowser connected={pipelineReady} />
         </>
+      ) : null}
+
+      {connected ? (
+        <Panel>
+          <PanelHeader
+            title="Intake diagnostics"
+            subtitle="Webhook receipts, scan results, and pipeline queue depth from Postgres."
+          />
+          <div className="space-y-3 p-4 text-sm text-app-ink-dim sm:px-6">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-app-sm border border-app-border px-3 py-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-app-ink-mute">
+                  Last webhook
+                </p>
+                <p className="mt-1 text-app-ink">
+                  {intakeStatus?.webhook?.lastReceivedAt
+                    ? `${intakeStatus.webhook.lastJiraKey ?? "—"} · ${new Date(
+                        intakeStatus.webhook.lastReceivedAt
+                      ).toLocaleString()}`
+                    : "No webhook received yet"}
+                </p>
+              </div>
+              <div className="rounded-app-sm border border-app-border px-3 py-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-app-ink-mute">
+                  Queue depth
+                </p>
+                <p className="mt-1 text-app-ink">
+                  {intakeStatus?.queue
+                    ? `${intakeStatus.queue.pending} pending · ${intakeStatus.queue.active} active`
+                    : "—"}
+                </p>
+              </div>
+            </div>
+            {intakeStatus?.lastScan ? (
+              <p className="text-xs">
+                Last scan: {intakeStatus.lastScan.scanned} scanned,{" "}
+                {intakeStatus.lastScan.enqueued} enqueued, {intakeStatus.lastScan.skipped} skipped
+                {intakeStatus.lastScanAt
+                  ? ` · ${new Date(intakeStatus.lastScanAt).toLocaleString()}`
+                  : ""}
+              </p>
+            ) : null}
+            {intakeStatus?.recentEvents?.length ? (
+              <ul className="divide-y divide-app-border rounded-app-sm border border-app-border">
+                {intakeStatus.recentEvents.slice(0, 5).map((event) => (
+                  <li key={event.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs">
+                    <span className="font-mono text-indigo">{event.jiraKey}</span>
+                    <LabelPill label={event.outcome} tone={event.outcome === "enqueued" ? "indigo" : "muted"} />
+                    <span className="flex-1 truncate">{event.message ?? event.skipReason ?? event.source}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-app-ink-mute">
+                Move a Task or Bug into the AI Worker column to see intake events here.
+              </p>
+            )}
+          </div>
+        </Panel>
       ) : null}
 
       {connected ? (
