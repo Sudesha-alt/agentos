@@ -1,6 +1,6 @@
 import { runAgenticLoop } from "../agenticLoop/loop";
 import { parseDiscoveryJson } from "../llm/discoveryCompletion";
-import type { AgentOutput, ImplementationOutput, PrdOutput, QaOutput } from "../types/agents";
+import type { AgentOutput, ImplementationMode, ImplementationOutput, PrdOutput, QaOutput } from "../types/agents";
 import type { RetrievedContext } from "../types/pipeline";
 import { logger } from "../utils/logger";
 import { executeQaToolCall } from "../tools/qaToolExecutor";
@@ -23,6 +23,7 @@ export interface QaAgentRunInput {
   prd: PrdOutput;
   implementation: ImplementationOutput;
   retrievedContext: RetrievedContext[];
+  implementationMode?: ImplementationMode;
 }
 
 export interface QaAgentRunResult {
@@ -39,11 +40,12 @@ export async function runQaAgentic(
   input: QaAgentRunInput
 ): Promise<QaAgentRunResult> {
   const branchName = resolveQaBranchName();
+  const mode = input.implementationMode ?? input.implementation.implementationMode ?? "code";
   clearQaArtifacts(input.pipelineId);
 
   try {
     const loop = await runAgenticLoop({
-      systemPrompt: buildQaSystemPrompt(),
+      systemPrompt: buildQaSystemPrompt(mode),
       initialUserMessage: buildQaInitialUserMessage({
         ...input,
         branchName,

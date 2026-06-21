@@ -4,7 +4,9 @@ import {
   useEngineeringCodingEvents,
   useEngineeringRun,
 } from "../../entities/engineering-agent";
+import { pipelineAdapter } from "../../entities/pipeline";
 import { AGENT_NAMES } from "../../shared/config/app";
+import { formatStageLabel, formatStatusLabel } from "../../shared/lib/format";
 import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 import { Panel } from "../../shared/ui/Panel";
 
@@ -43,6 +45,8 @@ export default function AnantaTicketWorkspace({
   const [historyOpen, setHistoryOpen] = useState(false);
   const [fileTab, setFileTab] = useState("raw");
   const [costOpen, setCostOpen] = useState(false);
+  const [resuming, setResuming] = useState(false);
+  const [resumeError, setResumeError] = useState(null);
 
   const coverageLabel = useMemo(() => {
     if (!run) return null;
@@ -122,9 +126,81 @@ export default function AnantaTicketWorkspace({
   }
 
   const isLive = run.status === "RUNNING" && (run.liveSteps?.length || run.files?.length);
+  const isFailed = run.status === "FAILED";
+  const stageLabel =
+    run.failedStageLabel ??
+    run.currentStageLabel ??
+    (run.currentStage ? formatStageLabel(run.currentStage) : "Unknown stage");
+  const statusLabel = run.statusLabel ?? formatStatusLabel(run.status);
+
+  async function handleResumePipeline() {
+    setResumeError(null);
+    setResuming(true);
+    try {
+      await pipelineAdapter.resume(run.pipelineId);
+      refresh();
+    } catch (err) {
+      setResumeError(err instanceof Error ? err.message : "Could not resume pipeline");
+    } finally {
+      setResuming(false);
+    }
+  }
 
   return (
     <div className="flex min-h-[calc(100vh-12rem)] flex-col">
+      {isFailed ? (
+        <div className="mb-4 rounded-app-sm border border-danger/30 bg-danger/5 px-5 py-4 sm:px-6">
+          <p className="text-sm font-medium text-app-ink">
+            Engineering run failed at {stageLabel}
+          </p>
+          <p className="mt-2 text-[13px] leading-relaxed text-app-ink-dim">
+            {run.failureReason ??
+              "No failure details were recorded. Check the pipeline audit log for more context."}
+          </p>
+          {run.filesCreated === 0 && run.filesModified === 0 ? (
+            <p className="mt-2 text-[13px] text-app-ink-dim">
+              Ananta did not stage any source files. For document-only tickets (like curriculum
+              updates), the agent may need explicit file paths in the PRD, or the run may have
+              timed out before writing output.
+            </p>
+          ) : null}
+          {run.recentEvents?.length ? (
+            <ul className="mt-3 space-y-1 border-t border-danger/20 pt-3 text-[12px] text-app-ink-dim">
+              {run.recentEvents.slice(0, 4).map((entry) => (
+                <li key={`${entry.event}-${entry.timestamp}`}>
+                  <span className="font-mono text-[10px] uppercase text-app-ink-mute">
+                    {entry.event.replaceAll("_", " ")}
+                  </span>
+                  {" — "}
+                  {entry.summary}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            {run.canResume ? (
+              <button
+                type="button"
+                onClick={handleResumePipeline}
+                disabled={resuming}
+                className="rounded-full bg-indigo px-4 py-2 text-sm font-medium text-white hover:bg-indigo/90 disabled:opacity-60"
+              >
+                {resuming ? "Resuming…" : "Resume pipeline"}
+              </button>
+            ) : null}
+            <Link
+              to={orgPath("pipelines", run.pipelineId)}
+              className="text-sm font-medium text-indigo hover:underline"
+            >
+              Open pipeline detail →
+            </Link>
+          </div>
+          {resumeError ? (
+            <p className="mt-2 text-sm text-danger">{resumeError}</p>
+          ) : null}
+        </div>
+      ) : null}
+
       {run.qaPhase ? (
         <div className="mb-4 rounded-app-sm border border-indigo/30 bg-indigo/5 px-5 py-4 sm:px-6">
           <p className="text-sm font-medium text-app-ink">
@@ -147,9 +223,20 @@ export default function AnantaTicketWorkspace({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="type-kicker">{AGENT_NAMES.ANANTA} · Tech</p>
-            <h1 className="mt-1 text-lg font-semibold text-app-ink">
-              {run.jiraKey} — {run.summary}
-            </h1>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <h1 className="text-lg font-semibold text-app-ink">
+                {run.jiraKey} — {run.summary}
+              </h1>
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
+                  run.implementationMode === "content"
+                    ? "bg-warning/15 text-warning"
+                    : "bg-indigo/10 text-indigo"
+                }`}
+              >
+                {run.implementationMode === "content" ? "Content deliverable" : "Code change"}
+              </span>
+            </div>
             <p className="mt-2 text-sm text-app-ink-dim">
               Branch:{" "}
               <span className="font-mono text-app-ink">{run.branch}</span>
@@ -162,16 +249,51 @@ export default function AnantaTicketWorkspace({
             </p>
             <p className="mt-1 text-sm text-app-ink-dim">
               Stage:{" "}
-              <span className="inline-flex items-center gap-1.5 font-medium text-indigo">
-                <span className="size-1.5 animate-pulse rounded-full bg-indigo" />
-                {run.status}
+              <span
+                className={`inline-flex items-center gap-1.5 font-medium ${
+                  isFailed ? "text-danger" : "text-indigo"
+                }`}
+              >
+                {!isFailed && run.status === "RUNNING" ? (
+                  <span className="size-1.5 animate-pulse rounded-full bg-indigo" />
+                ) : null}
+                {stageLabel}
               </span>
-              · Duration: {run.durationMinutes} min · Cost: ${run.costUsd?.toFixed(2)}
+              {" · "}
+              Status:{" "}
+              <span className={isFailed ? "font-medium text-danger" : "text-app-ink"}>
+                {statusLabel}
+              </span>
+              {" · "}
+              Duration: {run.durationMinutes} min · Cost: ${run.costUsd?.toFixed(2)}
             </p>
             <p className="mt-1 text-xs text-app-ink-mute">
               Files created: {run.filesCreated} · Modified: {run.filesModified} · Tests:{" "}
               {run.testsGenerated}
             </p>
+            {run.implementationMode === "content" && run.deliverableFiles?.length ? (
+              <div className="mt-3 rounded-app-sm border border-warning/25 bg-warning/5 px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-app-ink-mute">
+                  Required deliverable files
+                </p>
+                <ul className="mt-1 space-y-1">
+                  {run.deliverableFiles.map((file) => {
+                    const staged = run.files?.some((f) => f.path === file.path);
+                    return (
+                      <li
+                        key={file.path}
+                        className={`font-mono text-[11px] ${staged ? "text-success" : isFailed ? "text-danger" : "text-app-ink-dim"}`}
+                      >
+                        {staged ? "✓" : "○"} {file.path}
+                        {file.purpose ? (
+                          <span className="ml-1 font-sans text-app-ink-mute">— {file.purpose}</span>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {isLive ? (

@@ -103,8 +103,12 @@ export interface LivePipelineResponse {
   queue: Awaited<ReturnType<typeof getPipelineQueueState>>;
 }
 
-function stageLabel(stage: PipelineStage): string {
+export function pipelineStageLabel(stage: PipelineStage): string {
   return STAGE_LABELS[stage] ?? stage;
+}
+
+function stageLabel(stage: PipelineStage): string {
+  return pipelineStageLabel(stage);
 }
 
 function auditLabel(event: string, metadata?: unknown): string {

@@ -10,6 +10,7 @@ import { ENGINEERING_CODING_TOOL_DEFINITIONS } from "../tools/engineeringCodingT
 import type {
   AgentMetadata,
   CodeChange,
+  ImplementationMode,
   ImplementationOutput,
   PrdOutput,
 } from "../types/agents";
@@ -23,6 +24,7 @@ import { buildEngineeringCodingSystemPrompt } from "./systemPrompt";
 const INPUT_COST_PER_TOKEN = 0.000003;
 const OUTPUT_COST_PER_TOKEN = 0.000015;
 const MAX_CODING_TOOL_CALLS = 16;
+const MAX_CONTENT_CODING_TOOL_CALLS = 12;
 
 export interface EngineeringCodingAgentRunInput {
   pipelineId: string;
@@ -33,6 +35,8 @@ export interface EngineeringCodingAgentRunInput {
   pmContext?: PmPipelineContext;
   compileFeedback?: string;
   retainArtifacts?: boolean;
+  implementationMode?: ImplementationMode;
+  deliverableFiles?: Array<{ path: string; format: string; purpose: string }>;
 }
 
 interface CodingAgentJsonOutput {
@@ -58,19 +62,22 @@ export async function runEngineeringCodingAgentic(
   input: EngineeringCodingAgentRunInput
 ): Promise<EngineeringCodingAgentRunResult> {
   const branchName = resolveCodingBranchName();
+  const mode = input.implementationMode ?? input.implementation.implementationMode ?? "code";
   clearCodingArtifacts(input.pipelineId);
 
   try {
     const loop = await runAgenticLoop({
-      systemPrompt: buildEngineeringCodingSystemPrompt(),
+      systemPrompt: buildEngineeringCodingSystemPrompt(mode),
       initialUserMessage: buildEngineeringCodingInitialUserMessage({
         ...input,
         branchName,
         compileFeedback: input.compileFeedback,
+        implementationMode: mode,
+        deliverableFiles: input.deliverableFiles,
       }),
       pipelineId: input.pipelineId,
       jiraKey: input.jiraKey,
-      maxToolCalls: MAX_CODING_TOOL_CALLS,
+      maxToolCalls: mode === "content" ? MAX_CONTENT_CODING_TOOL_CALLS : MAX_CODING_TOOL_CALLS,
       tools: ENGINEERING_CODING_TOOL_DEFINITIONS,
       executeToolCall: executeEngineeringCodingToolCall,
       forcedWrapUpMessage: `You have used the maximum number of coding tool calls. Produce the final JSON summary now using all staged changes. Do not call more tools.`,

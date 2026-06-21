@@ -1,4 +1,19 @@
-export function buildEngineeringCodingSystemPrompt(): string {
+import type { ImplementationMode } from "../types/agents";
+
+const CONTENT_CODING_RULES = `
+You are authoring document/content deliverables (markdown, curriculum, policy, guides).
+- read_source_file on existing docs in the same area for tone, structure, and headings.
+- write_source_file with COMPLETE markdown/document content for every required deliverable path.
+- You MUST call write_source_file once per required deliverable file before finishing.
+- Do not write application source code unless a doc explicitly requires code samples.
+- Match existing documentation style when prior docs exist.
+`.trim();
+
+export function buildEngineeringCodingSystemPrompt(
+  mode: ImplementationMode = "code"
+): string {
+  const modeRules = mode === "content" ? `\n\n${CONTENT_CODING_RULES}` : "";
+
   return `
 You are an autonomous senior software engineer implementing a feature from a PRD
 and an approved implementation plan.
@@ -43,5 +58,6 @@ Rules:
 - codeChanges must list every file staged via write_source_file.
 - linesChanged is approximate (count of new/changed lines).
 - Return ONLY valid JSON as your final message (no markdown fences).
+${modeRules}
   `.trim();
 }

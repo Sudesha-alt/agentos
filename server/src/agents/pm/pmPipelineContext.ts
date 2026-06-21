@@ -31,6 +31,7 @@ export function buildPmPipelineContext(record: PmAnalysisRecord): PmPipelineCont
       pmEnrichment: record.enrichment,
       pmClassification: record.classification,
       pmCodebaseImpact: record.codebaseImpact,
+      pmCodebaseAnalysis: record.codebaseAnalysis ?? null,
       pmEffort: record.effortEstimate,
       pmImplementation: record.implementation,
       pmAcceptanceCriteria: record.acceptanceCriteria,

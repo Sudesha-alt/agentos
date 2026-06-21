@@ -51,12 +51,15 @@ export function buildQaAgentContext(
   implementation: ImplementationOutput,
   retrievedContext: RetrievedContext[]
 ): string {
+  const mode = implementation.implementationMode ?? "code";
   const compressed = contextCompressor.compress({
     currentLabel: "Current QA Input",
     currentBody: `PRD Title: ${prd.title}
+Implementation mode: ${mode}
 Acceptance Criteria: ${prd.acceptanceCriteria.join(" | ")}
 Implementation Summary: ${implementation.summary}
 Technical Approach: ${implementation.technicalApproach}
+Target files: ${(implementation.targetFiles ?? []).join(" | ") || "none"}
 Risks: ${implementation.risks
   .map((risk) => `${risk.description} [${risk.severity}]`)
   .join(" | ")}`.trim(),

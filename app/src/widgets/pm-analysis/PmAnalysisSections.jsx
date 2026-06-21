@@ -269,8 +269,34 @@ export function PmPrdSection({ prd }) {
             <span className="rounded-full border border-hairline px-3 py-1 font-mono text-[11px]">
               Confidence {Math.round((prd.prdConfidence ?? 0) * 100)}%
             </span>
+            {prd.implementationMode === "content" ? (
+              <span className="rounded-full border border-warning/40 bg-warning/10 px-3 py-1 font-mono text-[11px] text-warning">
+                Content deliverable
+              </span>
+            ) : null}
           </div>
         </div>
+        {prd.implementationMode === "content" && prd.deliverableFiles?.length > 0 ? (
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-mute">
+              Deliverable files
+            </p>
+            <ul className="mt-2 space-y-2">
+              {prd.deliverableFiles.map((file) => (
+                <li
+                  key={file.path}
+                  className="rounded-lg border border-hairline px-3 py-2 font-mono text-[12px]"
+                >
+                  <span className="text-indigo">{file.path}</span>
+                  <span className="text-ink-dim"> · {file.format}</span>
+                  {file.purpose ? (
+                    <p className="mt-1 font-sans text-[13px] text-ink-dim">{file.purpose}</p>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
         <div>
           <p className="font-mono text-[10px] uppercase tracking-[0.14em] text-ink-mute">Problem</p>
           <p className="mt-1 text-ink">{prd.problemStatement}</p>

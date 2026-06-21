@@ -40,6 +40,7 @@ function buildTicketList(pmItems, engineeringRuns) {
       summary: run.summary ?? existing?.summary ?? "Engineering run",
       status: run.status,
       pipelineId: run.pipelineId,
+      currentStageLabel: run.currentStageLabel,
       recommendation: existing?.recommendation,
     });
   }
@@ -157,7 +158,9 @@ export default function AnantaWorkspace() {
                             <span className="mt-1 text-[10px] uppercase tracking-wider text-app-ink-mute">
                               {ticket.status === "handoff"
                                 ? "Handoff ready"
-                                : ticket.status.replaceAll("_", " ")}
+                                : ticket.status === "FAILED"
+                                  ? `Failed · ${ticket.currentStageLabel ?? "engineering"}`
+                                  : ticket.status.replaceAll("_", " ")}
                             </span>
                           </button>
                         </li>

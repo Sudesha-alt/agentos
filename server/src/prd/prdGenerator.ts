@@ -86,6 +86,10 @@ export interface GeneratedPRD {
   reuseFromCodebase?: string[];
   /** Short prose tying PRD scope to what exists vs what is new. */
   implementationDeltaSummary?: string;
+  /** Whether engineering produces source code or document files. */
+  implementationMode?: "code" | "content";
+  /** Target repo paths for content-mode deliverables (markdown/docs). */
+  deliverableFiles?: Array<{ path: string; format: string; purpose: string }>;
   prdConfidence: number;
   confidenceNotes: string;
 }

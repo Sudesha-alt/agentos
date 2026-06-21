@@ -1,5 +1,6 @@
 import type { Prisma, PipelineStage } from "../db/prisma";
 import { EngineeringAgent } from "../agents/engineeringAgent";
+import { buildEngineeringAgentSystemPrompt } from "../agents/engineeringAgentPrompt";
 import { runCanaryCycle } from "../canaryAgent";
 import { runEngineeringCodingAgentic } from "../engineeringCodingAgent";
 import {
@@ -7,6 +8,11 @@ import {
   getCodingArtifacts,
   snapshotCodingArtifacts,
 } from "../engineering/codingArtifactStore";
+import {
+  resolveDeliverableFiles,
+  resolveImplementationMode,
+  resolveTargetFilePaths,
+} from "../engineering/resolveImplementationMode";
 import { emitEngineeringCodingEvent } from "../engineering/codingEventsHub";
 import {
   MAX_COMPILE_ATTEMPTS,
@@ -111,7 +117,7 @@ export class PipelineOrchestrator {
 
       const engStage = await this.runEngineeringAgent(
         pipeline.id,
-        normalizedTicket.jiraKey,
+        normalizedTicket,
         productStage.agentOutput.parsed,
         productStage.enrichedPrdDocument
       );
@@ -126,7 +132,9 @@ export class PipelineOrchestrator {
       const implementationValidation = await this.validateImplementationStage(
         pipeline.id,
         implementationOutput,
-        productStage.agentOutput.parsed
+        productStage.agentOutput.parsed,
+        normalizedTicket,
+        productStage.enrichedPrdDocument
       );
       await orgIntelligence.captureValidation({
         pipelineId: pipeline.id,
@@ -266,7 +274,12 @@ export class PipelineOrchestrator {
         return;
       }
       const message = err instanceof Error ? err.message : String(err);
-      await stateManager.fail(pipeline.id, "OUTPUT", message);
+      const failedPipeline = await pipelineRepo.findById(pipeline.id);
+      await stateManager.fail(
+        pipeline.id,
+        failedPipeline?.currentStage ?? pipeline.currentStage,
+        message
+      );
       await ticketRepo.setStatus(ticket.id, "FAILED");
       logger.error({ err, pipelineId: pipeline.id }, "pipeline failed");
       throw err;
@@ -331,7 +344,7 @@ export class PipelineOrchestrator {
       if (!completedStages.has("ENGINEERING_AGENT")) {
         const engStage = await this.runEngineeringAgent(
           pipelineId,
-          normalizedTicket.jiraKey,
+          normalizedTicket,
           productStage.agentOutput.parsed,
           productStage.enrichedPrdDocument
         );
@@ -372,7 +385,9 @@ export class PipelineOrchestrator {
         implementationValidation = await this.validateImplementationStage(
           pipelineId,
           implementationOutput,
-          productStage.agentOutput.parsed
+          productStage.agentOutput.parsed,
+          normalizedTicket,
+          productStage.enrichedPrdDocument
         );
       }
       if (
@@ -517,7 +532,12 @@ export class PipelineOrchestrator {
         return;
       }
       const message = err instanceof Error ? err.message : String(err);
-      await stateManager.fail(pipelineId, "OUTPUT", message);
+      const failedPipeline = await pipelineRepo.findById(pipelineId);
+      await stateManager.fail(
+        pipelineId,
+        failedPipeline?.currentStage ?? pipeline.currentStage,
+        message
+      );
       await ticketRepo.setStatus(ticket.id, "FAILED");
       throw err;
     }
@@ -757,12 +777,28 @@ export class PipelineOrchestrator {
     return result;
   }
 
+  private resolveImplementationContext(
+    ticket: NormalizedTicket,
+    enrichedPrdDocument: Record<string, unknown>
+  ) {
+    const generatedPrd =
+      ticket.pmContext?.generatedPrd ??
+      (enrichedPrdDocument.generatedPrd as GeneratedPRD | undefined);
+    const modeInput = { generatedPrd, pmContext: ticket.pmContext, ticket };
+    const implementationMode = resolveImplementationMode(modeInput);
+    const deliverableFiles = resolveDeliverableFiles(modeInput);
+    const targetFilePaths = resolveTargetFilePaths(modeInput);
+    return { generatedPrd, implementationMode, deliverableFiles, targetFilePaths };
+  }
+
   private async runEngineeringAgent(
     pipelineId: string,
-    jiraKey: string,
+    ticket: NormalizedTicket,
     prd: PrdOutput,
     enrichedPrdDocument: Record<string, unknown>
   ): Promise<{ output: AgentOutput<ImplementationOutput>; stageLogId: string }> {
+    const { implementationMode, deliverableFiles, targetFilePaths } =
+      this.resolveImplementationContext(ticket, enrichedPrdDocument);
     const query = `${prd.title} ${prd.problemStatement} ${prd.proposedSolution}`;
     const scope = resolveRepoScope();
     const branch = scope?.defaultBranch ?? "main";
@@ -771,7 +807,7 @@ export class PipelineOrchestrator {
       ticketTypes: ["prd", "implementation", "ticket"],
       codebase: { branchName: branch, topK: 10 },
       topKTotal: 12,
-      currentJiraKey: jiraKey,
+      currentJiraKey: ticket.jiraKey,
     });
 
     const codebaseIntelligence = await this.getCodebaseIntelligenceSnapshot(prd);
@@ -780,7 +816,7 @@ export class PipelineOrchestrator {
       prd,
       unified.retrievedContext.length > 0
         ? unified.retrievedContext
-        : await retriever.retrieveForEngineeringAgent(prd, jiraKey),
+        : await retriever.retrieveForEngineeringAgent(prd, ticket.jiraKey),
       `${enrichedPrdSummary}\n\nUnified retrieval (tickets + codebase):\n${unified.fusedBlock}\n\n${codebaseIntelligence.snapshotText}`
     );
     const input = {
@@ -788,7 +824,13 @@ export class PipelineOrchestrator {
       enrichedPrdDocument,
       codebaseIntelligence,
       prd,
-      instruction: "Produce an implementation plan mapped to every acceptance criterion.",
+      instruction:
+        implementationMode === "content"
+          ? "Produce a content implementation plan with targetFiles for every deliverable document."
+          : "Produce an implementation plan mapped to every acceptance criterion.",
+      implementationMode,
+      deliverableFiles,
+      targetFilePaths,
     };
     const stageLog = await pipelineRepo.startStage({
       pipelineId,
@@ -797,11 +839,16 @@ export class PipelineOrchestrator {
     });
     const output = await this.engineeringAgent.run(
       pipelineId,
-      JSON.stringify(input, null, 2)
+      JSON.stringify(input, null, 2),
+      { systemPrompt: buildEngineeringAgentSystemPrompt(implementationMode) }
     );
+    output.parsed.implementationMode =
+      output.parsed.implementationMode ?? implementationMode;
+    output.parsed.targetFiles =
+      output.parsed.targetFiles?.length ? output.parsed.targetFiles : targetFilePaths;
     publishPipelineArtifact({
       pipelineId,
-      jiraKey,
+      jiraKey: ticket.jiraKey,
       type: "IMPLEMENTATION_PLAN",
       producer: "engineering",
       title: "Implementation plan",
@@ -831,6 +878,13 @@ export class PipelineOrchestrator {
     });
 
     const branchName = resolveCodingBranchName();
+    const { implementationMode, deliverableFiles, targetFilePaths } =
+      this.resolveImplementationContext(ticket, enrichedPrdDocument);
+    const requiredPaths =
+      implementationOutput.parsed.targetFiles?.length
+        ? implementationOutput.parsed.targetFiles
+        : targetFilePaths;
+
     let compileFeedback: string | undefined;
     let codingResult: Awaited<ReturnType<typeof runEngineeringCodingAgentic>> | null = null;
 
@@ -845,9 +899,30 @@ export class PipelineOrchestrator {
         pmContext: ticket.pmContext,
         compileFeedback,
         retainArtifacts: true,
+        implementationMode,
+        deliverableFiles,
       });
 
       const staged = getCodingArtifacts(pipelineId).stagedFiles;
+
+      if (implementationMode === "content") {
+        if (staged.length === 0) {
+          throw new Error(
+            `Content deliverable required ${requiredPaths.length || "at least one"} file(s) (${requiredPaths.join(", ") || "see PRD deliverableFiles"}); Ananta staged 0. Resume after updating PRD deliverableFiles or re-run.`
+          );
+        }
+        if (requiredPaths.length > 0) {
+          const stagedPaths = new Set(staged.map((f) => f.filePath));
+          const missing = requiredPaths.filter((p) => !stagedPaths.has(p));
+          if (missing.length > 0) {
+            throw new Error(
+              `Content deliverable missing staged files: ${missing.join(", ")}. Staged ${staged.length} of ${requiredPaths.length} required path(s).`
+            );
+          }
+        }
+        break;
+      }
+
       if (staged.length === 0) {
         break;
       }
@@ -1076,14 +1151,25 @@ export class PipelineOrchestrator {
   private async validateImplementationStage(
     pipelineId: string,
     output: AgentOutput<ImplementationOutput>,
-    prd: PrdOutput
+    prd: PrdOutput,
+    ticket: NormalizedTicket,
+    enrichedPrdDocument: Record<string, unknown>
   ): Promise<ValidationResult> {
+    const { implementationMode, targetFilePaths } = this.resolveImplementationContext(
+      ticket,
+      enrichedPrdDocument
+    );
     const stageLog = await pipelineRepo.startStage({
       pipelineId,
       stage: "IMPLEMENTATION_VALIDATION",
       inputJson: output.parsed as unknown as Prisma.InputJsonValue,
     });
-    const result = validateImplementation(output.parsed, prd);
+    const result = validateImplementation(output.parsed, prd, {
+      implementationMode,
+      targetFiles: output.parsed.targetFiles?.length
+        ? output.parsed.targetFiles
+        : targetFilePaths,
+    });
     await pipelineRepo.completeStage({
       stageLogId: stageLog.id,
       output: result as unknown as Prisma.InputJsonValue,
@@ -1119,6 +1205,7 @@ export class PipelineOrchestrator {
       prd,
       implementation,
       retrievedContext: retrieved,
+      implementationMode: implementation.implementationMode,
     });
     const output = result.agentOutput;
     await pipelineRepo.completeStage({

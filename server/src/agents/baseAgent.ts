@@ -15,8 +15,13 @@ export abstract class BaseAgent<TParsed = Record<string, unknown>> {
   protected model = getOpenAIChatModel();
   protected maxTokens = 4000;
 
-  async run(pipelineId: string, userPrompt: string): Promise<AgentOutput<TParsed>> {
+  async run(
+    pipelineId: string,
+    userPrompt: string,
+    options?: { systemPrompt?: string }
+  ): Promise<AgentOutput<TParsed>> {
     const startTime = Date.now();
+    const system = options?.systemPrompt ?? this.systemPrompt;
 
     await auditRepo.log(pipelineId, `${this.name}_STARTED`, {
       promptLength: userPrompt.length,
@@ -25,7 +30,7 @@ export abstract class BaseAgent<TParsed = Record<string, unknown>> {
     const { text, usage } = await retry(
       () =>
         chatCompletionText({
-          system: this.systemPrompt,
+          system,
           user: userPrompt,
           maxTokens: this.maxTokens,
         }),

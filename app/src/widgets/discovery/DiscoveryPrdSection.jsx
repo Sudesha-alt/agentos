@@ -16,9 +16,30 @@ export default function DiscoveryPrdSection({ parsed, scores }) {
         <p className="font-display text-[1.25rem] text-ink">{prd.title}</p>
         <p className="mt-2 font-mono text-[11px] text-ink-dim">
           {prd.version ?? "v1.0"} · {prd.status ?? "Draft"} · {prd.effortEstimate ?? "—"}
+          {prd.implementationMode === "content" ? " · Content deliverable" : ""}
           {scores ? ` · quality ${formatScorePercent(scores.prdQualityScore)}` : ""}
         </p>
       </div>
+
+      {prd.implementationMode === "content" && prd.deliverableFiles?.length > 0 ? (
+        <div>
+          <p className="editorial-kicker mb-2 text-ink-mute">Deliverable files</p>
+          <ul className="space-y-2">
+            {prd.deliverableFiles.map((file) => (
+              <li
+                key={file.path}
+                className="rounded-[0.85rem] border border-hairline bg-canvas/30 px-3 py-2 font-mono text-[12px] text-ink"
+              >
+                <span className="text-indigo">{file.path}</span>
+                <span className="text-ink-dim"> · {file.format}</span>
+                {file.purpose ? (
+                  <p className="mt-1 font-sans text-[13px] text-ink-dim">{file.purpose}</p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       <ProseBlock label="Problem" text={prd.problemStatement} />
       <ProseBlock label="Solution" text={prd.proposedSolution} />

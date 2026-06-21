@@ -1,6 +1,8 @@
 import type { PmPipelineContext } from "../agents/pm/pmPipelineContext";
 import { resolveRepoScope } from "../codebaseIntelligence/repoScope";
+import type { GeneratedPRD } from "../prd/prdGenerator";
 import type {
+  ImplementationMode,
   ImplementationOutput,
   PrdOutput,
 } from "../types/agents";
@@ -14,6 +16,8 @@ export interface EngineeringCodingAgenticInput {
   pmContext?: PmPipelineContext;
   branchName: string;
   compileFeedback?: string;
+  implementationMode?: ImplementationMode;
+  deliverableFiles?: Array<{ path: string; format: string; purpose: string }>;
 }
 
 export function resolveCodingBranchName(): string {
@@ -57,11 +61,48 @@ export function buildEngineeringCodingInitialUserMessage(
     | Array<{ id: string; title: string; files: string[] }>
     | undefined;
 
+  const generatedPrd =
+    input.pmContext?.generatedPrd ??
+    (input.enrichedPrdDocument.generatedPrd as GeneratedPRD | undefined);
+
+  const mode = input.implementationMode ?? generatedPrd?.implementationMode ?? "code";
+  const deliverableFiles =
+    input.deliverableFiles ??
+    generatedPrd?.deliverableFiles ??
+    input.implementation.targetFiles?.map((path) => ({
+      path,
+      format: path.endsWith(".md") ? "markdown" : "document",
+      purpose: "Implementation target file",
+    })) ??
+    [];
+
+  const taskFilePaths = [...new Set((tasks ?? []).flatMap((t) => t.files ?? []))];
+  const requiredPaths = [
+    ...new Set([
+      ...deliverableFiles.map((f) => f.path),
+      ...taskFilePaths,
+      ...(input.implementation.targetFiles ?? []),
+    ]),
+  ].filter(Boolean);
+
+  const requiredFilesBlock =
+    mode === "content" && requiredPaths.length
+      ? `REQUIRED OUTPUT FILES (you MUST write_source_file each before finishing):
+${requiredPaths.map((p) => `- ${p}`).join("\n")}
+${deliverableFiles.length ? `\nDeliverable details:\n${deliverableFiles.map((f) => `- ${f.path} (${f.format}): ${f.purpose}`).join("\n")}` : ""}
+`
+      : mode === "content"
+        ? `REQUIRED OUTPUT FILES: PRD did not list deliverableFiles — infer doc paths from netNewWork and task breakdown, then write_source_file each.`
+        : "";
+
   return `
 Jira: ${input.jiraKey}
 Pipeline: ${input.pipelineId}
 Branch: ${input.branchName}
+Implementation mode: ${mode}
 PM context attached: ${input.pmContext ? "yes" : "no"}
+
+${requiredFilesBlock}
 
 PRD title: ${input.prd.title}
 Problem: ${input.prd.problemStatement}
@@ -98,13 +139,13 @@ ${design ? `System design package:\n${JSON.stringify(design, null, 2)}` : ""}
 
 ${tasks?.length ? `Task breakdown:\n${tasks.map((t) => `- ${t.id}: ${t.title} (${t.files.join(", ")})`).join("\n")}` : ""}
 
-${input.pmContext?.generatedPrd ? `Full PM-generated PRD (authoritative — implement every feature, user story, and requirement described here):\n${JSON.stringify(input.pmContext.generatedPrd, null, 2)}` : ""}
+${generatedPrd ? `Full PM-generated PRD (authoritative — implement every feature, user story, and requirement described here):\n${JSON.stringify(generatedPrd, null, 2)}` : ""}
 
-${input.pmContext?.generatedPrd?.implementationDeltaSummary ? `CODEBASE DELTA (build only net-new work):\nSummary: ${input.pmContext.generatedPrd.implementationDeltaSummary}\nAlready exists:\n${(input.pmContext.generatedPrd.existingCapabilities ?? []).map((c) => `- ${c}`).join("\n")}\nNet-new work:\n${(input.pmContext.generatedPrd.netNewWork ?? []).map((c) => `- ${c}`).join("\n")}\nReuse from codebase:\n${(input.pmContext.generatedPrd.reuseFromCodebase ?? []).map((c) => `- ${c}`).join("\n")}` : ""}
+${generatedPrd?.implementationDeltaSummary ? `CODEBASE DELTA (build only net-new work):\nSummary: ${generatedPrd.implementationDeltaSummary}\nAlready exists:\n${(generatedPrd.existingCapabilities ?? []).map((c) => `- ${c}`).join("\n")}\nNet-new work:\n${(generatedPrd.netNewWork ?? []).map((c) => `- ${c}`).join("\n")}\nReuse from codebase:\n${(generatedPrd.reuseFromCodebase ?? []).map((c) => `- ${c}`).join("\n")}` : ""}
 
 ${input.compileFeedback ? `SANDBOX COMPILE/TEST FEEDBACK — fix these errors before finishing:\n${input.compileFeedback}` : ""}
 
 Begin PHASE 1: read and search the codebase on branch "${input.branchName}",
-then PHASE 2: stage source file changes, then return the final JSON summary.
+then PHASE 2: stage ${mode === "content" ? "document" : "source"} file changes, then return the final JSON summary.
   `.trim();
 }

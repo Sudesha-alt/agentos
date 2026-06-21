@@ -39,5 +39,22 @@ export function validateGeneratedPrd(
     issues.push("Missing implementationDeltaSummary tying PRD to codebase reality");
   }
 
+  if (prd.implementationMode === "content") {
+    if (!prd.deliverableFiles?.length) {
+      issues.push("Content-mode PRD must include deliverableFiles with target doc paths");
+    } else {
+      for (const file of prd.deliverableFiles) {
+        if (!file.path?.trim()) {
+          issues.push("deliverableFiles entry missing path");
+        } else if (!/\.\w+$/.test(file.path.trim())) {
+          issues.push(`deliverableFiles path must include extension: ${file.path}`);
+        }
+      }
+    }
+    if ((prd.technicalRequirements?.endpoints ?? []).length > 0) {
+      issues.push("Content-mode PRD should not declare API endpoints");
+    }
+  }
+
   return { passed: issues.length === 0, issues };
 }

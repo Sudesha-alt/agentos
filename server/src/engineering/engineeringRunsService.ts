@@ -1,5 +1,4 @@
-import type { AuditLog, Pipeline, Ticket } from "../db/prisma";
-import type { PipelineStage } from "../generated/prisma/client";
+import type { AuditLog, Pipeline, PipelineStage, Ticket } from "../db/prisma";
 import { prisma } from "../db/client";
 import { auditRepo } from "../db/repositories/auditRepo";
 import { pipelineRepo } from "../db/repositories/pipelineRepo";
@@ -7,7 +6,9 @@ import {
   getCachedReadSourceFile,
   getStagedFilesForRun,
 } from "../engineering/codingArtifactStore";
-import type { ImplementationOutput } from "../types/agents";
+import { pipelineStageLabel } from "../pipeline/liveStatus";
+import type { GeneratedPRD } from "../prd/prdGenerator";
+import type { ImplementationMode, ImplementationOutput } from "../types/agents";
 
 const ENGINEERING_STAGES: PipelineStage[] = [
   "ENGINEERING_AGENT",
@@ -22,8 +23,11 @@ export interface EngineeringRunListItem {
   jiraKey: string;
   summary: string;
   status: string;
+  statusLabel: string;
   currentStage: PipelineStage;
+  currentStageLabel: string;
   branch: string;
+  failureReason?: string;
 }
 
 export interface EngineeringRunDetail extends EngineeringRunListItem {
@@ -37,6 +41,10 @@ export interface EngineeringRunDetail extends EngineeringRunListItem {
   testsGenerated: number;
   criteriaMapped: number;
   criteriaTotal: number;
+  failedStage: PipelineStage | null;
+  failedStageLabel: string | null;
+  canResume: boolean;
+  recentEvents: Array<{ event: string; timestamp: string; summary: string }>;
   implementationPlan: Record<string, unknown> | null;
   files: Array<{
     path: string;
@@ -64,6 +72,8 @@ export interface EngineeringRunDetail extends EngineeringRunListItem {
   }> | null;
   qaPhase: boolean;
   qaPipelineStage: PipelineStage | null;
+  implementationMode: ImplementationMode;
+  deliverableFiles: Array<{ path: string; format: string; purpose: string }>;
 }
 
 function resolveBranchName(): string {
@@ -85,6 +95,93 @@ function mapRunStatus(pipeline: Pipeline): string {
   if (pipeline.status === "FAILED") return "FAILED";
   if (pipeline.status === "COMPLETED") return "COMPLETED";
   return pipeline.status;
+}
+
+function mapStatusLabel(status: string): string {
+  const labels: Record<string, string> = {
+    RUNNING: "Running",
+    PAUSED: "Awaiting human",
+    COMPLETED: "Completed",
+    FAILED: "Failed",
+  };
+  return labels[status] ?? status;
+}
+
+interface FailureInfo {
+  failedStage: PipelineStage | null;
+  failureReason: string | null;
+}
+
+async function resolveFailureInfo(
+  pipeline: Pipeline,
+  logs: AuditLog[]
+): Promise<FailureInfo> {
+  if (pipeline.status !== "FAILED") {
+    return { failedStage: null, failureReason: null };
+  }
+
+  const failedAudit = logs.find((l) => l.event === "PIPELINE_FAILED");
+  if (failedAudit) {
+    const meta = (failedAudit.metadata ?? {}) as {
+      stage?: PipelineStage;
+      error?: string;
+    };
+    return {
+      failedStage: meta.stage ?? pipeline.currentStage,
+      failureReason:
+        meta.error?.trim() ||
+        "Pipeline failed without a detailed error message.",
+    };
+  }
+
+  const failedStageLog = await prisma.pipelineStageLog.findFirst({
+    where: { pipelineId: pipeline.id, status: "FAILED" },
+    orderBy: { completedAt: "desc" },
+    select: { stage: true, error: true },
+  });
+  if (failedStageLog?.error) {
+    return {
+      failedStage: failedStageLog.stage,
+      failureReason: failedStageLog.error,
+    };
+  }
+
+  const runningStageLog = await prisma.pipelineStageLog.findFirst({
+    where: { pipelineId: pipeline.id, status: "RUNNING" },
+    orderBy: { startedAt: "desc" },
+    select: { stage: true, startedAt: true },
+  });
+  if (runningStageLog) {
+    return {
+      failedStage: runningStageLog.stage,
+      failureReason: `Pipeline stopped while ${pipelineStageLabel(runningStageLog.stage)} was still running. This often means the server restarted or the run exceeded the stale timeout. Resume to retry from the last completed stage.`,
+    };
+  }
+
+  return {
+    failedStage: pipeline.currentStage,
+    failureReason:
+      "Pipeline failed without a recorded error. Open the pipeline detail page for audit logs, or resume to retry.",
+  };
+}
+
+function summarizeAuditEvent(log: AuditLog): string {
+  const meta = (log.metadata ?? {}) as Record<string, unknown>;
+  if (typeof meta.error === "string" && meta.error.trim()) return meta.error.trim();
+  if (typeof meta.message === "string" && meta.message.trim()) return meta.message.trim();
+  if (typeof meta.tool === "string") {
+    const filePath = typeof meta.filePath === "string" ? meta.filePath : "";
+    return filePath ? `${meta.tool}: ${filePath}` : String(meta.tool);
+  }
+  return log.event.replaceAll("_", " ").toLowerCase();
+}
+
+function buildRecentEvents(logs: AuditLog[]): EngineeringRunDetail["recentEvents"] {
+  return logs.slice(0, 8).map((log) => ({
+    event: log.event,
+    timestamp: log.timestamp.toISOString(),
+    summary: summarizeAuditEvent(log),
+  }));
 }
 
 function isQaPhase(stage: PipelineStage): boolean {
@@ -261,11 +358,35 @@ async function loadBranchPr(jiraKey: string) {
   };
 }
 
+function resolveRunDeliverableContext(
+  impl: ImplementationOutput | null,
+  ticket: Ticket
+): {
+  implementationMode: ImplementationMode;
+  deliverableFiles: Array<{ path: string; format: string; purpose: string }>;
+} {
+  const normalized = ticket.normalizedData as {
+    pmContext?: { generatedPrd?: GeneratedPRD };
+  } | null;
+  const generatedPrd = normalized?.pmContext?.generatedPrd;
+  const implementationMode =
+    impl?.implementationMode ?? generatedPrd?.implementationMode ?? "code";
+  const deliverableFiles =
+    generatedPrd?.deliverableFiles ??
+    (impl?.targetFiles ?? []).map((path) => ({
+      path,
+      format: path.endsWith(".md") ? "markdown" : "document",
+      purpose: "Implementation target",
+    }));
+  return { implementationMode, deliverableFiles };
+}
+
 function buildDetail(
   pipeline: Pipeline & { ticket: Ticket },
   impl: ImplementationOutput | null,
   logs: AuditLog[],
-  costUsd: number
+  costUsd: number,
+  failure: FailureInfo
 ): EngineeringRunDetail {
   const staged = getStagedFilesForRun(pipeline.id);
   const files = buildFiles(pipeline.id, impl);
@@ -275,6 +396,11 @@ function buildDetail(
     : staged.length
       ? Math.min(criteriaTotal || staged.length, staged.length)
       : 0;
+
+  const { implementationMode, deliverableFiles } = resolveRunDeliverableContext(
+    impl,
+    pipeline.ticket
+  );
 
   const durationMs =
     pipeline.completedAt && pipeline.startedAt
@@ -286,8 +412,17 @@ function buildDetail(
     jiraKey: pipeline.ticket.jiraKey,
     summary: ticketSummary(pipeline.ticket),
     status: mapRunStatus(pipeline),
+    statusLabel: mapStatusLabel(mapRunStatus(pipeline)),
     currentStage: pipeline.currentStage,
+    currentStageLabel: pipelineStageLabel(pipeline.currentStage),
     branch: resolveBranchName(),
+    failureReason: failure.failureReason ?? undefined,
+    failedStage: failure.failedStage,
+    failedStageLabel: failure.failedStage
+      ? pipelineStageLabel(failure.failedStage)
+      : null,
+    canResume: pipeline.status === "FAILED",
+    recentEvents: buildRecentEvents(logs),
     prNumber: null,
     prDraft: true,
     durationMinutes: Math.max(1, Math.round(durationMs / 60_000)),
@@ -306,6 +441,8 @@ function buildDetail(
     liveSteps: buildLiveSteps(pipeline, logs, staged.length),
     qaPhase: isQaPhase(pipeline.currentStage),
     qaPipelineStage: isQaPhase(pipeline.currentStage) ? pipeline.currentStage : null,
+    implementationMode,
+    deliverableFiles,
   };
 }
 
@@ -322,14 +459,40 @@ export async function listEngineeringRuns(
     include: { ticket: true },
   });
 
-  const items = pipelines.map((p) => ({
-    pipelineId: p.id,
-    jiraKey: p.ticket.jiraKey,
-    summary: ticketSummary(p.ticket),
-    status: mapRunStatus(p),
-    currentStage: p.currentStage,
-    branch: resolveBranchName(),
-  }));
+  const failedIds = pipelines.filter((p) => p.status === "FAILED").map((p) => p.id);
+  const failureByPipeline = new Map<string, FailureInfo>();
+
+  if (failedIds.length) {
+    const failedAudits = await prisma.auditLog.findMany({
+      where: { pipelineId: { in: failedIds }, event: "PIPELINE_FAILED" },
+      orderBy: { timestamp: "desc" },
+    });
+    for (const audit of failedAudits) {
+      if (!audit.pipelineId || failureByPipeline.has(audit.pipelineId)) continue;
+      const meta = (audit.metadata ?? {}) as { stage?: PipelineStage; error?: string };
+      const pipeline = pipelines.find((p) => p.id === audit.pipelineId);
+      failureByPipeline.set(audit.pipelineId, {
+        failedStage: meta.stage ?? pipeline?.currentStage ?? null,
+        failureReason: meta.error?.trim() || null,
+      });
+    }
+  }
+
+  const items = pipelines.map((p) => {
+    const failure = failureByPipeline.get(p.id);
+    const status = mapRunStatus(p);
+    return {
+      pipelineId: p.id,
+      jiraKey: p.ticket.jiraKey,
+      summary: ticketSummary(p.ticket),
+      status,
+      statusLabel: mapStatusLabel(status),
+      currentStage: p.currentStage,
+      currentStageLabel: pipelineStageLabel(p.currentStage),
+      branch: resolveBranchName(),
+      failureReason: failure?.failureReason ?? undefined,
+    };
+  });
 
   return { items };
 }
@@ -341,6 +504,7 @@ export async function getEngineeringRun(
   if (!pipeline) return null;
 
   const logs = await auditRepo.listForPipeline(pipelineId, 300);
+  const failure = await resolveFailureInfo(pipeline, logs);
   const impl = await loadImplementationOutput(pipelineId);
   const stageLogs = await prisma.pipelineStageLog.findMany({
     where: { pipelineId },
@@ -348,7 +512,7 @@ export async function getEngineeringRun(
   });
   const costUsd = stageLogs.reduce((sum, l) => sum + (l.costUsd ?? 0), 0);
 
-  const detail = buildDetail(pipeline, impl, logs, costUsd);
+  const detail = buildDetail(pipeline, impl, logs, costUsd, failure);
   const prInfo = await loadBranchPr(pipeline.ticket.jiraKey);
   if (prInfo) {
     detail.prNumber = prInfo.prNumber;

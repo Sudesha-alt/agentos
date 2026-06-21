@@ -50,6 +50,8 @@ export interface CodeChange {
   linesChanged?: number;
 }
 
+export type ImplementationMode = "code" | "content";
+
 export interface ImplementationOutput {
   summary: string;
   technicalApproach: string;
@@ -63,6 +65,8 @@ export interface ImplementationOutput {
   blockers: string[];
   confidenceScore: number;
   confidenceReason: string;
+  implementationMode?: ImplementationMode;
+  targetFiles?: string[];
   codeChanges?: CodeChange[];
   codingSummary?: string;
 }

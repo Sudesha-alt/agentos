@@ -211,9 +211,14 @@ Tasks:
 5. Pressure-test the proposed direction with technical risks
 6. Draft testable acceptance criteria (precise enough for engineers to write tests)
 7. Separate what ALREADY EXISTS in the repo vs what GAPS must be built for this ticket
+8. If the ticket is a document/content deliverable (curriculum, policy, playbook, documentation, markdown):
+   - gapsToBuild MUST cite concrete doc file paths (e.g. docs/curriculum/q1.md)
+   - suggestedFirstFile MUST be an existing or new doc path (.md preferred)
+   - set suggestedImplementationMode to "content"
 
 Output JSON:
 {
+  "suggestedImplementationMode": "code|content",
   "relevantModules": [{"path": "...", "reason": "...", "role": "primary|secondary|config|test"}],
   "reuseOpportunities": ["..."],
   "alreadyExists": ["concrete capability already in codebase — cite file paths"],
@@ -309,6 +314,12 @@ Quality bar:
 - implementationDeltaSummary MUST explain already-built vs net-new in 2-4 sentences
 - Open questions are real and named with owner
 - effortEstimate and complexitySummary use AgentOS agent pipeline wall-clock hours (Virin → Ananta → Neel), NOT human developer sprint days. Typical ranges: XS 30–90 min, S 1–3 h, M 3–8 h, L 8–16 h, XL 16–40 h.
+- If the ticket is a document/content deliverable (curriculum, policy, playbook, documentation):
+  - set implementationMode to "content"
+  - deliverableFiles MUST list every repo file to create/update with path, format (markdown), and purpose
+  - netNewWork MUST list those same file paths
+  - technicalRequirements.endpoints MUST be []
+- Otherwise set implementationMode to "code"
 
 Use GeneratedPRD schema:
 {
@@ -347,6 +358,8 @@ Use GeneratedPRD schema:
   "netNewWork": ["what must be built or changed — delta only"],
   "reuseFromCodebase": ["modules/patterns to extend"],
   "implementationDeltaSummary": "2-4 sentences: already built vs net-new for this ticket",
+  "implementationMode": "code|content",
+  "deliverableFiles": [{"path": "docs/example.md", "format": "markdown", "purpose": "when content mode only"}],
   "prdConfidence": 0.0,
   "confidenceNotes": "honest uncertainty notes"
 }${JSON_ONLY}`;
@@ -376,6 +389,7 @@ Output JSON:
 export const PROMPT_TASK_PLANNING = `Stage — Task planning (Project Manager capability)
 
 Break the system design into ordered engineering tasks. Each task must map to files and dependencies.
+For content-mode tickets (documentation, curriculum, policy): every task files[] entry MUST be a doc path (.md).
 
 System design JSON:
 {{system_design_json}}

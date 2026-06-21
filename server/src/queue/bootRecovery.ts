@@ -1,4 +1,5 @@
 import { prisma } from "../db/client";
+import { auditRepo } from "../db/repositories/auditRepo";
 import { logger } from "../utils/logger";
 import {
   resetStaleActiveItems,
@@ -24,10 +25,19 @@ export async function recoverPipelineStateOnBoot(): Promise<void> {
       status: "RUNNING",
       startedAt: { lt: staleCutoff },
     },
-    select: { id: true },
+    select: { id: true, currentStage: true },
   });
 
   if (staleRunning.length > 0) {
+    const staleHours = Math.round(STALE_RUNNING_MS / 3_600_000);
+    for (const pipeline of staleRunning) {
+      await auditRepo.log(pipeline.id, "PIPELINE_FAILED", {
+        stage: pipeline.currentStage,
+        error: `Pipeline timed out after ${staleHours} hours without completing.`,
+        reason: "stale_running_timeout",
+      });
+    }
+
     await prisma.pipeline.updateMany({
       where: { id: { in: staleRunning.map((p) => p.id) } },
       data: { status: "FAILED", completedAt: new Date() },

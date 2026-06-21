@@ -64,6 +64,7 @@ export interface QuestionModeState {
 }
 
 export interface CodebaseAnalysisOutput {
+  suggestedImplementationMode?: "code" | "content";
   relevantModules: Array<{ path: string; reason: string; role: string }>;
   reuseOpportunities: string[];
   alreadyExists?: string[];
@@ -75,6 +76,7 @@ export interface CodebaseAnalysisOutput {
   testableAcceptanceCriteria: string[];
   scopeAssessment: string;
   suggestedFirstFile: string;
+  suggestedImplementationMode?: "code" | "content";
 }
 
 export interface SystemDesignOutput {

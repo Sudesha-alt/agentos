@@ -32,6 +32,8 @@ const implementationSchema = z.object({
     })
   ),
   blockers: z.array(z.string()),
+  implementationMode: z.enum(["code", "content"]).optional(),
+  targetFiles: z.array(z.string()).optional(),
   confidenceScore: z.number().min(0).max(1),
   confidenceReason: z.string().min(8),
 });
@@ -43,7 +45,11 @@ const implementationSchema = z.object({
  */
 export function validateImplementation(
   implementation: unknown,
-  prd: PrdOutput
+  prd: PrdOutput,
+  options?: {
+    implementationMode?: "code" | "content";
+    targetFiles?: string[];
+  }
 ): ValidationResult {
   const issues: ValidationIssue[] = [];
   const amberFlags: string[] = [];
@@ -103,6 +109,27 @@ export function validateImplementation(
       severity: "error",
       message: `Implementation confidence ${data.confidenceScore} below 0.7 threshold.`,
     });
+  }
+
+  const mode = options?.implementationMode ?? data.implementationMode ?? "code";
+  const targetFiles = options?.targetFiles ?? data.targetFiles ?? [];
+
+  if (mode === "content") {
+    if (!targetFiles.length) {
+      issues.push({
+        code: "MISSING_TARGET_FILES",
+        severity: "error",
+        message: "Content-mode plan must declare targetFiles with deliverable document paths.",
+      });
+    }
+    if (data.apiChanges.length > 0) {
+      amberFlags.push("Content-mode plan declares API changes — verify this is not a code ticket.");
+    }
+    if (data.databaseChanges.length > 0) {
+      amberFlags.push(
+        "Content-mode plan declares database changes — verify this is not a code ticket."
+      );
+    }
   }
 
   const errorCount = issues.filter((i) => i.severity === "error").length;

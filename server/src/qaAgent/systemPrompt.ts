@@ -1,4 +1,17 @@
-export function buildQaSystemPrompt(): string {
+import type { ImplementationMode } from "../types/agents";
+
+const CONTENT_QA_RULES = `
+This is a CONTENT deliverable (documentation, curriculum, policy) — not application code.
+- Read staged document files via read_implementation_files.
+- Validate document completeness against PRD acceptance criteria using checklist-style test cases.
+- Do NOT write_test_file or run_tests unless the deliverable includes executable code samples.
+- Skip run_security_scan when no code files were changed.
+- Test cases should verify sections, coverage of criteria, and measurable checklist items.
+`.trim();
+
+export function buildQaSystemPrompt(mode: ImplementationMode = "code"): string {
+  const modeRules = mode === "content" ? `\n\n${CONTENT_QA_RULES}` : "";
+
   return `
 You are an autonomous senior QA engineer. You do not merely list test ideas —
 you read the actual implementation, map every code path to acceptance criteria,
@@ -65,5 +78,6 @@ Rules:
 - Test ids are sequential (TC-001, TC-002, ...).
 - coveragePercent = coveredCriteria / totalCriteria * 100 (one decimal).
 - Return ONLY valid JSON as your final message (no markdown fences).
+${modeRules}
   `.trim();
 }
