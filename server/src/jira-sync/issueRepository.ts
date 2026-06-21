@@ -1,4 +1,5 @@
 import { prisma } from "../db/client";
+import { isAiWorkerEligibleIssueType } from "../pipeline/jira/aiWorkerIssueTypes";
 import type { Prisma } from "../db/prisma";
 import { activeOrganizationFilter, requireActiveOrganizationId } from "../organization/orgScope";
 import type { FetchedJiraIssue } from "./issueFetcher";
@@ -156,15 +157,16 @@ export async function getJiraIssueStats(organizationId?: string): Promise<{
 export async function listJiraIssuesByStatus(
   statuses: string[],
   organizationId?: string
-): Promise<Array<{ jiraKey: string; status: string }>> {
+): Promise<Array<{ jiraKey: string; status: string; issueType: string }>> {
   if (statuses.length === 0) return [];
   const org = orgWhere(organizationId);
-  return prisma.jiraIssue.findMany({
+  const rows = await prisma.jiraIssue.findMany({
     where: {
       ...org,
       isDeleted: false,
       status: { in: statuses },
     },
-    select: { jiraKey: true, status: true },
+    select: { jiraKey: true, status: true, issueType: true },
   });
+  return rows.filter((row) => isAiWorkerEligibleIssueType(row.issueType));
 }

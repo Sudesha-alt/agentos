@@ -6,6 +6,7 @@ import {
 } from "./credentialsStore";
 import { pipelineJiraFetch } from "./client";
 import { getPipelineIntakeMapping, getPipelineIntakeStatuses } from "./intakeConfig";
+import { isAiWorkerEligibleIssueType } from "./aiWorkerIssueTypes";
 
 function ensurePipelineReady(): void {
   try {
@@ -173,6 +174,7 @@ export async function listTicketsByStatuses(statuses: string[]): Promise<{
 
   const statusList = statuses.map((s) => `"${escapeJqlString(s)}"`).join(", ");
   clauses.push(`status in (${statusList})`);
+  clauses.push(`issuetype in ("Task", "Bug")`);
 
   const jql = `${clauses.join(" AND ")} ORDER BY updated DESC`;
 
@@ -195,7 +197,7 @@ export async function listTicketsByStatuses(statuses: string[]): Promise<{
 
   const items = (result.issues ?? [])
     .map(mapIssue)
-    .filter((i) => i.key);
+    .filter((i) => i.key && isAiWorkerEligibleIssueType(i.issueType));
 
   return { items, jql };
 }

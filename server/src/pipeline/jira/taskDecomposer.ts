@@ -1,5 +1,5 @@
 import { getPipelineJiraClient } from "./client";
-import { logger } from "../../utils/logger";
+import { isAiWorkerEligibleIssueType } from "./aiWorkerIssueTypes";
 
 export interface StoryTaskGroup {
   storyKey: string;
@@ -19,21 +19,13 @@ interface HierarchyIssue {
   fields?: {
     summary?: string;
     issuetype?: { name?: string; subtask?: boolean };
-    subtasks?: Array<{ key?: string }>;
-    parent?: { key?: string };
     [key: string]: unknown;
   };
 }
 
-const HIERARCHY_FIELDS = [
-  "summary",
-  "issuetype",
-  "subtasks",
-  "parent",
-  "customfield_10014",
-];
+const HIERARCHY_FIELDS = ["summary", "issuetype"];
 
-/** Expand Epic/Story intake into leaf tasks grouped by story (contiguous queue blocks). */
+/** AI Worker intake — queue Task/Bug tickets directly (no epic/story decomposition). */
 export async function decomposeForPipelineIntake(
   rootKey: string
 ): Promise<DecomposedIntake> {
@@ -43,40 +35,12 @@ export async function decomposeForPipelineIntake(
     HIERARCHY_FIELDS
   )) as HierarchyIssue;
 
-  const sourceIssueType = root.fields?.issuetype?.name ?? "Story";
-  const issueTypeLower = sourceIssueType.toLowerCase();
+  const sourceIssueType = root.fields?.issuetype?.name ?? "Unknown";
 
-  if (issueTypeLower === "epic") {
-    const stories = await fetchEpicStoryChildren(rootKey);
-    if (stories.length === 0) {
-      logger.warn({ rootKey }, "epic has no child stories — queueing epic as single task");
-      return {
-        sourceKey: rootKey,
-        sourceIssueType,
-        groups: [
-          {
-            storyKey: rootKey,
-            storySummary: root.fields?.summary ?? rootKey,
-            taskKeys: [rootKey],
-          },
-        ],
-      };
-    }
-
-    const groups: StoryTaskGroup[] = [];
-    for (const story of stories) {
-      const taskKeys = await expandToBasicTasks(story.key);
-      groups.push({
-        storyKey: story.key,
-        storySummary: story.fields?.summary ?? story.key,
-        taskKeys,
-      });
-    }
-
-    return { sourceKey: rootKey, sourceIssueType, groups };
+  if (!isAiWorkerEligibleIssueType(sourceIssueType)) {
+    return { sourceKey: rootKey, sourceIssueType, groups: [] };
   }
 
-  const taskKeys = await expandToBasicTasks(rootKey);
   return {
     sourceKey: rootKey,
     sourceIssueType,
@@ -84,98 +48,8 @@ export async function decomposeForPipelineIntake(
       {
         storyKey: rootKey,
         storySummary: root.fields?.summary ?? rootKey,
-        taskKeys,
+        taskKeys: [rootKey],
       },
     ],
   };
-}
-
-/** Recursively split until leaf issues (no child subtasks). */
-async function expandToBasicTasks(issueKey: string): Promise<string[]> {
-  const children = await fetchDirectChildren(issueKey);
-  if (children.length === 0) {
-    return [issueKey];
-  }
-
-  const tasks: string[] = [];
-  for (const child of children) {
-    tasks.push(...(await expandToBasicTasks(child.key)));
-  }
-  return tasks;
-}
-
-async function fetchDirectChildren(parentKey: string): Promise<HierarchyIssue[]> {
-  const client = getPipelineJiraClient();
-  const issue = (await client.getIssueWithFields<HierarchyIssue>(
-    parentKey,
-    HIERARCHY_FIELDS
-  )) as HierarchyIssue;
-
-  const merged = new Map<string, HierarchyIssue>();
-
-  try {
-    const fromSearch = await runSearchWithFallback([
-      `parent = "${parentKey}" ORDER BY rank ASC, created ASC`,
-    ]);
-    for (const child of fromSearch) {
-      merged.set(child.key, child);
-    }
-  } catch (err) {
-    logger.warn(
-      { err, parentKey },
-      "Jira parent search failed — falling back to subtasks field"
-    );
-  }
-
-  for (const stub of issue.fields?.subtasks ?? []) {
-    if (!stub.key || merged.has(stub.key)) continue;
-    try {
-      const full = (await client.getIssueWithFields<HierarchyIssue>(
-        stub.key,
-        HIERARCHY_FIELDS
-      )) as HierarchyIssue;
-      merged.set(full.key, full);
-    } catch (err) {
-      logger.warn({ err, parentKey, childKey: stub.key }, "failed to fetch subtask stub");
-    }
-  }
-
-  return [...merged.values()];
-}
-
-async function fetchEpicStoryChildren(epicKey: string): Promise<HierarchyIssue[]> {
-  const issues = await runSearchWithFallback([
-    `(parent = "${epicKey}" OR "Epic Link" = "${epicKey}") ORDER BY rank ASC, created ASC`,
-    `parent = "${epicKey}" ORDER BY rank ASC, created ASC`,
-  ]);
-
-  return issues.filter((issue) => !isSubtaskIssue(issue));
-}
-
-async function runSearchWithFallback(
-  queries: string[]
-): Promise<HierarchyIssue[]> {
-  const client = getPipelineJiraClient();
-  let lastError: unknown;
-
-  for (const jql of queries) {
-    try {
-      const response = await client.searchIssues<HierarchyIssue>(jql, {
-        fields: HIERARCHY_FIELDS,
-        maxResults: 100,
-      });
-      return response.issues ?? [];
-    } catch (error) {
-      lastError = error;
-    }
-  }
-
-  throw lastError instanceof Error
-    ? lastError
-    : new Error("Jira hierarchy search failed");
-}
-
-function isSubtaskIssue(issue: HierarchyIssue): boolean {
-  const typeName = issue.fields?.issuetype?.name?.toLowerCase() ?? "";
-  return issue.fields?.issuetype?.subtask === true || typeName === "sub-task";
 }

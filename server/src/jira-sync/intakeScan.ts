@@ -2,6 +2,7 @@ import {
   getPipelineIntakeMapping,
   isPipelineIntakeStatus,
 } from "../pipeline/jira/intakeConfig";
+import { isAiWorkerEligibleIssueType } from "../pipeline/jira/aiWorkerIssueTypes";
 import { isPipelineJiraConfigured } from "../pipeline/jira/credentialsStore";
 import { listIntakeColumnTickets } from "../pipeline/jira/boardService";
 import { enqueueIntakeFromJiraKey } from "../pipeline/jira/intakeEnqueueService";
@@ -141,7 +142,11 @@ export async function scanIntakeFromSyncedIssues(
     const keys = [
       ...new Set(
         live.items
-          .filter((item) => isPipelineIntakeStatus(item.status))
+          .filter(
+            (item) =>
+              isPipelineIntakeStatus(item.status) &&
+              isAiWorkerEligibleIssueType(item.issueType)
+          )
           .map((item) => item.key)
           .filter(Boolean)
       ),

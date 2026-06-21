@@ -1,9 +1,13 @@
 import type { IntentClassification, NormalizedTicket } from "../types/ticket";
+import {
+  aiWorkerEligibleTypeLabel,
+  isAiWorkerEligibleIssueType,
+} from "../pipeline/jira/aiWorkerIssueTypes";
 
 const SKIP_TYPES = new Set(["Bug", "Task", "Sub-task", "Spike"]);
 const MIN_DESCRIPTION_LENGTH = 50;
 
-/** AI Worker column intake — human picked this ticket; do not filter by issue type. */
+/** AI Worker column — only Task and Bug tickets enter the pipeline. */
 export function classifyAiWorkerIntake(
   ticket: NormalizedTicket
 ): IntentClassification {
@@ -11,6 +15,13 @@ export function classifyAiWorkerIntake(
     return {
       requiresPipeline: false,
       skipReason: "Manually excluded via [no-agent] flag",
+    };
+  }
+
+  if (!isAiWorkerEligibleIssueType(ticket.issueType)) {
+    return {
+      requiresPipeline: false,
+      skipReason: `AI Worker only processes ${aiWorkerEligibleTypeLabel()} tickets (got ${ticket.issueType})`,
     };
   }
 

@@ -99,9 +99,10 @@ export default function PipelineQueuePanel({ setup, showHeader = true, onRefresh
           </p>
           <p className="mt-2 text-sm text-white/90">{trigger}</p>
           <p className="mt-2 text-xs leading-relaxed text-white/50">
-            Moving a ticket into this column/status in Jira fires a webhook. Tickets already
-            sitting in AI Worker before setup need a scan. Epics and stories decompose into
-            subtasks, then enter the FIFO queue below (one run at a time).
+            When a <strong className="text-white/70">Task</strong> or{" "}
+            <strong className="text-white/70">Bug</strong> is moved into this column, AgentOS
+            fetches it from Jira, shows a notification, and starts the pipeline automatically.
+            Stories and epics are ignored.
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <button

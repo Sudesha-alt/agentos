@@ -8,7 +8,8 @@ export type IntakeSkipReason =
   | "already_processing"
   | "already_completed"
   | "ticket_completed"
-  | "not_in_intake_status";
+  | "not_in_intake_status"
+  | "unsupported_issue_type";
 
 export interface ShouldEnqueueResult {
   enqueue: boolean;

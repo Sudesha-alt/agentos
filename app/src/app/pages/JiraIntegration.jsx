@@ -883,7 +883,10 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
 
       {connected ? (
         <Panel>
-          <PanelHeader title="AI Worker intake column" />
+          <PanelHeader
+            title="AI Worker intake column"
+            subtitle="Only Task and Bug tickets are picked up. Moving one into this column fetches it from Jira, notifies your team, and starts the agent pipeline."
+          />
           <form className="flex flex-wrap items-end gap-3 p-4 sm:px-6" onSubmit={handleSaveIntakeColumn}>
             <label className="block min-w-[240px] flex-1 text-sm">
               <span className="type-kicker">Board column</span>
@@ -921,6 +924,9 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
               {intakeStatuses.map((status) => (
                 <LabelPill key={status} label={status} tone="indigo" className="ml-1" />
               ))}
+              <span className="mt-2 block text-xs text-app-ink-mute">
+                Issue types: Task, Bug only — Stories and Epics in this column are ignored.
+              </span>
             </p>
           ) : null}
         </Panel>

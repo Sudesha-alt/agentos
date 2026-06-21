@@ -13,9 +13,12 @@ import {
 import { isPipelineIntakeStatus } from "./intakeConfig";
 import { shouldEnqueueJiraKey, logIntakeSkipped } from "./intakeDedup";
 import { classifyAiWorkerIntake } from "../../integrations/intentClassifier";
+import { getActiveOrganizationId } from "../../organization/context";
 import { logger } from "../../utils/logger";
 import type { PmPipelineContext } from "../../agents/pm/pmPipelineContext";
 import type { PipelineJiraWebhookPayload } from "./ticketNormalizer";
+import { recordIntakeAssignment } from "./intakeNotificationStore";
+import { aiWorkerEligibleTypeLabel } from "./aiWorkerIssueTypes";
 
 const FETCH_FIELDS = [
   "summary",
@@ -84,6 +87,22 @@ export async function enqueueIntakeFromJiraKey(
   }
 
   const decomposed = await decomposeForPipelineIntake(jiraKey);
+  if (decomposed.groups.length === 0) {
+    await logIntakeSkipped(
+      jiraKey,
+      "unsupported_issue_type",
+      `${jiraKey} is ${decomposed.sourceIssueType} — AI Worker only accepts ${aiWorkerEligibleTypeLabel()}`,
+      logSource === "manual" ? "manual" : logSource
+    );
+    return {
+      sourceKey: jiraKey,
+      enqueued: 0,
+      skipped: 1,
+      started: false,
+      groups: [],
+    };
+  }
+
   const batchItems: Array<{ ticketId: string; jiraKey: string }> = [];
   let skipped = 0;
 
@@ -165,6 +184,23 @@ export async function enqueueIntakeFromJiraKey(
 
   const batchResult =
     batchItems.length > 0 ? enqueuePipelineBatch(batchItems) : { started: false, enqueued: 0 };
+
+  if (batchResult.enqueued > 0) {
+    const organizationId = getActiveOrganizationId();
+    const rootSummary =
+      decomposed.groups[0]?.storySummary ??
+      (rootIssue.fields as { summary?: string }).summary ??
+      jiraKey;
+    if (organizationId) {
+      recordIntakeAssignment({
+        organizationId,
+        jiraKey: decomposed.sourceKey,
+        summary: rootSummary,
+        issueType: decomposed.sourceIssueType,
+        pipelineStarted: batchResult.started,
+      });
+    }
+  }
 
   return {
     sourceKey: decomposed.sourceKey,

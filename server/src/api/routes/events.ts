@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { prisma } from "../../db/client";
 import type { PipelineStage, PipelineStatus } from "../../generated/prisma/client";
+import { listIntakeNotifications } from "../../pipeline/jira/intakeNotificationStore";
 import { requireOrganizationUser } from "../orgRequestContext";
 
 const router = Router();
@@ -62,7 +63,23 @@ router.get("/recent", async (req, res, next) => {
       };
     });
 
-    res.json({ events });
+    const intakeEvents = listIntakeNotifications(user.organizationId).map((item) => ({
+      id: item.id,
+      pipelineId: null,
+      jiraKey: item.jiraKey,
+      tone: item.tone,
+      live: item.live,
+      message: item.message,
+      summary: item.summary,
+      issueType: item.issueType,
+      timestamp: item.timestamp,
+    }));
+
+    const merged = [...intakeEvents, ...events]
+      .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
+      .slice(0, 25);
+
+    res.json({ events: merged });
   } catch (err) {
     next(err);
   }

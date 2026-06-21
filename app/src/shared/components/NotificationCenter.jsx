@@ -14,9 +14,11 @@ export default function NotificationCenter() {
   const [open, setOpen] = useState(false);
   const panelRef = useRef(null);
   const { items: pipelines } = usePipelineList(undefined, { pollMs: 30_000 });
-  const { data: eventsData } = useActivityEvents({ pollMs: open ? 30_000 : 0, skip: !open });
+  const { data: eventsData } = useActivityEvents({ pollMs: 12_000 });
   const reviewItems = deriveReviewQueueItems(pipelines);
   const events = eventsData?.events ?? [];
+  const intakeEvents = events.filter((e) => e.tone === "intake");
+  const pipelineEvents = events.filter((e) => e.tone !== "intake");
   const totalCount = reviewItems.length + events.filter((e) => e.live).length;
 
   useEffect(() => {
@@ -108,13 +110,52 @@ export default function NotificationCenter() {
 
             <section className="border-t border-app-border px-4 py-3">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-app-ink-mute">
+                AI Worker assignments
+              </p>
+              {intakeEvents.length === 0 ? (
+                <p className="py-2 text-xs text-app-ink-dim">
+                  Move a Task or Bug into the AI Worker column to start work.
+                </p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {intakeEvents.slice(0, 5).map((event) => (
+                    <li key={event.id}>
+                      <Link
+                        to={orgPath("pipelines")}
+                        onClick={() => setOpen(false)}
+                        className="flex items-start gap-2 rounded-app-sm px-2 py-1.5 transition hover:bg-app-surface-muted"
+                      >
+                        <span
+                          className={`mt-1.5 size-2 shrink-0 rounded-full ${
+                            event.live ? "animate-pulse bg-indigo" : "bg-success"
+                          }`}
+                          aria-hidden
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] text-app-ink">
+                            <span className="font-mono text-app-ink-dim">{event.jiraKey}</span>{" "}
+                            {event.message}
+                          </p>
+                          <p className="text-[11px] text-app-ink-mute">
+                            {formatRelativeTime(event.timestamp)}
+                          </p>
+                        </div>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+
+            <section className="border-t border-app-border px-4 py-3">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-app-ink-mute">
                 Recent activity
               </p>
-              {events.length === 0 ? (
+              {pipelineEvents.length === 0 ? (
                 <p className="py-2 text-xs text-app-ink-dim">No recent activity.</p>
               ) : (
                 <ul className="space-y-1.5">
-                  {events.slice(0, 6).map((event) => (
+                  {pipelineEvents.slice(0, 6).map((event) => (
                     <li key={event.id}>
                       <Link
                         to={

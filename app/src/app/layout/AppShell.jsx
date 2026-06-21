@@ -11,6 +11,7 @@ import JiraOAuthRedirect from "./JiraOAuthRedirect";
 import MobileNav from "./MobileNav";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
+import IntakeAssignmentListener from "../../shared/components/IntakeAssignmentListener";
 
 function AppShellContent() {
   const { collapsed } = useSidebarCollapsed();
@@ -54,6 +55,7 @@ export default function AppShell() {
         <div className="app-shell app-shell-gradient min-h-screen text-app-ink">
           <GithubOAuthRedirect />
           <JiraOAuthRedirect />
+          <IntakeAssignmentListener />
           <AppShellContent />
         </div>
       </SidebarProvider>
