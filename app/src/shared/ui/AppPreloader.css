@@ -1,0 +1,145 @@
+.app-preloader {
+  width: 40px;
+  height: 20px;
+  --app-preloader-color: var(--ink, #f0eee8);
+  --c: no-repeat radial-gradient(farthest-side, var(--app-preloader-color) 93%, #0000);
+  background:
+    var(--c) 0 0,
+    var(--c) 50% 0;
+  background-size: 8px 8px;
+  position: relative;
+  clip-path: inset(-200% -100% 0 0);
+  animation: app-preloader-dots 1.5s linear infinite;
+}
+
+.app-preloader::before {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 12px;
+  background: var(--app-preloader-color);
+  left: -16px;
+  top: 0;
+  animation:
+    app-preloader-bar 1.5s linear infinite,
+    app-preloader-bar-top 0.5s cubic-bezier(0, 200, 0.8, 200) infinite;
+}
+
+.app-preloader::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--app-preloader-color);
+  animation: app-preloader-ball 1.5s linear infinite;
+}
+
+.app-preloader--indigo {
+  --app-preloader-color: var(--indigo, #6366f1);
+}
+
+.app-preloader--sm {
+  transform: scale(0.85);
+  transform-origin: center;
+}
+
+.app-preloader--lg {
+  transform: scale(1.35);
+  transform-origin: center;
+}
+
+.app-preloader-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1.25rem;
+  background: var(--canvas, #080810);
+  transition: opacity 0.4s ease, visibility 0.4s ease;
+}
+
+.app-preloader-overlay--exit {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.app-preloader-label {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--ink, #f0eee8) 55%, transparent);
+}
+
+.app-boot-hidden {
+  visibility: hidden;
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.app-boot-visible {
+  visibility: visible;
+  position: static;
+  overflow: visible;
+  pointer-events: auto;
+}
+
+@keyframes app-preloader-dots {
+  0%,
+  30% {
+    background-position: 0 0, 50% 0;
+  }
+  33% {
+    background-position: 0 100%, 50% 0;
+  }
+  41%,
+  63% {
+    background-position: 0 0, 50% 0;
+  }
+  66% {
+    background-position: 0 0, 50% 100%;
+  }
+  74%,
+  100% {
+    background-position: 0 0, 50% 0;
+  }
+}
+
+@keyframes app-preloader-bar {
+  90% {
+    transform: translateY(0);
+  }
+  95% {
+    transform: translateY(15px);
+  }
+  100% {
+    transform: translateY(15px);
+    left: calc(100% - 8px);
+  }
+}
+
+@keyframes app-preloader-bar-top {
+  100% {
+    top: -0.1px;
+  }
+}
+
+@keyframes app-preloader-ball {
+  0%,
+  80%,
+  100% {
+    transform: translate(0);
+  }
+  90% {
+    transform: translate(26px);
+  }
+}

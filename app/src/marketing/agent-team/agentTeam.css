@@ -250,9 +250,9 @@
   image-rendering: crisp-edges;
 }
 
-/* Cinematic mountain hero (mountain.gif) */
+/* Cinematic office hero (beautiful-office-space-cartoon-style.jpg) */
 .agent-team .at-pixel-bg-hero {
-  background: #120818;
+  background: #1a1028;
   isolation: isolate;
 }
 
@@ -519,7 +519,7 @@
 }
 
 .agent-team .at-hero-mountain-img {
-  object-position: center center;
+  object-position: center 38%;
 }
 
 .agent-team .at-hero-mountain-fade {

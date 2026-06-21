@@ -23,7 +23,8 @@ Legacy SVG tile mark — see Atlassian Design guidelines.
 
 | File | Usage |
 |------|--------|
-| `mountain.gif` | Active hero animation — cinematic mountain sunrise |
+| `beautiful-office-space-cartoon-style.jpg` | Active hero — cartoon office sunset skyline |
+| `mountain.gif` | Previous hero animation (unused) |
 | `cool.gif` | Previous lo-fi pixel hero (unused) |
 | `cool-hero-poster.png` | Static poster for previous hero (unused) |
 | `temple.gif` / `temple-hero.gif` | Previous temple scene (unused) |

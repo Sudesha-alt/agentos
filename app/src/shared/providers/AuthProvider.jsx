@@ -6,7 +6,7 @@ import {
 } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { authAdapter } from "../../entities/auth";
-import AppPageFallback from "../ui/AppPageFallback";
+import AppPreloader from "../ui/AppPreloader";
 import { AuthContext, useAuth } from "./useAuth";
 import { sessionHomePath, migrateAppPath } from "../routing/orgPaths";
 
@@ -91,13 +91,7 @@ export function RequireOnboardingComplete({ children }) {
   const location = useLocation();
 
   if (loading) {
-    return (
-      <div className="app-shell app-shell-gradient flex min-h-screen items-center justify-center px-5 py-10">
-        <div className="w-full max-w-[82rem]">
-          <AppPageFallback />
-        </div>
-      </div>
-    );
+    return <AppPreloader overlay label="Checking session" />;
   }
 
   if (isAuthenticated && (!onboardingCompleted || !hasOrganization)) {
@@ -112,13 +106,7 @@ export function RequireAuth({ children }) {
   const location = useLocation();
 
   if (loading) {
-    return (
-      <div className="app-shell app-shell-gradient flex min-h-screen items-center justify-center px-5 py-10">
-        <div className="w-full max-w-[82rem]">
-          <AppPageFallback />
-        </div>
-      </div>
-    );
+    return <AppPreloader overlay label="Checking session" />;
   }
 
   if (!isAuthenticated) {
@@ -140,11 +128,7 @@ export function PublicOnlyRoute({ children }) {
   const { loading, isAuthenticated, onboardingCompleted, session } = useAuth();
 
   if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-canvas px-5 text-center">
-        <p className="font-mono text-[12px] text-ink-dim">Checking session…</p>
-      </div>
-    );
+    return <AppPreloader overlay label="Checking session" />;
   }
 
   if (isAuthenticated) {

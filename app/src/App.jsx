@@ -10,6 +10,7 @@ import {
 import { OrgRouteProvider } from "./shared/providers/OrgRouteProvider";
 import AppCompatRedirect from "./shared/routing/AppCompatRedirect";
 import { orgAppRouteElements } from "./shared/routing/OrgAppRoutes";
+import AppBootstrapGate from "./shared/ui/AppBootstrapGate";
 import AppPageFallback from "./shared/ui/AppPageFallback";
 
 const Login = lazy(() => import("./pages/Login"));
@@ -40,8 +41,9 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Suspense fallback={null}>
-          <Routes>
+        <AppBootstrapGate>
+          <Suspense fallback={<AppPageFallback />}>
+            <Routes>
             <Route path="/" element={<Marketing />} />
             <Route path="/roi" element={<RoiCalculatorPage />} />
             <Route path="/contact" element={<ContactPage />} />
@@ -84,6 +86,7 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
+        </AppBootstrapGate>
       </AuthProvider>
     </BrowserRouter>
   );

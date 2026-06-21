@@ -1,6 +1,8 @@
 /**
- * Cinematic mountain sunrise — animated hero background with gradient overlay for copy.
+ * Cinematic office sunset — hero background with gradient overlay for copy.
  */
+const HERO_IMAGE = "/marketing/beautiful-office-space-cartoon-style.jpg";
+
 export default function MarketingBackground() {
   return (
     <div
@@ -10,7 +12,7 @@ export default function MarketingBackground() {
       <div className="at-hero-img-overlay absolute inset-0 z-[1]" />
       <img
         alt=""
-        src="/marketing/mountain.gif"
+        src={HERO_IMAGE}
         decoding="async"
         fetchPriority="high"
         loading="eager"
