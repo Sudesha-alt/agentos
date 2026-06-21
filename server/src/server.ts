@@ -11,6 +11,7 @@ import { initCodebaseVizWebSocket } from "./codebaseIntelligence/codebaseVizHub"
 import { recoverStaleIndexRuns } from "./codebaseIntelligence/indexRecovery";
 import { migrateJiraMirrorToJiraIssue } from "./jira-sync/migrateMirror";
 import { loadPmAnalysesFromStore } from "./agents/pm/store";
+import { backfillEngineeringHandoffRecords } from "./agents/pm/handoffStatus";
 import { loadCanarySettingsFromStore } from "./canaryAgent/settingsStore";
 import { loadPipelineSettingsFromStore } from "./pipeline/settingsStore";
 import { startCanaryScheduler } from "./canaryAgent/scheduler";
@@ -37,6 +38,9 @@ async function bootstrap(): Promise<void> {
   if (pmLoaded > 0) {
     logger.info({ count: pmLoaded }, "restored PM analyses from store");
   }
+  await backfillEngineeringHandoffRecords().catch((err) => {
+    logger.warn({ err }, "engineering handoff backfill failed");
+  });
   await restoreGitCredentialsFromPostgres().catch((err) => {
     logger.warn({ err }, "startup git credential restore failed");
   });

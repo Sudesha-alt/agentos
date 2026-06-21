@@ -72,7 +72,13 @@ export function getIntakeClarifyingProgress(analysis) {
 const pm = (path) => apiPath("/api", `/pm-agents${path}`);
 
 const restPmAdapter = {
-  listAnalyses: () => fetchJson(pm("/analyses")),
+  listAnalyses: (params = {}) => {
+    const qs = new URLSearchParams();
+    if (params.filter) qs.set("filter", params.filter);
+    if (params.limit) qs.set("limit", String(params.limit));
+    const query = qs.toString();
+    return fetchJson(pm(`/analyses${query ? `?${query}` : ""}`));
+  },
   getAnalysis: (ticketId) => fetchJson(pm(`/analysis/${encodeURIComponent(ticketId)}`)),
   analyze: (ticketId, body = {}) =>
     fetchJson(pm(`/analyze/${encodeURIComponent(ticketId)}`), {
@@ -129,7 +135,7 @@ const restPmAdapter = {
 };
 
 const mockPmAdapter = {
-  listAnalyses: () => mockApi.listPmAnalyses(),
+  listAnalyses: (params = {}) => mockApi.listPmAnalyses(params),
   getAnalysis: (ticketId) => mockApi.getPmAnalysis(ticketId),
   analyze: (ticketId, body) => mockApi.analyzePmTicket(ticketId, body),
   answer: () => Promise.resolve({ status: "RUNNING" }),
@@ -171,8 +177,8 @@ export const PM_STAGE_ORDER = [
   "HANDOFF",
 ];
 
-export function listPmAnalyses() {
-  return adapter.listAnalyses();
+export function listPmAnalyses(params) {
+  return adapter.listAnalyses(params);
 }
 
 export function getPmAnalysis(ticketId) {
@@ -231,9 +237,24 @@ export function startPmCodingPipeline(ticketId) {
 }
 
 export function usePmAnalyses(options = {}) {
-  return useResource(() => listPmAnalyses(), [], {
+  const filter = options.filter ?? "all";
+  const limit = options.limit ?? 100;
+  return useResource(() => listPmAnalyses({ filter, limit }), [filter, limit], {
     pollMs: options.pollMs ?? 8000,
   });
+}
+
+export const HANDOFF_STATUS_LABELS = {
+  not_started: "Awaiting",
+  pending: "Pending",
+  enqueued: "Queued",
+  running: "Coding",
+  completed: "Done",
+  failed: "Failed",
+};
+
+export function handoffStatusLabel(status) {
+  return HANDOFF_STATUS_LABELS[status] ?? status ?? "Awaiting";
 }
 
 export function usePmAnalysis(ticketId, options = {}) {

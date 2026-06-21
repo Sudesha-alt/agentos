@@ -187,6 +187,21 @@ export interface PmStageMeta {
   error?: string;
 }
 
+export type EngineeringHandoffStatus =
+  | "not_started"
+  | "pending"
+  | "enqueued"
+  | "running"
+  | "completed"
+  | "failed";
+
+export interface EngineeringHandoff {
+  status: EngineeringHandoffStatus;
+  pipelineId?: string;
+  attemptedAt?: string;
+  message?: string;
+}
+
 export interface PmAnalysisRecord {
   id: string;
   jiraKey: string;
@@ -228,6 +243,7 @@ export interface PmAnalysisRecord {
   completedAt?: string;
   updatedAt: string;
   organizationId?: string;
+  engineeringHandoff?: EngineeringHandoff;
 }
 
 export interface RetrospectiveInput {

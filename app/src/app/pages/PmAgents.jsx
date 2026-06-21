@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useCompanyProfile } from "../../entities/company-intelligence";
 import { AGENT_NAMES } from "../../shared/config/app";
@@ -19,6 +19,9 @@ import {
 import { useJiraSyncIssues } from "../../entities/jira-sync";
 import { usePipelineIntakeTickets } from "../../entities/pipeline-jira";
 import { VirinWorkspace } from "../../widgets/pm-analysis/VirinWorkspace";
+import VirinWorkspaceTabs from "../../widgets/pm-analysis/VirinWorkspaceTabs";
+import VirinAwaitingAnantaPanel from "../../widgets/pm-analysis/VirinAwaitingAnantaPanel";
+import VirinPrdLibraryPanel from "../../widgets/pm-analysis/VirinPrdLibraryPanel";
 import { AgentPageWithChat } from "../../widgets/agent-chat/AgentPageWithChat";
 import { AgentPageHeader } from "../../widgets/agent-chat/AgentPageHeader";
 import VirinPipelineLivePanel from "../../widgets/pm-analysis/VirinPipelineLivePanel";
@@ -37,8 +40,26 @@ export default function PmAgents() {
   const [exportBusy, setExportBusy] = useState(false);
   const [error, setError] = useState(null);
 
+  const [activeTab, setActiveTab] = useState("active");
+
   const { data: companyProfile } = useCompanyProfile();
-  const { data: listData, refetch: refetchList } = usePmAnalyses();
+  const { data: listData, refetch: refetchList } = usePmAnalyses({ pollMs: 8000 });
+  const { data: awaitingData, refetch: refetchAwaiting } = usePmAnalyses({
+    filter: "awaiting_ananta",
+    pollMs: 12_000,
+  });
+  const { data: prdLibraryData, refetch: refetchPrdLibrary } = usePmAnalyses({
+    filter: "has_prd",
+    pollMs: 12_000,
+  });
+
+  const tabCounts = useMemo(
+    () => ({
+      awaitingAnanta: awaitingData?.items?.length ?? 0,
+      prdLibrary: prdLibraryData?.items?.length ?? 0,
+    }),
+    [awaitingData?.items, prdLibraryData?.items]
+  );
   const companyConfigured =
     Boolean(companyProfile?.businessContext?.trim()) ||
     Boolean(companyProfile?.companyName?.trim() && companyProfile?.revenueModel?.trim());
@@ -78,6 +99,9 @@ export default function PmAgents() {
     if (analysis?.status === "COMPLETED" || analysis?.status === "FAILED") {
       setAnalyzing(false);
     }
+    if (analysis?.status === "COMPLETED") {
+      refetchCatalogs();
+    }
   }, [analysis?.status]);
 
   async function handleAnalyze() {
@@ -89,7 +113,7 @@ export default function PmAgents() {
     try {
       await analyzePmTicket(key);
       await refetchAnalysis();
-      await refetchList();
+      await refetchCatalogs();
     } catch (err) {
       setError(err.message ?? "Analysis failed");
       setAnalyzing(false);
@@ -109,7 +133,7 @@ export default function PmAgents() {
     try {
       await resumePmAnalysis(key, { resumeFrom });
       await refetchAnalysis();
-      await refetchList();
+      await refetchCatalogs();
     } catch (err) {
       setError(err.message ?? "Resume failed");
       setAnalyzing(false);
@@ -179,6 +203,13 @@ export default function PmAgents() {
   function selectFromList(key) {
     setActiveKey(key);
     setTicketInput(key);
+    setActiveTab("active");
+  }
+
+  function refetchCatalogs() {
+    void refetchList();
+    void refetchAwaiting();
+    void refetchPrdLibrary();
   }
 
   return (
@@ -197,6 +228,31 @@ export default function PmAgents() {
         </Panel>
       )}
 
+      <VirinWorkspaceTabs
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        counts={tabCounts}
+      />
+
+      {activeTab === "awaiting_ananta" ? (
+        <VirinAwaitingAnantaPanel
+          items={awaitingData?.items ?? []}
+          loading={!awaitingData && activeTab === "awaiting_ananta"}
+          onOpenTicket={selectFromList}
+          onHandoffComplete={refetchCatalogs}
+        />
+      ) : null}
+
+      {activeTab === "prd_library" ? (
+        <VirinPrdLibraryPanel
+          items={prdLibraryData?.items ?? []}
+          loading={!prdLibraryData && activeTab === "prd_library"}
+          onOpenTicket={selectFromList}
+        />
+      ) : null}
+
+      {activeTab === "active" ? (
+        <>
       {/* Ticket launcher */}
       <Panel>
         <PanelHeader
@@ -330,6 +386,8 @@ export default function PmAgents() {
           </ol>
         </div>
       )}
+        </>
+      ) : null}
       </AgentPageWithChat>
     </AnimatedAppPage>
   );

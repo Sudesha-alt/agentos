@@ -1,6 +1,5 @@
 import { Router, type Request } from "express";
 import { getTechAgentHandoff } from "../../agents/pm/handoff";
-import { buildPmPipelineContext } from "../../agents/pm/pmPipelineContext";
 import {
   confirmVirinSolution,
   getPmResumeStage,
@@ -10,17 +9,16 @@ import {
   submitVirinAnswer,
   estimateAnalysisCost,
 } from "../../agents/pm/orchestrator";
-import { mirrorPmArtifactsToPipeline, buildProductPackageExport } from "../../pipeline/artifacts";
-import { enqueueIntakeFromJiraKey } from "../../pipeline/jira/intakeEnqueueService";
+import { buildProductPackageExport } from "../../pipeline/artifacts";
 import { prepareTechAgentHandoff } from "../../agents/tech/orchestrator";
 import { pmAnalysisStore } from "../../agents/pm/store";
-import { ticketRepo } from "../../db/repositories/ticketRepo";
-import { prisma } from "../../db/client";
-import { activeOrganizationFilter } from "../../organization/orgScope";
+import { buildPmAnalysisListItems, buildPrdSummary } from "../../agents/pm/pmAnalysisCatalog";
+import { startEngineeringHandoff } from "../../agents/pm/startEngineeringHandoff";
+import type { PmAnalysisListFilter } from "../../agents/pm/handoffStatus";
 import type { PmStageId, PmTicketInput, RetrospectiveInput } from "../../agents/pm/types";
 import { getPipelineQueueState } from "../../queue/inProcessRunner";
 import { resolveUserFromAuthHeader } from "./authSession";
-import { withOrganizationContext } from "../orgRequestContext";
+import { requireOrganizationUser, withOrganizationContext } from "../orgRequestContext";
 import { NotFoundError, ValidationError } from "../../utils/errors";
 
 import {
@@ -47,32 +45,50 @@ router.get("/analysis/:ticketId/export", (req, res, next) => {
   }
 });
 
-router.get("/analyses", (_req, res) => {
-  const items = pmAnalysisStore.list(50).map((r) => ({
-    id: r.id,
-    jiraKey: r.jiraKey,
-    status: r.status,
-    currentStage: r.currentStage,
-    summary: r.ticketInput.summary,
-    agent: r.agentName ?? "Virin",
-    ticketType: r.neelIntake?.ticketType ?? r.classification?.type ?? null,
-    recommendation: r.prioritization?.recommendation ?? r.solutioning?.recommendedApproach?.slice(0, 80) ?? null,
-    severity: r.classification?.severity ?? null,
-    awaiting: r.status === "AWAITING_INPUT" || r.status === "AWAITING_CONFIRMATION",
-    startedAt: r.startedAt,
-    completedAt: r.completedAt ?? null,
-    costUsd: estimateAnalysisCost(r),
-  }));
-  res.json({ items });
+router.get("/analyses", async (req, res, next) => {
+  try {
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
+
+    await withOrganizationContext(user.organizationId, async () => {
+      const filter = (req.query.filter as PmAnalysisListFilter | undefined) ?? "all";
+      const limit = Math.min(Number(req.query.limit) || 100, 200);
+      const items = await buildPmAnalysisListItems(user.organizationId!, { limit, filter });
+      res.json({ items });
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
-router.get("/analysis/:ticketId", (req, res, next) => {
+router.get("/prds/:ticketId/summary", async (req, res, next) => {
   try {
-    const record = pmAnalysisStore.get(req.params.ticketId);
-    if (!record) throw new NotFoundError("PM analysis not found");
-    res.json({
-      ...record,
-      costUsd: estimateAnalysisCost(record),
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
+
+    await withOrganizationContext(user.organizationId, async () => {
+      const jiraKey = req.params.ticketId.trim().toUpperCase();
+      const summary = await buildPrdSummary(user.organizationId!, jiraKey);
+      if (!summary) throw new NotFoundError("PRD not found for this ticket");
+      res.json(summary);
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/analysis/:ticketId", async (req, res, next) => {
+  try {
+    const user = requireOrganizationUser(req, res);
+    if (!user?.organizationId) return;
+
+    await withOrganizationContext(user.organizationId, async () => {
+      const record = pmAnalysisStore.get(req.params.ticketId);
+      if (!record) throw new NotFoundError("PM analysis not found");
+      res.json({
+        ...record,
+        costUsd: estimateAnalysisCost(record),
+      });
     });
   } catch (err) {
     next(err);
@@ -278,43 +294,26 @@ router.post("/handoff/:ticketId/start-pipeline", async (req, res, next) => {
           ? await prepareTechAgentHandoff(jiraKey)
           : null;
 
-      const pmContext =
-        record?.generatedPrd && record.status === "COMPLETED"
-          ? buildPmPipelineContext(record)
-          : undefined;
-
-      const intake = await enqueueIntakeFromJiraKey(jiraKey, undefined, pmContext);
-
-      let pipelineId: string | null = null;
-      const ticket = await ticketRepo.findByJiraKey(jiraKey);
-      if (ticket) {
-        const pipeline = await prisma.pipeline.findFirst({
-          where: { ticketId: ticket.id, ...activeOrganizationFilter() },
-          orderBy: { startedAt: "desc" },
-        });
-        pipelineId = pipeline?.id ?? null;
-      }
+      const result = await startEngineeringHandoff(jiraKey, user.organizationId!);
 
       res.status(202).json({
         jiraKey,
-        pipelineId,
-        status: "started",
-        message:
-          intake.enqueued > 0
-            ? pmContext
-              ? "Coding pipeline enqueued with PM PRD (discovery skipped)"
-              : handoff
-                ? "Coding pipeline enqueued from PM handoff"
-                : "Coding pipeline enqueued from Jira ticket (PM handoff unavailable — re-run analysis to attach PM context)"
-            : "Ticket already active or queued — check pipeline queue",
-        pmContextAttached: Boolean(pmContext),
+        pipelineId: result.pipelineId,
+        status: result.started ? "started" : result.enqueued > 0 ? "queued" : "skipped",
+        message: result.message,
+        pmContextAttached: Boolean(record?.generatedPrd),
+        engineeringHandoff: pmAnalysisStore.get(jiraKey)?.engineeringHandoff ?? null,
         handoff: handoff
           ? {
               recommendation: handoff.handoff.recommendation,
               suggestedFirstFile: handoff.handoff.suggestedFirstFile,
             }
           : null,
-        intake,
+        intake: {
+          enqueued: result.enqueued,
+          skipped: result.skipped,
+          started: result.started,
+        },
         queue: await getPipelineQueueState(user.organizationId!),
       });
     });

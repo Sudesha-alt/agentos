@@ -1,15 +1,13 @@
-import { buildPmPipelineContext } from "./pmPipelineContext";
+import { patchEngineeringHandoff } from "./handoffStatus";
 import { pmAnalysisStore } from "./store";
-import type { PmAnalysisRecord } from "./types";
-import { enqueueIntakeFromJiraKey } from "../../pipeline/jira/intakeEnqueueService";
-import { withOrganizationContext } from "../../api/orgRequestContext";
+import { startEngineeringHandoff } from "./startEngineeringHandoff";
 import { prisma } from "../../db/client";
 import { getActiveOrganizationId } from "../../organization/context";
 import { logger } from "../../utils/logger";
 
 async function resolveOrganizationIdForHandoff(
   jiraKey: string,
-  record: PmAnalysisRecord
+  record: NonNullable<ReturnType<typeof pmAnalysisStore.get>>
 ): Promise<string | null> {
   const key = jiraKey.trim().toUpperCase();
   if (record.organizationId?.trim()) return record.organizationId;
@@ -50,32 +48,16 @@ export async function autoStartEngineeringFromVirin(jiraKey: string): Promise<vo
 
   const orgId = await resolveOrganizationIdForHandoff(key, record);
   if (!orgId) {
+    patchEngineeringHandoff(key, {
+      status: "failed",
+      message: "Auto handoff failed — no organization context",
+    });
     logger.error({ jiraKey: key }, "auto engineering start failed — no organization context");
     return;
   }
 
-  if (!record.organizationId) {
-    pmAnalysisStore.update(key, { organizationId: orgId });
-  }
-
   try {
-    const pmContext = buildPmPipelineContext(record);
-    const intake = await withOrganizationContext(orgId, () =>
-      enqueueIntakeFromJiraKey(key, undefined, pmContext, "manual")
-    );
-
-    if (intake.enqueued === 0) {
-      logger.warn(
-        { jiraKey: key, skipped: intake.skipped, orgId },
-        "engineering pipeline handoff produced no enqueue — check intake diagnostics"
-      );
-      return;
-    }
-
-    logger.info(
-      { jiraKey: key, enqueued: intake.enqueued, started: intake.started, orgId },
-      "engineering pipeline auto-started after Virin handoff"
-    );
+    await startEngineeringHandoff(key, orgId);
   } catch (err) {
     logger.error({ err, jiraKey: key, orgId }, "auto engineering start failed after Virin handoff");
   }

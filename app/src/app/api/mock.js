@@ -2348,10 +2348,26 @@ export const mockApi = {
       message: `Jira ${body.mode ?? "full"} sync started (mock)`,
     };
   },
-  async listPmAnalyses() {
+  async listPmAnalyses(params = {}) {
     markUsed();
     await delay(120);
-    return { items: MOCK_PM_ANALYSES_LIST };
+    let items = MOCK_PM_ANALYSES_LIST.map((item) => ({
+      ...item,
+      agent: "Virin",
+      ticketType: "feature",
+      awaiting: false,
+      hasPrd: true,
+      prdTitle: "Usage-based billing controls",
+      prdConfidence: 0.82,
+      engineeringHandoff: { status: "not_started" },
+      awaitingAnanta: item.status === "COMPLETED",
+    }));
+    if (params.filter === "awaiting_ananta") {
+      items = items.filter((i) => i.awaitingAnanta);
+    } else if (params.filter === "has_prd") {
+      items = items.filter((i) => i.hasPrd);
+    }
+    return { items };
   },
   async getPmAnalysis(ticketId) {
     markUsed();

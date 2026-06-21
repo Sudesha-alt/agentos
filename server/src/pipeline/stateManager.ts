@@ -2,6 +2,7 @@ import type { PipelineStage } from "../db/prisma";
 import { prisma } from "../db/client";
 import { auditRepo } from "../db/repositories/auditRepo";
 import { pipelineRepo } from "../db/repositories/pipelineRepo";
+import { syncEngineeringHandoffFromPipelineState } from "../agents/pm/handoffStatus";
 
 // Allowed forward transitions. Failures and human overrides can also move
 // the pipeline backwards or to terminal states — those are explicit calls.
@@ -41,6 +42,9 @@ export const stateManager = {
       from: pipeline.currentStage,
       to: nextStage,
     });
+    if (nextStage === "ENGINEERING_AGENT") {
+      void syncEngineeringHandoffFromPipelineState(pipelineId).catch(() => undefined);
+    }
   },
 
   async pauseForHuman(
@@ -65,10 +69,12 @@ export const stateManager = {
       data: { currentStage: stage, status: "FAILED", completedAt: new Date() },
     });
     await auditRepo.log(pipelineId, "PIPELINE_FAILED", { stage, error });
+    void syncEngineeringHandoffFromPipelineState(pipelineId).catch(() => undefined);
   },
 
   async complete(pipelineId: string): Promise<void> {
     await pipelineRepo.complete(pipelineId, "COMPLETED");
     await auditRepo.log(pipelineId, "PIPELINE_COMPLETED", {});
+    void syncEngineeringHandoffFromPipelineState(pipelineId).catch(() => undefined);
   },
 };

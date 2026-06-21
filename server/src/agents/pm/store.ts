@@ -133,6 +133,16 @@ export const pmAnalysisStore = {
     return getFromCache(jiraKey);
   },
 
+  /** Merge a Postgres row into the in-memory cache (no-op if newer cache entry exists). */
+  hydrate(record: PmAnalysisRecord): PmAnalysisRecord {
+    const existing = getFromCache(record.jiraKey, record.organizationId);
+    if (existing && existing.updatedAt >= record.updatedAt) {
+      return existing;
+    }
+    persistRecord(record);
+    return getFromCache(record.jiraKey, record.organizationId) ?? record;
+  },
+
   list(limit = 50): PmAnalysisRecord[] {
     const orgId = getActiveOrganizationId();
     const byId = new Map<string, PmAnalysisRecord>();
