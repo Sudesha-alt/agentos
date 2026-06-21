@@ -23,6 +23,7 @@ import Spinner from "../components/Spinner";
 import PipelineQueuePanel from "../../widgets/pipeline-queue/PipelineQueuePanel";
 import JiraSyncStatusPanel from "../../widgets/jira-sync/JiraSyncStatusPanel";
 import JiraTicketBrowser from "../../widgets/jira-sync/JiraTicketBrowser";
+import JiraVectorIndexStatus from "../../widgets/jira-sync/JiraVectorIndexStatus";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import { SettingsPageShell } from "../layout/SettingsPageShell";
 import { useOrg } from "../../shared/providers/OrgRouteProvider";
@@ -105,6 +106,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   );
   const [referencePending, setReferencePending] = useState(false);
   const [referenceSyncPending, setReferenceSyncPending] = useState(false);
+  const [lastIndexResult, setLastIndexResult] = useState(null);
   const [connectPending, setConnectPending] = useState(false);
   const [oauthPending, setOauthPending] = useState(false);
   const [disconnectPending, setDisconnectPending] = useState(false);
@@ -338,6 +340,16 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
 
   const intakeStatuses = setup?.intake?.aiWorkerStatuses ?? [];
   const referenceStatuses = setup?.intake?.referenceStatuses ?? [];
+  const jiraSyncStats = setup?.sync?.stats ?? null;
+  const jiraSyncRunning = Boolean(setup?.sync?.running);
+
+  useEffect(() => {
+    if (!referenceSyncPending) return undefined;
+    const id = window.setInterval(() => {
+      void refetchSetup();
+    }, 3000);
+    return () => window.clearInterval(id);
+  }, [referenceSyncPending, refetchSetup]);
   const referenceColumnOptions = useMemo(
     () => columnOptions.filter((name) => name !== intakeColumn),
     [columnOptions, intakeColumn]
@@ -449,6 +461,13 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
       });
       const embedded = result?.sync?.embedded ?? 0;
       const synced = result?.sync?.synced ?? 0;
+      setLastIndexResult({
+        embedded,
+        synced,
+        skipped: result?.sync?.skipped ?? 0,
+        errors: result?.sync?.errors ?? 0,
+        completedAt: new Date().toISOString(),
+      });
       setStatusMessage(
         synced > 0
           ? `Reference columns saved — synced ${synced} ticket(s), embedded ${embedded} new/changed.`
@@ -471,17 +490,29 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
   async function handleIndexJiraVectors() {
     setReferenceSyncPending(true);
     setStatusMessage("");
+    setConnectError("");
     try {
       const result = await syncPipelineReferenceColumns();
       const embedded = result?.sync?.embedded ?? 0;
       const synced = result?.sync?.synced ?? 0;
       const skipped = result?.sync?.skipped ?? 0;
+      const errors = result?.sync?.errors ?? 0;
+      setLastIndexResult({
+        embedded,
+        synced,
+        skipped,
+        errors,
+        completedAt: new Date().toISOString(),
+      });
       setStatusMessage(
-        `Jira vector index complete — ${synced} ticket(s) synced, ${embedded} embedded, ${skipped} unchanged.`
+        errors > 0
+          ? `Jira vector index finished with ${errors} error(s) — ${synced} synced, ${embedded} embedded, ${skipped} unchanged.`
+          : `Jira vector index complete — ${synced} ticket(s) synced, ${embedded} embedded, ${skipped} unchanged.`
       );
       await refetchSetup();
     } catch (err) {
       setConnectError(err.message || "Could not index Jira vectors");
+      setLastIndexResult(null);
     } finally {
       setReferenceSyncPending(false);
     }
@@ -898,50 +929,6 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
       {connected ? (
         <Panel>
           <PanelHeader
-            title="Jira vector index (RAG)"
-            subtitle="Embeds ticket summaries and descriptions into Supabase pgvector for semantic search. Only reference + AI Worker statuses are vectorized — not the whole backlog."
-          />
-          <div className="space-y-4 p-4 sm:px-6">
-            <p className="text-[13px] leading-relaxed text-app-ink-dim">
-              <strong className="text-app-ink">Where to configure:</strong> pick reference columns
-              below (Done, Resolved, …), save, then use{" "}
-              <strong className="text-app-ink">Index Jira vectors</strong>. New or updated tickets
-              only — already-embedded tickets are skipped. Requires{" "}
-              <code className="font-mono text-[12px]">OPENAI_API_KEY</code> on the server.
-            </p>
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                disabled={
-                  referenceSyncPending ||
-                  !referenceStatuses.length ||
-                  !pipelineReady
-                }
-                onClick={handleIndexJiraVectors}
-                className="app-btn-primary disabled:opacity-50"
-              >
-                {referenceSyncPending ? "Indexing…" : "Index Jira vectors"}
-              </button>
-              {!referenceStatuses.length ? (
-                <p className="text-xs text-app-ink-mute">
-                  Save reference columns first to enable indexing.
-                </p>
-              ) : (
-                <p className="text-xs text-app-ink-dim">
-                  Statuses: {referenceStatuses.join(", ")}
-                  {intakeStatuses.length
-                    ? ` · AI Worker: ${intakeStatuses.join(", ")}`
-                    : ""}
-                </p>
-              )}
-            </div>
-          </div>
-        </Panel>
-      ) : null}
-
-      {connected ? (
-        <Panel>
-          <PanelHeader
             title="Reference columns (context only)"
             subtitle="Done, Resolved, and similar columns — synced to Postgres and vector DB for RAG. Never start the agent pipeline."
           />
@@ -951,7 +938,7 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
                 Load board columns above, then select which columns hold completed work for context.
               </p>
             ) : (
-              <ul className="grid gap-2 sm:grid-cols-2">
+              <ul className="grid gap-2">
                 {referenceColumnOptions.map((name) => (
                   <li key={name}>
                     <label className="flex cursor-pointer items-center gap-2 rounded-app-sm border border-app-border px-3 py-2 text-sm">
@@ -981,6 +968,67 @@ function JiraIntegrationContent({ setup, refetchSetup, embedded = false }) {
               ) : null}
             </div>
           </form>
+        </Panel>
+      ) : null}
+
+      {connected ? (
+        <Panel>
+          <PanelHeader
+            title="Jira vector index (RAG)"
+            subtitle="Embeds ticket summaries and descriptions into Supabase pgvector for semantic search. Only reference + AI Worker statuses are vectorized — not the whole backlog."
+            right={
+              <JiraVectorIndexStatus
+                compact
+                indexing={referenceSyncPending}
+                syncRunning={jiraSyncRunning}
+                referenceConfigured={referenceStatuses.length > 0}
+                stats={jiraSyncStats}
+                lastIndexResult={lastIndexResult}
+              />
+            }
+          />
+          <div className="space-y-4 p-4 sm:px-6">
+            <JiraVectorIndexStatus
+              indexing={referenceSyncPending}
+              syncRunning={jiraSyncRunning}
+              referenceConfigured={referenceStatuses.length > 0}
+              stats={jiraSyncStats}
+              lastIndexResult={lastIndexResult}
+            />
+            <p className="text-[13px] leading-relaxed text-app-ink-dim">
+              <strong className="text-app-ink">Where to configure:</strong> pick reference columns
+              above (Done, Resolved, …), save, then use{" "}
+              <strong className="text-app-ink">Index Jira vectors</strong> below. New or updated
+              tickets only — already-embedded tickets are skipped. Requires{" "}
+              <code className="font-mono text-[12px]">OPENAI_API_KEY</code> on the server.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                disabled={
+                  referenceSyncPending ||
+                  !referenceStatuses.length ||
+                  !pipelineReady
+                }
+                onClick={handleIndexJiraVectors}
+                className="app-btn-primary disabled:opacity-50"
+              >
+                {referenceSyncPending ? "Indexing…" : "Index Jira vectors"}
+              </button>
+              {!referenceStatuses.length ? (
+                <p className="text-xs text-app-ink-mute">
+                  Save reference columns first to enable indexing.
+                </p>
+              ) : (
+                <p className="text-xs text-app-ink-dim">
+                  Statuses: {referenceStatuses.join(", ")}
+                  {intakeStatuses.length
+                    ? ` · AI Worker: ${intakeStatuses.join(", ")}`
+                    : ""}
+                </p>
+              )}
+            </div>
+          </div>
         </Panel>
       ) : null}
 

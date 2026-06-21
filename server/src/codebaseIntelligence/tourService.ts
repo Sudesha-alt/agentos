@@ -123,7 +123,8 @@ async function readCachedTour(branchName: string): Promise<CodebaseTour | null> 
 
   const row = await prismaAny.codebaseTourCache.findUnique({
     where: {
-      repoOwner_repoName_branchName: {
+      organizationId_repoOwner_repoName_branchName: {
+        organizationId: scope.organizationId,
         repoOwner: scope.repoOwner,
         repoName: scope.repoName,
         branchName,
@@ -149,13 +150,15 @@ async function writeCachedTour(branchName: string, tour: CodebaseTour): Promise<
 
   await prismaAny.codebaseTourCache.upsert({
     where: {
-      repoOwner_repoName_branchName: {
+      organizationId_repoOwner_repoName_branchName: {
+        organizationId: scope.organizationId,
         repoOwner: scope.repoOwner,
         repoName: scope.repoName,
         branchName,
       },
     },
     create: {
+      organizationId: scope.organizationId,
       repoOwner: scope.repoOwner,
       repoName: scope.repoName,
       branchName,

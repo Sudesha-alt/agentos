@@ -38,7 +38,8 @@ export const visualizationCache = {
 
     const row = await prismaAny.codebaseVisualizationCache.findUnique({
       where: {
-        repoOwner_repoName_branchName: {
+        organizationId_repoOwner_repoName_branchName: {
+          organizationId: scope.organizationId,
           repoOwner: scope.repoOwner,
           repoName: scope.repoName,
           branchName,
@@ -55,13 +56,15 @@ export const visualizationCache = {
 
     await prismaAny.codebaseVisualizationCache.upsert({
       where: {
-        repoOwner_repoName_branchName: {
+        organizationId_repoOwner_repoName_branchName: {
+          organizationId: scope.organizationId,
           repoOwner: scope.repoOwner,
           repoName: scope.repoName,
           branchName,
         },
       },
       create: {
+        organizationId: scope.organizationId,
         repoOwner: scope.repoOwner,
         repoName: scope.repoName,
         branchName,

@@ -94,7 +94,8 @@ async function readCachedKnowledge(branchName: string): Promise<CodebaseKnowledg
 
   const row = await prismaAny.codebaseKnowledgeCache.findUnique({
     where: {
-      repoOwner_repoName_branchName: {
+      organizationId_repoOwner_repoName_branchName: {
+        organizationId: scope.organizationId,
         repoOwner: scope.repoOwner,
         repoName: scope.repoName,
         branchName,
@@ -115,13 +116,15 @@ async function writeCachedKnowledge(
 
   await prismaAny.codebaseKnowledgeCache.upsert({
     where: {
-      repoOwner_repoName_branchName: {
+      organizationId_repoOwner_repoName_branchName: {
+        organizationId: scope.organizationId,
         repoOwner: scope.repoOwner,
         repoName: scope.repoName,
         branchName,
       },
     },
     create: {
+      organizationId: scope.organizationId,
       repoOwner: scope.repoOwner,
       repoName: scope.repoName,
       branchName,

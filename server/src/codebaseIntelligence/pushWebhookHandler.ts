@@ -1,4 +1,5 @@
 import { prisma } from "../db/client";
+import { getActiveOrganizationId } from "../organization/context";
 import { logger } from "../utils/logger";
 import { enqueueIncrementalIndexFromWebhook } from "./indexQueue";
 import { isTrackedDefaultBranch } from "./webhookIndexHelpers";
@@ -38,15 +39,23 @@ export async function enqueueCodebaseIndexFromPush(input: {
     prNumber,
   } = input;
 
+  const organizationId = getActiveOrganizationId();
+  if (!organizationId) {
+    logger.warn({ repoOwner, repoName, branchName }, "push webhook skipped — no organization context");
+    return;
+  }
+
   await prismaAny.branchState.upsert({
     where: {
-      repoOwner_repoName_branchName: {
+      organizationId_repoOwner_repoName_branchName: {
+        organizationId,
         repoOwner,
         repoName,
         branchName,
       },
     },
     create: {
+      organizationId,
       repoOwner,
       repoName,
       branchName,
@@ -68,13 +77,15 @@ export async function enqueueCodebaseIndexFromPush(input: {
   for (const commit of commits) {
     await prismaAny.commitHistory.upsert({
       where: {
-        repoOwner_repoName_sha: {
+        organizationId_repoOwner_repoName_sha: {
+          organizationId,
           repoOwner,
           repoName,
           sha: commit.sha,
         },
       },
       create: {
+        organizationId,
         repoOwner,
         repoName,
         branchName,

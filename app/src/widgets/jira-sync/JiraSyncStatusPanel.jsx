@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { runJiraSync, useJiraSyncStatus } from "../../entities/jira-sync";
+import LabelPill from "../../app/components/LabelPill";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import Spinner from "../../app/components/Spinner";
 import { formatRelativeTime } from "../../shared/lib/format";
@@ -16,6 +17,14 @@ export default function JiraSyncStatusPanel({ setupSync, connected = true }) {
   const stats = sync?.stats;
   const latestRun = sync?.latestRun;
   const running = sync?.running;
+  const syncTone = running ? "indigo" : latestRun?.status === "FAILED" ? "danger" : latestRun ? "success" : "muted";
+  const syncLabel = running
+    ? "Syncing…"
+    : latestRun?.status === "FAILED"
+      ? "Sync failed"
+      : latestRun?.status === "COMPLETED"
+        ? "Sync complete"
+        : "Not synced";
 
   async function handleSync(mode) {
     setSyncPending(true);
@@ -36,11 +45,7 @@ export default function JiraSyncStatusPanel({ setupSync, connected = true }) {
       <PanelHeader
         title="Ticket sync"
         subtitle="Stores tickets in Postgres. Vector embedding uses reference + AI Worker columns (Jira Integration → Index Jira vectors)."
-        right={
-          running ? (
-            <span className="font-mono text-[10px] uppercase text-indigo">Syncing…</span>
-          ) : null
-        }
+        right={<LabelPill label={syncLabel} tone={syncTone} />}
       />
       <div className="space-y-4 px-5 py-4 sm:px-6">
         {loading && !stats ? <Spinner label="Loading sync status" /> : null}
@@ -67,6 +72,18 @@ export default function JiraSyncStatusPanel({ setupSync, connected = true }) {
               }
             />
           </dl>
+        ) : null}
+
+        {latestRun?.status === "COMPLETED" && !running ? (
+          <p className="text-[13px] text-success">
+            Last sync finished {latestRun.completedAt ? formatRelativeTime(latestRun.completedAt) : "recently"}
+            {latestRun.issuesSynced != null ? ` — ${latestRun.issuesSynced} ticket(s) updated.` : "."}
+          </p>
+        ) : null}
+        {latestRun?.status === "FAILED" && !running ? (
+          <p className="text-[13px] text-danger">
+            Last sync failed{latestRun.errorMessage ? `: ${latestRun.errorMessage}` : "."} Try incremental or full sync again.
+          </p>
         ) : null}
 
         <div className="flex flex-wrap gap-3">
