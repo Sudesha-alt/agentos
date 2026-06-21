@@ -43,22 +43,28 @@ export default function PmAgents() {
   const [activeTab, setActiveTab] = useState("active");
 
   const { data: companyProfile } = useCompanyProfile();
-  const { data: listData, refetch: refetchList } = usePmAnalyses({ pollMs: 8000 });
-  const { data: awaitingData, refetch: refetchAwaiting } = usePmAnalyses({
-    filter: "awaiting_ananta",
-    pollMs: 12_000,
-  });
-  const { data: prdLibraryData, refetch: refetchPrdLibrary } = usePmAnalyses({
-    filter: "has_prd",
-    pollMs: 12_000,
-  });
+  const {
+    data: listData,
+    refetch: refetchList,
+    loading: listLoading,
+    error: listError,
+  } = usePmAnalyses({ pollMs: 8000 });
+
+  const awaitingItems = useMemo(
+    () => listData?.items?.filter((item) => item.awaitingAnanta) ?? [],
+    [listData?.items]
+  );
+  const prdLibraryItems = useMemo(
+    () => listData?.items?.filter((item) => item.hasPrd) ?? [],
+    [listData?.items]
+  );
 
   const tabCounts = useMemo(
     () => ({
-      awaitingAnanta: awaitingData?.items?.length ?? 0,
-      prdLibrary: prdLibraryData?.items?.length ?? 0,
+      awaitingAnanta: awaitingItems.length,
+      prdLibrary: prdLibraryItems.length,
     }),
-    [awaitingData?.items, prdLibraryData?.items]
+    [awaitingItems.length, prdLibraryItems.length]
   );
   const companyConfigured =
     Boolean(companyProfile?.businessContext?.trim()) ||
@@ -208,8 +214,6 @@ export default function PmAgents() {
 
   function refetchCatalogs() {
     void refetchList();
-    void refetchAwaiting();
-    void refetchPrdLibrary();
   }
 
   return (
@@ -234,10 +238,18 @@ export default function PmAgents() {
         counts={tabCounts}
       />
 
+      {listError && activeTab !== "active" ? (
+        <Panel className="border-danger/30 bg-danger/5">
+          <p className="px-5 py-4 text-[13px] text-danger sm:px-6">
+            {listError.message ?? "Failed to load Virin catalog"}
+          </p>
+        </Panel>
+      ) : null}
+
       {activeTab === "awaiting_ananta" ? (
         <VirinAwaitingAnantaPanel
-          items={awaitingData?.items ?? []}
-          loading={!awaitingData && activeTab === "awaiting_ananta"}
+          items={awaitingItems}
+          loading={listLoading && !listData}
           onOpenTicket={selectFromList}
           onHandoffComplete={refetchCatalogs}
         />
@@ -245,8 +257,8 @@ export default function PmAgents() {
 
       {activeTab === "prd_library" ? (
         <VirinPrdLibraryPanel
-          items={prdLibraryData?.items ?? []}
-          loading={!prdLibraryData && activeTab === "prd_library"}
+          items={prdLibraryItems}
+          loading={listLoading && !listData}
           onOpenTicket={selectFromList}
         />
       ) : null}
