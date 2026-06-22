@@ -16,9 +16,13 @@ const TABS = [
   {
     id: "active",
     label: "Active",
-    statuses: ["RUNNING", "QUEUED", "PAUSED"],
+    statuses: ["RUNNING", "QUEUED"],
   },
-  { id: "review", label: "Review queue", statuses: ["PAUSED"] },
+  {
+    id: "review",
+    label: "Review queue",
+    statuses: ["PAUSED", "AWAITING_HUMAN"],
+  },
   { id: "history", label: "History", statuses: ["COMPLETED", "FAILED"] },
 ];
 
@@ -80,7 +84,9 @@ export default function PipelineExplorerWidget() {
     return list;
   }, [items, activeTab, query]);
 
-  const reviewCount = items.filter((p) => p.status === "PAUSED").length;
+  const reviewCount = items.filter((p) =>
+    ["PAUSED", "AWAITING_HUMAN"].includes(p.status)
+  ).length;
 
   const detailPipelineId = useMemo(() => {
     if (selectedId) return resolveQueuedSelection(selectedId, items);

@@ -1,6 +1,7 @@
 import {
   PipelineDetailSchema,
   PipelineListResponseSchema,
+  ResumePipelineResponseSchema,
   RunPipelineResponseSchema,
 } from "../../contracts";
 import { apiPath } from "../../shared/config/apiBase";
@@ -46,10 +47,12 @@ const restPipelineAdapter = {
     return fetchJson(pipelines(`/pipelines/live${params}`), { headers: headers() });
   },
   async resume(pipelineId) {
-    return fetchJson(pipelines(`/${encodeURIComponent(pipelineId)}/resume`), {
-      method: "POST",
-      headers: headers(),
-    });
+    return ResumePipelineResponseSchema.parse(
+      await fetchJson(pipelines(`/pipelines/${encodeURIComponent(pipelineId)}/resume`), {
+        method: "POST",
+        headers: headers(),
+      })
+    );
   },
 };
 
@@ -70,7 +73,9 @@ const mockPipelineAdapter = {
     return mockApi.getPipelineLive?.(options) ?? { active: null, queue: {} };
   },
   async resume(pipelineId) {
-    return mockApi.resumePipeline?.(pipelineId) ?? { pipelineId, started: true };
+    return ResumePipelineResponseSchema.parse(
+      (await mockApi.resumePipeline?.(pipelineId)) ?? { pipelineId, started: true }
+    );
   },
 };
 

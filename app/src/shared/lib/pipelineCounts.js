@@ -1,9 +1,11 @@
 /** Derive pipeline tab counts from list summaries. */
 
 export function derivePipelineCounts(pipelines = []) {
-  const active = pipelines.filter((p) => p.status === "RUNNING").length;
-  const review = pipelines.filter((p) => p.status === "PAUSED").length;
-  const running = active;
+  const active = pipelines.filter((p) => ["RUNNING", "QUEUED"].includes(p.status)).length;
+  const review = pipelines.filter((p) =>
+    ["PAUSED", "AWAITING_HUMAN"].includes(p.status)
+  ).length;
+  const running = pipelines.filter((p) => p.status === "RUNNING").length;
   const completedToday = pipelines.filter((p) => {
     if (p.status !== "COMPLETED" || !p.completedAt) return false;
     const d = new Date(p.completedAt);
@@ -23,7 +25,7 @@ export function deriveReviewQueueItems(pipelines = [], orgPath = (...segments) =
   return tail ? `/app/${tail}` : "/app";
 }) {
   return pipelines
-    .filter((p) => p.status === "PAUSED")
+    .filter((p) => ["PAUSED", "AWAITING_HUMAN"].includes(p.status))
     .map((p) => {
       const stage = p.currentStage ?? "PRODUCT_AGENT";
       const isPrd = stage === "PRD_VALIDATION" || stage === "PRODUCT_AGENT";

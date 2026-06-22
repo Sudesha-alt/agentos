@@ -127,8 +127,31 @@ export const ReadinessResponseSchema = z.object({
 });
 
 export const RunPipelineResponseSchema = z.object({
-  jobId: z.union([z.string(), z.number()]),
-  ticketId: z.string(),
+  sourceKey: z.string().optional(),
+  enqueued: z.number().optional(),
+  skipped: z.number().optional(),
+  started: z.boolean(),
+  groups: z
+    .array(
+      z.object({
+        storyKey: z.string(),
+        taskKeys: z.array(z.string()),
+      })
+    )
+    .optional(),
+  /** Legacy mock / alternate shapes */
+  jobId: z.union([z.string(), z.number()]).optional(),
+  ticketId: z.string().optional(),
+  pipelineId: z.string().optional(),
+  queued: z.boolean().optional(),
+  message: z.string().optional(),
+});
+
+export const ResumePipelineResponseSchema = z.object({
+  pipelineId: z.string(),
+  started: z.boolean(),
+  queued: z.boolean().optional(),
+  position: z.number().optional(),
 });
 
 export const SubmitOverrideRequestSchema = z.object({

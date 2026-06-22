@@ -64,7 +64,7 @@ export default function PipelineCard({
         {typeof cost === "number" && cost > 0 ? (
           <span>{formatUsd(cost)}</span>
         ) : null}
-        {showAction && pipeline.status === "PAUSED" ? (
+        {showAction && ["PAUSED", "AWAITING_HUMAN"].includes(pipeline.status) ? (
           <span className="rounded-full border border-warning/40 bg-warning/10 px-2 py-0.5 text-warning">
             Review required
           </span>

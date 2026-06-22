@@ -2071,7 +2071,7 @@ export const mockApi = {
   async runPipeline(ticketId) {
     markUsed();
     await delay(140);
-    return { ticketId, started: true };
+    return { sourceKey: ticketId, enqueued: 1, skipped: 0, started: true, ticketId };
   },
   async getPipelineLive(options = {}) {
     markUsed();

@@ -123,6 +123,20 @@ router.post("/:ticketId/run", async (req, res, next) => {
     await withOrganizationContext(user.organizationId, async () => {
       const ticket = await ticketRepo.findById(req.params.ticketId);
       if (!ticket) throw new NotFoundError("Ticket not found");
+
+      const pausedPipeline = await prisma.pipeline.findFirst({
+        where: {
+          ticketId: ticket.id,
+          status: "PAUSED",
+        },
+        orderBy: { startedAt: "desc" },
+      });
+      if (pausedPipeline) {
+        throw new ValidationError(
+          "Pipeline is paused awaiting review — use Resume on the pipeline detail page instead of Re-run."
+        );
+      }
+
       if (
         (await isTicketInPipelineQueue(ticket.id)) ||
         (await isJiraKeyInPipelineQueue(ticket.jiraKey))

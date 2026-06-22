@@ -21,7 +21,27 @@ export default function PipelineDetail() {
   const { item, loading } = usePipelineDetail(id, { pollMs: 6000 });
   const { artifacts } = usePipelineArtifacts(id, { pollMs: 8000 });
   const { items: auditItems } = usePipelineAudit(id, { pollMs: 9000 });
-  const { run, pending: rerunning } = useRunPipeline();
+  const { run, resume, pending: rerunning, error: rerunError } = useRunPipeline();
+  const [actionMsg, setActionMsg] = useState(null);
+
+  const canResume =
+    item?.status === "PAUSED" || item?.status === "FAILED" || item?.status === "AWAITING_HUMAN";
+
+  async function handlePipelineAction() {
+    if (!item) return;
+    setActionMsg(null);
+    try {
+      if (canResume) {
+        await resume(item.id);
+        setActionMsg("Pipeline resumed — check Active tab for live progress.");
+      } else {
+        await run(item.ticketId);
+        setActionMsg("Pipeline re-run queued.");
+      }
+    } catch {
+      /* error surfaced via rerunError */
+    }
+  }
 
   const stages = useMemo(() => item?.stages ?? [], [item]);
   const [selectedStageId, setSelectedStageId] = useState(null);
@@ -110,15 +130,28 @@ export default function PipelineDetail() {
               </Link>
               <button
                 type="button"
-                onClick={() => run(item.ticketId)}
+                onClick={handlePipelineAction}
                 disabled={rerunning}
                 className="rounded-full border border-hairline bg-surface/40 px-4 py-2 text-[13px] text-ink-dim transition-colors hover:border-hairline-strong hover:text-ink disabled:opacity-50"
               >
-                {rerunning ? "Re-running…" : "Re-run"}
+                {rerunning
+                  ? canResume
+                    ? "Resuming…"
+                    : "Re-running…"
+                  : canResume
+                    ? "Resume pipeline"
+                    : "Re-run"}
               </button>
             </div>
           }
         />
+        {rerunError ? (
+          <p className="text-sm text-danger">
+            {rerunError instanceof Error ? rerunError.message : "Pipeline action failed"}
+          </p>
+        ) : actionMsg ? (
+          <p className="text-sm text-success">{actionMsg}</p>
+        ) : null}
       </header>
 
       {productPackage ? (

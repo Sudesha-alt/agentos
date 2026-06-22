@@ -477,7 +477,7 @@ async function buildDetail(
     failedStageLabel: failure.failedStage
       ? pipelineStageLabel(failure.failedStage)
       : null,
-    canResume: pipeline.status === "FAILED",
+    canResume: pipeline.status === "FAILED" || pipeline.status === "PAUSED",
     recentEvents: buildRecentEvents(logs),
     prNumber: branchPr?.prNumber ?? null,
     prUrl: branchPr?.prUrl ?? null,

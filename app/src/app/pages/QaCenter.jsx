@@ -14,6 +14,7 @@ import {
 } from "../../entities/canary";
 import { useEngineeringCodingEvents } from "../../entities/engineering-agent";
 import { useSettings } from "../../entities/settings";
+import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import { AppTabButton } from "../../shared/ui/AppChrome";
 import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
@@ -261,6 +262,7 @@ function formatWhen(iso) {
 }
 
 export default function QaCenter() {
+  const orgPath = useOrgPathBuilder();
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState("overview");
   const [triggering, setTriggering] = useState(false);
@@ -470,7 +472,7 @@ export default function QaCenter() {
                         ) : null}
                       </div>
                       <Link
-                        to={`/app/pipelines/${report.pipelineId}`}
+                        to={orgPath("pipelines", report.pipelineId)}
                         className="text-[13px] text-indigo hover:underline"
                         onClick={(e) => e.stopPropagation()}
                       >
