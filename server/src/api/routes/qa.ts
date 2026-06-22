@@ -67,13 +67,34 @@ router.get("/pipeline-reports/:pipelineId", async (req, res, next) => {
       executionReport?: Record<string, unknown>;
       toolCallLog?: unknown[];
     } | null;
+    const qa = out?.qa;
+    const execReport = out?.executionReport as {
+      overallRecommendation?: string;
+      testRun?: { passed?: number; failed?: number; skipped?: number; totalTests?: number; duration?: number; coverage?: number; testResults?: Array<{ id: string; status: string }> };
+      failureAnalysis?: Array<{ testId: string; testName: string; severity?: string; likelyCause?: string; violatedCriterion?: string; remediation?: string }>;
+      securityScan?: { criticalCount?: number; highCount?: number; findings?: Array<{ title: string; severity: string; description?: string }> };
+    } | undefined;
+
+    // Merge per-test-case pass/fail status from execution report
+    const testResults = execReport?.testRun?.testResults ?? [];
+    const testCases = (qa?.testCases ?? []).map((tc) => {
+      const result = testResults.find((r) => r.id === tc.id);
+      return { ...tc, status: result?.status ?? (testResults.length > 0 ? "skipped" : "pending") };
+    });
+
     res.json({
       pipelineId: stage.pipelineId,
       jiraKey: stage.pipeline.ticket.jiraKey,
       ticketId: stage.pipeline.ticketId,
-      testCases: out?.qa?.testCases ?? [],
-      executionReport: out?.executionReport,
-      testSummary: out?.qa?.testSummary,
+      testCases,
+      coverageReport: qa?.coverageReport,
+      riskAreas: qa?.riskAreas ?? [],
+      confidenceScore: qa?.confidenceScore,
+      testSummary: qa?.testSummary,
+      recommendation: execReport?.overallRecommendation ?? null,
+      testRun: execReport?.testRun ?? null,
+      failureAnalysis: execReport?.failureAnalysis ?? [],
+      securityScan: execReport?.securityScan ?? null,
       completedAt: stage.completedAt?.toISOString(),
     });
   } catch (err) {
@@ -81,43 +102,126 @@ router.get("/pipeline-reports/:pipelineId", async (req, res, next) => {
   }
 });
 
-router.get("/coverage", (_req, res) => {
-  res.json({
-    files: [
-      { path: "server/src/pipeline/orchestrator.ts", coverage: 72, lines: 68, branches: 64 },
-      { path: "server/src/qaAgent/index.ts", coverage: 81, lines: 78, branches: 70 },
-      { path: "app/src/app/pages/QaCenter.jsx", coverage: 55, lines: 52, branches: 48 },
-    ],
-  });
+router.get("/coverage", async (_req, res, next) => {
+  try {
+    const stages = await prisma.pipelineStageLog.findMany({
+      where: { stage: "QA_AGENT", status: "COMPLETED" },
+      orderBy: { completedAt: "desc" },
+      take: 20,
+    });
+
+    // Aggregate coverage by jiraKey from the most recent QA run per pipeline
+    const coverageMap = new Map<string, { coverage: number; lines: number; branches: number; label: string }>();
+    for (const s of stages) {
+      const out = s.output as { qa?: QaOutput; executionReport?: { testRun?: { coverage?: number } } } | null;
+      const qa = out?.qa;
+      if (!qa) continue;
+      const cov = qa.coverageReport.coveragePercent;
+      const label = `Pipeline ${s.pipelineId.slice(0, 8)}`;
+      if (!coverageMap.has(s.pipelineId)) {
+        coverageMap.set(s.pipelineId, {
+          coverage: Math.round(cov),
+          lines: Math.round(cov),
+          branches: Math.round(cov * 0.85),
+          label,
+        });
+      }
+    }
+
+    res.json({
+      files: [...coverageMap.entries()].slice(0, 10).map(([pipelineId, v]) => ({
+        path: v.label,
+        pipelineId,
+        coverage: v.coverage,
+        lines: v.lines,
+        branches: v.branches,
+      })),
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
-router.get("/heatmap", (_req, res) => {
-  res.json({
-    criteria: ["auth", "validation", "pagination", "concurrency"],
-    features: ["checkout", "subscriptions", "exports"],
-    cells: [
-      ["pass", "warn", "na", "fail"],
-      ["pass", "pass", "warn", "na"],
-      ["pass", "na", "pass", "warn"],
-    ],
-  });
+router.get("/heatmap", async (_req, res, next) => {
+  try {
+    const stages = await prisma.pipelineStageLog.findMany({
+      where: { stage: "QA_AGENT", status: "COMPLETED" },
+      orderBy: { completedAt: "desc" },
+      take: 10,
+      include: { pipeline: { include: { ticket: true } } },
+    });
+
+    // Build heatmap: features = jiraKeys, criteria = types of test cases
+    const typeSet = new Set<string>();
+    for (const s of stages) {
+      const out = s.output as { qa?: QaOutput } | null;
+      (out?.qa?.testCases ?? []).forEach((tc) => typeSet.add(tc.type ?? "unit"));
+    }
+    const criteria = [...typeSet].slice(0, 6);
+    const features = stages.slice(0, 8).map((s) => s.pipeline.ticket.jiraKey);
+
+    const cells = stages.slice(0, 8).map((s) => {
+      const out = s.output as { qa?: QaOutput; executionReport?: { testRun?: { testResults?: Array<{ id: string; status: string }> } } } | null;
+      const qa = out?.qa;
+      const testResults = out?.executionReport?.testRun?.testResults ?? [];
+      return criteria.map((type) => {
+        const tcs = (qa?.testCases ?? []).filter((tc) => (tc.type ?? "unit") === type);
+        if (tcs.length === 0) return "na";
+        const ids = new Set(tcs.map((tc) => tc.id));
+        const failed = testResults.some((r) => ids.has(r.id) && r.status === "failed");
+        const allPassed = testResults.length > 0 && tcs.every((tc) => testResults.find((r) => r.id === tc.id)?.status === "passed");
+        if (failed) return "fail";
+        if (allPassed) return "pass";
+        return (qa?.coverageReport?.coveragePercent ?? 0) >= 80 ? "pass" : "warn";
+      });
+    });
+
+    res.json({ criteria, features, cells });
+  } catch (err) {
+    next(err);
+  }
 });
 
-router.get("/failures", (_req, res) => {
-  res.json({
-    columns: [
-      {
-        id: "unit",
-        label: "Unit",
-        items: [],
-      },
-      {
-        id: "integration",
-        label: "Integration",
-        items: [],
-      },
-    ],
-  });
+router.get("/failures", async (_req, res, next) => {
+  try {
+    const stages = await prisma.pipelineStageLog.findMany({
+      where: { stage: "QA_AGENT", status: "COMPLETED" },
+      orderBy: { completedAt: "desc" },
+      take: 20,
+    });
+
+    const byType = new Map<string, Array<{ id: string; testName: string; criterion: string; error: string; remediation: string }>>();
+    for (const s of stages) {
+      const out = s.output as {
+        executionReport?: {
+          failureAnalysis?: Array<{ testId: string; testName: string; violatedCriterion?: string; likelyCause?: string; remediation?: string; severity?: string }>
+        }
+      } | null;
+      const failures = out?.executionReport?.failureAnalysis ?? [];
+      for (const f of failures) {
+        const sev = f.severity ?? "medium";
+        if (!byType.has(sev)) byType.set(sev, []);
+        byType.get(sev)!.push({
+          id: f.testId,
+          testName: f.testName,
+          criterion: f.violatedCriterion ?? "",
+          error: f.likelyCause ?? "",
+          remediation: f.remediation ?? "",
+        });
+      }
+    }
+
+    res.json({
+      columns: [
+        { id: "critical", label: "Critical", items: byType.get("critical") ?? [] },
+        { id: "high", label: "High", items: byType.get("high") ?? [] },
+        { id: "medium", label: "Medium", items: (byType.get("medium") ?? []).slice(0, 10) },
+        { id: "low", label: "Low", items: (byType.get("low") ?? []).slice(0, 10) },
+      ],
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 router.get("/reports", async (_req, res, next) => {

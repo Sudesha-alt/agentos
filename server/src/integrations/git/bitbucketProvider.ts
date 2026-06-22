@@ -135,6 +135,10 @@ export function createBitbucketProvider(
       throw new Error("pushFilesToBranch is not supported for Bitbucket — use GitHub.");
     },
 
+    async updatePullRequest() {
+      throw new Error("updatePullRequest is not supported for Bitbucket — use GitHub.");
+    },
+
     async createPullRequest() {
       throw new Error("createPullRequest is not supported for Bitbucket — use GitHub.");
     },

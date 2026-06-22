@@ -21,6 +21,42 @@ function stringValue(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
 
+/** Build a short human-readable label for a tool call that is shown in the live UI. */
+function buildDisplayLabel(toolName: string, input: Record<string, unknown>): string {
+  const filePath = typeof input.file_path === "string" ? input.file_path : "";
+  const fileName = filePath ? filePath.split("/").pop() ?? filePath : "";
+  switch (toolName) {
+    case "read_file":
+    case "read_source_file":
+      return filePath ? `Reading ${fileName}` : "Reading file";
+    case "write_file":
+    case "write_source_file":
+      return filePath ? `Writing ${fileName}` : "Writing file";
+    case "edit_file":
+      return filePath ? `Editing ${fileName}` : "Editing file";
+    case "delete_file":
+      return filePath ? `Deleting ${fileName}` : "Deleting file";
+    case "list_dir": {
+      const dir = typeof input.dir_path === "string" ? input.dir_path : ".";
+      return `Listing ${dir}`;
+    }
+    case "grep": {
+      const pattern = typeof input.pattern === "string" ? input.pattern.slice(0, 40) : "";
+      return `Grepping for "${pattern}"`;
+    }
+    case "search_codebase": {
+      const query = typeof input.query === "string" ? input.query.slice(0, 50) : "";
+      return `Searching codebase: "${query}"`;
+    }
+    case "run_command": {
+      const cmd = typeof input.command === "string" ? input.command.slice(0, 60) : "command";
+      return `Running: ${cmd}`;
+    }
+    default:
+      return toolName.replace(/_/g, " ");
+  }
+}
+
 function arrayOfStrings(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is string => typeof item === "string");
@@ -48,10 +84,12 @@ export async function executeEngineeringCodingToolCall(
     input: toolCall.input,
   });
 
+  const displayLabel = buildDisplayLabel(toolCall.name, toolCall.input as Record<string, unknown>);
   emitEngineeringCodingEvent({
     type: "tool_started",
     pipelineId,
     tool: toolCall.name,
+    displayLabel,
     input: toolCall.input as Record<string, unknown>,
     timestamp: new Date().toISOString(),
   });
@@ -301,7 +339,7 @@ export async function executeEngineeringCodingToolCall(
           type: "file_staged",
           pipelineId,
           filePath,
-          action: "modify",
+          action: "delete",
           summary: `Deleted: ${reason}`,
           contentLength: 0,
           timestamp: new Date().toISOString(),
@@ -359,19 +397,20 @@ export async function executeEngineeringCodingToolCall(
           : undefined,
     });
 
+    const hasFilePath =
+      toolCall.name === "write_file" ||
+      toolCall.name === "write_source_file" ||
+      toolCall.name === "edit_file" ||
+      toolCall.name === "read_file" ||
+      toolCall.name === "read_source_file" ||
+      toolCall.name === "delete_file";
     emitEngineeringCodingEvent({
       type: "tool_completed",
       pipelineId,
       tool: toolCall.name,
       durationMs,
-      filePath:
-        toolCall.name === "write_file" ||
-        toolCall.name === "write_source_file" ||
-        toolCall.name === "edit_file" ||
-        toolCall.name === "read_file" ||
-        toolCall.name === "read_source_file"
-          ? stringValue(toolCall.input.file_path)
-          : undefined,
+      displayLabel,
+      filePath: hasFilePath ? stringValue(toolCall.input.file_path) : undefined,
       timestamp: new Date().toISOString(),
     });
 

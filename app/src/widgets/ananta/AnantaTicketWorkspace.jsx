@@ -31,12 +31,31 @@ export default function AnantaTicketWorkspace({
   useEngineeringCodingEvents(pipelineId, {
     enabled: run?.status === "RUNNING",
     onEvent: (event) => {
-      if (
-        event?.type === "file_staged" ||
-        event?.type === "tool_completed" ||
-        event?.type === "coding_completed"
-      ) {
+      if (!event) return;
+      if (event.type === "tool_started") {
+        setCurrentActivity({
+          tool: event.tool,
+          displayLabel: event.displayLabel ?? event.tool,
+          timestamp: event.timestamp,
+        });
+      } else if (event.type === "tool_completed") {
+        setCurrentActivity(null);
+        setActivityFeed((prev) => {
+          const entry = {
+            tool: event.tool,
+            displayLabel: event.displayLabel ?? event.tool,
+            filePath: event.filePath,
+            durationMs: event.durationMs,
+            timestamp: event.timestamp,
+          };
+          return [entry, ...prev].slice(0, 20);
+        });
         refresh();
+      } else if (event.type === "file_staged" || event.type === "coding_completed") {
+        refresh();
+      } else if (event.type === "coding_started") {
+        setActivityFeed([]);
+        setCurrentActivity(null);
       }
     },
   });
@@ -47,6 +66,9 @@ export default function AnantaTicketWorkspace({
   const [costOpen, setCostOpen] = useState(false);
   const [resuming, setResuming] = useState(false);
   const [resumeError, setResumeError] = useState(null);
+  // Live SSE activity tracking
+  const [currentActivity, setCurrentActivity] = useState(null); // { tool, displayLabel, timestamp }
+  const [activityFeed, setActivityFeed] = useState([]); // last N completed tool calls
 
   const coverageLabel = useMemo(() => {
     if (!run) return null;
@@ -429,7 +451,11 @@ export default function AnantaTicketWorkspace({
           <Panel className="min-h-[420px] border border-app-border">
             {isLive ? (
               <div className="grid gap-0 lg:grid-cols-2">
-                <LiveRunPanel steps={run.liveSteps} />
+                <LiveRunPanel
+                  steps={run.liveSteps}
+                  currentActivity={currentActivity}
+                  activityFeed={activityFeed}
+                />
                 <FileContentView
                   file={activeFile}
                   fileTab={fileTab}
@@ -549,39 +575,110 @@ function AnantaEmptyState() {
   );
 }
 
-function LiveRunPanel({ steps }) {
+const TOOL_ICON = {
+  read_file: "📖",
+  read_source_file: "📖",
+  write_file: "✍️",
+  write_source_file: "✍️",
+  edit_file: "✏️",
+  delete_file: "🗑️",
+  list_dir: "📁",
+  grep: "🔍",
+  search_codebase: "🔭",
+  run_command: "⚡",
+};
+
+function getToolIcon(tool) {
+  return TOOL_ICON[tool] ?? "🔧";
+}
+
+function LiveRunPanel({ steps, currentActivity, activityFeed }) {
   const items = steps ?? [];
+  const feed = activityFeed ?? [];
+
   return (
-    <div className="border-b border-app-border px-5 py-6 sm:border-b-0 sm:border-r lg:px-6">
-      <p className="type-kicker">{AGENT_NAMES.ANANTA} — Live</p>
-      <ul className="mt-4 space-y-2">
-        {items.map((step) => (
-          <li key={step.id} className="flex items-start gap-3 text-sm">
-            <span
-              className={`mt-1 size-2 shrink-0 rounded-full ${
-                step.status === "in_progress"
-                  ? "animate-pulse bg-indigo"
-                  : step.status === "complete"
-                    ? "bg-success"
-                    : "bg-app-ink-mute/40"
-              }`}
-            />
-            <div>
-              <p className="text-app-ink">
-                {step.label}{" "}
-                {step.status === "complete" ? (
-                  <span className="text-success">complete ✓</span>
-                ) : step.status === "in_progress" ? (
-                  <span className="text-indigo">IN PROGRESS</span>
-                ) : null}
+    <div className="flex flex-col border-b border-app-border sm:border-b-0 sm:border-r">
+      {/* Current in-flight activity */}
+      <div className="border-b border-app-border px-5 py-4 lg:px-6">
+        <p className="type-kicker mb-3">{AGENT_NAMES.ANANTA} — Live</p>
+        {currentActivity ? (
+          <div className="flex items-center gap-3 rounded-app-sm border border-indigo/30 bg-indigo/5 px-3 py-2.5">
+            <span className="size-2 animate-pulse rounded-full bg-indigo shrink-0" />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-indigo">
+                {getToolIcon(currentActivity.tool)} {currentActivity.displayLabel}
               </p>
-              {step.detail ? (
-                <p className="text-xs text-app-ink-mute">{step.detail}</p>
-              ) : null}
+              <p className="mt-0.5 text-[11px] text-app-ink-mute">
+                {currentActivity.tool.replace(/_/g, " ")}
+              </p>
             </div>
-          </li>
-        ))}
-      </ul>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 text-sm text-app-ink-dim">
+            <span className="size-2 animate-pulse rounded-full bg-indigo/50" />
+            <span>Thinking…</span>
+          </div>
+        )}
+      </div>
+
+      {/* Progress steps */}
+      <div className="px-5 py-4 lg:px-6">
+        <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-app-ink-mute">
+          Progress
+        </p>
+        <ul className="space-y-2">
+          {items.map((step) => (
+            <li key={step.id} className="flex items-start gap-3 text-sm">
+              <span
+                className={`mt-1 size-2 shrink-0 rounded-full ${
+                  step.status === "in_progress"
+                    ? "animate-pulse bg-indigo"
+                    : step.status === "complete"
+                      ? "bg-success"
+                      : "bg-app-ink-mute/40"
+                }`}
+              />
+              <div>
+                <p className={step.status === "pending" ? "text-app-ink-dim" : "text-app-ink"}>
+                  {step.label}
+                  {step.status === "complete" ? (
+                    <span className="ml-1 text-success">✓</span>
+                  ) : null}
+                </p>
+                {step.detail ? (
+                  <p className="mt-0.5 truncate font-mono text-[11px] text-app-ink-mute">
+                    {step.detail}
+                  </p>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Recent activity feed */}
+      {feed.length > 0 ? (
+        <div className="border-t border-app-border px-5 py-3 lg:px-6">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-app-ink-mute">
+            Recent activity
+          </p>
+          <ul className="space-y-1.5 max-h-48 overflow-y-auto">
+            {feed.map((entry, i) => (
+              <li key={`${entry.timestamp}-${i}`} className="flex items-baseline gap-2 text-xs">
+                <span className="shrink-0 text-app-ink-mute">{getToolIcon(entry.tool)}</span>
+                <span className="min-w-0 flex-1 truncate text-app-ink-dim">
+                  {entry.displayLabel}
+                </span>
+                <span className="shrink-0 text-[11px] text-app-ink-mute tabular-nums">
+                  {entry.durationMs < 1000
+                    ? `${entry.durationMs}ms`
+                    : `${(entry.durationMs / 1000).toFixed(1)}s`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -689,16 +786,24 @@ function ToolCallLogView({ calls }) {
       <p className="text-sm font-medium text-app-ink">
         Tool call log ({calls?.length ?? 0} calls)
       </p>
-      <ol className="mt-4 space-y-2">
+      <ol className="mt-4 space-y-1.5">
         {(calls ?? []).map((c) => (
           <li
             key={c.id}
-            className="flex items-center justify-between rounded-app-sm border border-app-border px-3 py-2 font-mono text-xs"
+            className="flex items-center gap-3 rounded-app-sm border border-app-border px-3 py-2 text-xs"
           >
-            <span>
-              {c.id} {c.name}
+            <span className="shrink-0 text-base">{getToolIcon(c.tool ?? c.name)}</span>
+            <span className="min-w-0 flex-1">
+              <span className="font-mono text-app-ink-dim">
+                {c.tool ?? c.name}
+              </span>
+              {c.filePath ? (
+                <span className="ml-2 truncate font-mono text-[11px] text-violet-600">
+                  {c.filePath.split("/").pop()}
+                </span>
+              ) : null}
             </span>
-            <span className="text-app-ink-mute">{c.durationSec}s</span>
+            <span className="shrink-0 tabular-nums text-app-ink-mute">{c.durationSec}s</span>
           </li>
         ))}
       </ol>

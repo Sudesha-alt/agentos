@@ -12,6 +12,7 @@ import {
   triggerCanaryRun,
   useCanaryRuns,
 } from "../../entities/canary";
+import { useEngineeringCodingEvents } from "../../entities/engineering-agent";
 import { useSettings } from "../../entities/settings";
 import { Panel, PanelHeader } from "../../shared/ui/Panel";
 import { AppTabButton } from "../../shared/ui/AppChrome";
@@ -19,6 +20,221 @@ import { AnimatedAppPage } from "../../shared/ui/AnimatedAppPage";
 import { AgentPageWithChat } from "../../widgets/agent-chat/AgentPageWithChat";
 import { AgentPageHeader } from "../../widgets/agent-chat/AgentPageHeader";
 import AgentPipelineLiveStatus from "../../shared/components/AgentPipelineLiveStatus";
+
+const RECOMMENDATION_STYLES = {
+  approve: { border: "border-success/40 bg-success/10", text: "text-success", icon: "✓", label: "Approved — ready to merge" },
+  approve_with_conditions: { border: "border-warning/40 bg-warning/10", text: "text-warning", icon: "⚠", label: "Approved with conditions" },
+  request_changes: { border: "border-danger/40 bg-danger/10", text: "text-danger", icon: "✗", label: "Changes requested" },
+  block: { border: "border-danger/40 bg-danger/10", text: "text-danger", icon: "🚫", label: "Blocked — do not merge" },
+};
+
+function RecommendationBanner({ recommendation }) {
+  if (!recommendation) return null;
+  const style = RECOMMENDATION_STYLES[recommendation] ?? RECOMMENDATION_STYLES.approve_with_conditions;
+  return (
+    <div className={`mx-5 mt-4 flex items-center gap-3 rounded-app-sm border px-4 py-3 ${style.border}`}>
+      <span className="text-lg">{style.icon}</span>
+      <div>
+        <p className={`text-sm font-semibold ${style.text}`}>{style.label}</p>
+        <p className="text-[11px] text-app-ink-mute">QA recommendation — {recommendation.replace(/_/g, " ")}</p>
+      </div>
+    </div>
+  );
+}
+
+function TestRunStats({ testRun, coverageReport, confidenceScore }) {
+  if (!testRun && !coverageReport) return null;
+  return (
+    <div className="grid grid-cols-2 gap-3 px-5 py-4 sm:grid-cols-4">
+      {testRun ? (
+        <>
+          <StatCard label="Passed" value={testRun.passed ?? 0} color="text-success" />
+          <StatCard label="Failed" value={testRun.failed ?? 0} color="text-danger" />
+          <StatCard label="Total tests" value={testRun.totalTests ?? 0} />
+          <StatCard label="Duration" value={testRun.duration ? `${(testRun.duration / 1000).toFixed(1)}s` : "—"} />
+        </>
+      ) : null}
+      {coverageReport ? (
+        <>
+          <StatCard
+            label="Criteria coverage"
+            value={`${coverageReport.coveragePercent?.toFixed(1)}%`}
+            color={coverageReport.coveragePercent >= 95 ? "text-success" : coverageReport.coveragePercent >= 80 ? "text-warning" : "text-danger"}
+          />
+          <StatCard label="Covered" value={`${coverageReport.coveredCriteria} / ${coverageReport.totalCriteria}`} />
+          {confidenceScore != null ? (
+            <StatCard label="Confidence" value={`${(confidenceScore * 100).toFixed(0)}%`} />
+          ) : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function StatCard({ label, value, color = "text-app-ink" }) {
+  return (
+    <div className="rounded-app-sm border border-app-border bg-app-surface-muted/30 px-3 py-2.5">
+      <p className="type-kicker">{label}</p>
+      <p className={`type-metric mt-1 ${color}`}>{value}</p>
+    </div>
+  );
+}
+
+function FailureAnalysisSection({ failures }) {
+  if (!failures?.length) return null;
+  return (
+    <div className="border-t border-app-border px-5 py-4">
+      <p className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-app-ink-mute">
+        Failure analysis ({failures.length})
+      </p>
+      <ul className="space-y-2">
+        {failures.map((f) => (
+          <li
+            key={f.testId}
+            className={`rounded-app-sm border px-3 py-2.5 text-xs ${SEVERITY_STYLES[f.severity] ?? SEVERITY_STYLES.medium}`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="font-mono font-semibold">{f.testId}</p>
+              <span className="rounded-full border px-1.5 py-0.5 text-[10px] uppercase tracking-wide opacity-70">
+                {f.severity}
+              </span>
+            </div>
+            <p className="mt-1 font-medium">{f.testName}</p>
+            {f.violatedCriterion ? (
+              <p className="mt-1 opacity-80">AC: {f.violatedCriterion}</p>
+            ) : null}
+            {f.likelyCause ? <p className="mt-1 opacity-80">Cause: {f.likelyCause}</p> : null}
+            {f.remediation ? (
+              <p className="mt-1.5 font-medium text-app-ink">Fix: {f.remediation}</p>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function SecurityScanSection({ securityScan }) {
+  if (!securityScan) return null;
+  const { criticalCount = 0, highCount = 0, findings = [] } = securityScan;
+  const clean = criticalCount === 0 && highCount === 0;
+  return (
+    <div className="border-t border-app-border px-5 py-4">
+      <div className="flex items-center gap-3 mb-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-app-ink-mute">
+          Security scan
+        </p>
+        <span
+          className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${
+            clean ? "border-success/30 text-success" : "border-danger/30 text-danger"
+          }`}
+        >
+          {clean ? "Clean" : `${criticalCount} critical · ${highCount} high`}
+        </span>
+      </div>
+      {findings.length > 0 ? (
+        <ul className="space-y-1.5">
+          {findings.slice(0, 5).map((f, i) => (
+            <li key={i} className={`rounded-app-sm border px-3 py-2 text-xs ${SEVERITY_STYLES[f.severity] ?? SEVERITY_STYLES.medium}`}>
+              <p className="font-medium">{f.title}</p>
+              {f.description ? <p className="mt-0.5 opacity-80">{f.description}</p> : null}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-xs text-app-ink-dim">No security findings.</p>
+      )}
+    </div>
+  );
+}
+
+function UncoveredCriteria({ coverageReport }) {
+  if (!coverageReport?.uncoveredCriteria?.length) return null;
+  return (
+    <div className="border-t border-app-border px-5 py-4">
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-app-ink-mute">
+        Uncovered criteria ({coverageReport.uncoveredCriteria.length})
+      </p>
+      <ul className="space-y-1">
+        {coverageReport.uncoveredCriteria.map((c, i) => (
+          <li key={i} className="flex items-start gap-2 text-xs text-warning">
+            <span className="shrink-0">⚠</span>
+            <span>{c}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function PipelineQaDetail({ report }) {
+  return (
+    <Panel>
+      <PanelHeader
+        kicker="QA Report"
+        title={report.jiraKey ?? "Pipeline report"}
+        subtitle={report.testSummary}
+      />
+      <RecommendationBanner recommendation={report.recommendation} />
+      <TestRunStats
+        testRun={report.testRun}
+        coverageReport={report.coverageReport}
+        confidenceScore={report.confidenceScore}
+      />
+      <div className="border-t border-app-border">
+        <TestCaseViewer testCases={report.testCases ?? []} />
+      </div>
+      <FailureAnalysisSection failures={report.failureAnalysis} />
+      <UncoveredCriteria coverageReport={report.coverageReport} />
+      <SecurityScanSection securityScan={report.securityScan} />
+      {report.riskAreas?.length ? (
+        <div className="border-t border-app-border px-5 py-4">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-app-ink-mute">
+            Risk areas
+          </p>
+          <ul className="space-y-1">
+            {report.riskAreas.map((r, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs text-app-ink-dim">
+                <span className="shrink-0 text-warning">⚠</span>
+                <span>{r}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </Panel>
+  );
+}
+
+const CANARY_PHASE_LABELS = {
+  reconnaissance: { icon: "🔭", label: "Reconnaissance — mapping endpoints and risk areas" },
+  hypotheses: { icon: "🧠", label: "Generating adversarial hypotheses" },
+  exploration: { icon: "⚡", label: "Probing live application — running HTTP tests" },
+  synthesis: { icon: "📝", label: "Synthesising findings" },
+  completed: { icon: "✓", label: "Canary complete" },
+  failed: { icon: "✗", label: "Canary failed" },
+};
+
+function CanaryLivePanel({ phase, findingCount }) {
+  const info = CANARY_PHASE_LABELS[phase] ?? { icon: "🔧", label: phase };
+  const isDone = phase === "completed" || phase === "failed";
+  return (
+    <Panel>
+      <div className="flex items-center gap-4 px-5 py-4">
+        {!isDone && <span className="size-2 animate-pulse rounded-full bg-indigo shrink-0" />}
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-app-ink-mute">
+            Canary {isDone ? "" : "— Live"}
+          </p>
+          <p className="mt-1 text-sm font-medium text-app-ink">
+            {info.icon} {info.label}
+            {phase === "completed" && findingCount != null ? ` — ${findingCount} finding${findingCount !== 1 ? "s" : ""}` : ""}
+          </p>
+        </div>
+      </div>
+    </Panel>
+  );
+}
 
 const HEATMAP_CELL = {
   pass: "bg-success",
@@ -59,13 +275,31 @@ export default function QaCenter() {
     if (pipeline) setSelectedPipelineId(pipeline);
   }, [searchParams]);
 
+  const [canaryPhase, setCanaryPhase] = useState(null); // live canary phase from SSE
+  const [canaryFindingCount, setCanaryFindingCount] = useState(null);
   const { data: coverage } = useQaCoverage();
   const { data: heatmap } = useQaHeatmap();
   const { data: failures } = useQaFailures();
-  const { data: reports } = useQaReports();
-  const { data: pipelineReport } = useQaPipelineReport(selectedPipelineId);
+  const { data: reports } = useQaReports({ pollMs: 15_000 });
+  // Poll while a pipeline is selected and might still be running QA
+  const { data: pipelineReport } = useQaPipelineReport(selectedPipelineId, { pollMs: 5_000 });
   const { data: canaryData, refetch: refetchCanary } = useCanaryRuns({ pollMs: 15_000 });
   const { data: settings } = useSettings();
+
+  // Live canary phase events via pipeline SSE
+  useEngineeringCodingEvents(selectedPipelineId, {
+    enabled: !!selectedPipelineId,
+    onEvent: (event) => {
+      if (event?.type === "canary_phase") {
+        setCanaryPhase(event.phase);
+        if (event.findingCount != null) setCanaryFindingCount(event.findingCount);
+        if (event.phase === "completed" || event.phase === "failed") {
+          // Refresh canary list after completion
+          refetchCanary();
+        }
+      }
+    },
+  });
 
   const runs = canaryData?.items ?? [];
   const selectedRun = runs.find((r) => r.id === selectedRunId) ?? runs[0] ?? null;
@@ -216,12 +450,23 @@ export default function QaCenter() {
                       }`}
                     >
                       <div>
-                        <p className="text-[12px] font-medium text-indigo">{report.jiraKey}</p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-[12px] font-medium text-indigo">{report.jiraKey}</p>
+                          {report.passRate >= 95 ? (
+                            <span className="rounded-full border border-success/30 bg-success/10 px-1.5 py-0.5 text-[10px] font-semibold text-success">
+                              {report.passRate}% pass
+                            </span>
+                          ) : report.passRate > 0 ? (
+                            <span className="rounded-full border border-warning/30 bg-warning/10 px-1.5 py-0.5 text-[10px] font-semibold text-warning">
+                              {report.passRate}% pass
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="text-[13px] text-app-ink-dim">
-                          {report.testCount} test case(s) · pass rate {report.passRate}%
+                          {report.testCount} test case(s) · {report.completedAt ? new Date(report.completedAt).toLocaleDateString() : ""}
                         </p>
                         {report.testSummary ? (
-                          <p className="mt-1 text-[12px] text-app-ink-mute">{report.testSummary}</p>
+                          <p className="mt-1 truncate text-[12px] text-app-ink-mute">{report.testSummary}</p>
                         ) : null}
                       </div>
                       <Link
@@ -238,15 +483,12 @@ export default function QaCenter() {
             </ul>
           </Panel>
 
+          {selectedPipelineId && canaryPhase ? (
+            <CanaryLivePanel phase={canaryPhase} findingCount={canaryFindingCount} />
+          ) : null}
+
           {selectedPipelineId && pipelineReport ? (
-            <Panel>
-              <PanelHeader
-                kicker="Test cases"
-                title={pipelineReport.jiraKey ?? selectedPipelineId}
-                subtitle={pipelineReport.testSummary}
-              />
-              <TestCaseViewer testCases={pipelineReport.testCases ?? []} />
-            </Panel>
+            <PipelineQaDetail report={pipelineReport} />
           ) : null}
         </>
       ) : (

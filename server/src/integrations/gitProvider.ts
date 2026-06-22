@@ -63,4 +63,12 @@ export const gitClient = {
     const ctx = getRepoContext();
     return getGitClient().createPullRequest(ctx, headBranch, baseBranch, title, body, draft);
   },
+
+  async updatePullRequest(
+    prNumber: number,
+    updates: { title?: string; body?: string; draft?: boolean }
+  ): Promise<void> {
+    const ctx = getRepoContext();
+    return getGitClient().updatePullRequest(ctx, prNumber, updates);
+  },
 };

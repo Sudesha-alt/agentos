@@ -6,6 +6,8 @@ export type EngineeringCodingEvent =
       type: "tool_started";
       pipelineId: string;
       tool: string;
+      /** Human-readable description shown live, e.g. "Reading src/foo.ts" */
+      displayLabel: string;
       input?: Record<string, unknown>;
       timestamp: string;
     }
@@ -14,6 +16,7 @@ export type EngineeringCodingEvent =
       pipelineId: string;
       tool: string;
       durationMs: number;
+      displayLabel: string;
       filePath?: string;
       timestamp: string;
     }
@@ -21,7 +24,7 @@ export type EngineeringCodingEvent =
       type: "file_staged";
       pipelineId: string;
       filePath: string;
-      action: "create" | "modify";
+      action: "create" | "modify" | "delete";
       summary: string;
       contentLength: number;
       timestamp: string;
@@ -29,6 +32,14 @@ export type EngineeringCodingEvent =
   | {
       type: "coding_started" | "coding_completed";
       pipelineId: string;
+      jiraKey?: string;
+      timestamp: string;
+    }
+  | {
+      type: "canary_phase";
+      pipelineId: string;
+      phase: "reconnaissance" | "hypotheses" | "exploration" | "synthesis" | "completed" | "failed";
+      findingCount?: number;
       jiraKey?: string;
       timestamp: string;
     };

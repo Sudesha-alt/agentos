@@ -60,4 +60,9 @@ export interface GitProviderClient {
     body: string,
     draft?: boolean
   ): Promise<GitPullRequest>;
+  updatePullRequest(
+    ctx: GitRepoContext,
+    prNumber: number,
+    updates: { title?: string; body?: string; draft?: boolean }
+  ): Promise<void>;
 }

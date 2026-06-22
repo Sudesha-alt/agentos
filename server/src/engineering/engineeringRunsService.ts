@@ -55,7 +55,7 @@ export interface EngineeringRunDetail extends EngineeringRunListItem {
     diff?: string;
     humanModified: boolean;
   }>;
-  toolCalls: Array<{ id: number; name: string; durationSec: number }>;
+  toolCalls: Array<{ id: number; name: string; tool: string; filePath?: string; durationSec: number }>;
   pr: {
     title: string;
     description: string;
@@ -269,10 +269,17 @@ function buildToolCalls(logs: AuditLog[]): EngineeringRunDetail["toolCalls"] {
     const meta = (l.metadata ?? {}) as Record<string, unknown>;
     const tool = String(meta.tool ?? "tool");
     const filePath = typeof meta.filePath === "string" ? meta.filePath : "";
-    const name = filePath ? `${tool}: ${filePath.split("/").pop()}` : tool;
+    const query = typeof meta.query === "string" ? meta.query.slice(0, 60) : "";
+    const name = filePath
+      ? `${tool}: ${filePath.split("/").pop()}`
+      : query
+        ? `${tool}: "${query}"`
+        : tool;
     return {
       id: i + 1,
       name,
+      tool,
+      filePath: filePath || undefined,
       durationSec: Math.round(Number(meta.durationMs ?? 0) / 100) / 10,
     };
   });
@@ -294,11 +301,16 @@ function buildLiveSteps(
   const codingStarted = logs.some((l) => l.event === "ENGINEERING_CODING_STARTED");
   const codingDone = logs.some((l) => l.event === "ENGINEERING_CODING_COMPLETED");
   const toolLogs = logs.filter((l) => l.event === "CODING_TOOL_CALL_COMPLETED");
-  const writes = toolLogs.filter(
-    (l) => (l.metadata as Record<string, unknown>)?.tool === "write_source_file"
-  );
-  const reads = toolLogs.filter(
-    (l) => (l.metadata as Record<string, unknown>)?.tool === "read_source_file"
+  const writes = toolLogs.filter((l) => {
+    const tool = (l.metadata as Record<string, unknown>)?.tool;
+    return tool === "write_file" || tool === "write_source_file" || tool === "edit_file";
+  });
+  const reads = toolLogs.filter((l) => {
+    const tool = (l.metadata as Record<string, unknown>)?.tool;
+    return tool === "read_file" || tool === "read_source_file";
+  });
+  const commands = toolLogs.filter(
+    (l) => (l.metadata as Record<string, unknown>)?.tool === "run_command"
   );
 
   const steps: EngineeringRunDetail["liveSteps"] = [
@@ -339,10 +351,20 @@ function buildLiveSteps(
     });
   }
 
+  if (commands.length > 0) {
+    const lastCmd = (commands[commands.length - 1]?.metadata as Record<string, unknown>)?.command;
+    steps.push({
+      id: "commands",
+      label: `Running checks… (${commands.length} command${commands.length > 1 ? "s" : ""})`,
+      status: codingDone ? "complete" : "in_progress",
+      detail: typeof lastCmd === "string" ? lastCmd.slice(0, 80) : undefined,
+    });
+  }
+
   steps.push({
     id: "validate",
     label: "Running implementation check…",
-    status: codingDone ? "complete" : "pending",
+    status: codingDone ? "complete" : commands.length > 0 ? "pending" : "pending",
   });
 
   return steps;
@@ -394,6 +416,22 @@ function resolveRunDeliverableContext(
       purpose: "Implementation target",
     }));
   return { implementationMode, deliverableFiles };
+}
+
+function resolveTestsGenerated(pipelineId: string, logs: AuditLog[]): number {
+  // Prefer the count reported in the QA audit log
+  const qaLog = logs.find((l) => l.event === "QA_REPORT_GENERATED" || l.event === "QA_COMPLETED");
+  if (qaLog) {
+    const meta = (qaLog.metadata ?? {}) as Record<string, unknown>;
+    if (typeof meta.testCount === "number") return meta.testCount;
+  }
+  // Fall back: count CODING_TOOL_CALL_COMPLETED events whose tool is "write_test_file"
+  const testWrites = logs.filter(
+    (l) =>
+      l.event === "CODING_TOOL_CALL_COMPLETED" &&
+      (l.metadata as Record<string, unknown>)?.tool === "write_test_file"
+  );
+  return testWrites.length;
 }
 
 async function buildDetail(
@@ -449,7 +487,7 @@ async function buildDetail(
     toolCallCount: logs.filter((l) => l.event === "CODING_TOOL_CALL_COMPLETED").length,
     filesCreated: files.filter((f) => f.change === "created").length,
     filesModified: files.filter((f) => f.change === "modified").length,
-    testsGenerated: 0,
+    testsGenerated: resolveTestsGenerated(pipeline.id, logs),
     criteriaMapped,
     criteriaTotal: criteriaTotal || criteriaMapped,
     implementationPlan: buildImplementationPlan(impl),

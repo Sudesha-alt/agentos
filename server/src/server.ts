@@ -14,7 +14,7 @@ import { loadPmAnalysesFromStore } from "./agents/pm/store";
 import { backfillEngineeringHandoffRecords } from "./agents/pm/handoffStatus";
 import { loadCanarySettingsFromStore } from "./canaryAgent/settingsStore";
 import { loadPipelineSettingsFromStore } from "./pipeline/settingsStore";
-import { startCanaryScheduler } from "./canaryAgent/scheduler";
+// canary scheduler removed — canary runs only via pipeline trigger and manual API call
 import { scanIntakeFromSyncedIssues } from "./jira-sync/intakeScan";
 import {
   hydrateQueueFromDb,
@@ -60,7 +60,7 @@ async function bootstrap(): Promise<void> {
 
   startJiraSyncScheduler();
   startIntakePollScheduler();
-  startCanaryScheduler();
+  // startCanaryScheduler() removed — canary runs only with QA gate per pipeline
 
   await recoverPipelineStateOnBoot().catch((err) => {
     logger.warn({ err }, "startup pipeline queue recovery failed");

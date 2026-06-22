@@ -235,5 +235,12 @@ export function createGithubProvider(
         draft: pr.draft,
       } satisfies GitPullRequest;
     },
+
+    async updatePullRequest(ctx, prNumber, updates) {
+      await githubPatch(
+        `/repos/${ctx.workspace}/${ctx.repoSlug}/pulls/${prNumber}`,
+        updates
+      );
+    },
   };
 }

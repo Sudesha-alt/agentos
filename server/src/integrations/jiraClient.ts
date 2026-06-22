@@ -330,6 +330,44 @@ export class JiraClient {
     };
     return this.addComment(jiraKey, body);
   }
+
+  async createIssue(opts: {
+    summary: string;
+    description?: string;
+    issueType?: string;
+    labels?: string[];
+    priority?: string;
+    projectKey?: string;
+  }): Promise<{ key: string; id: string } | null> {
+    const projectKey = opts.projectKey ?? process.env.JIRA_DEFAULT_PROJECT_KEY;
+    if (!projectKey) {
+      logger.warn("createIssue skipped — no project key (set JIRA_DEFAULT_PROJECT_KEY)");
+      return null;
+    }
+    const descText = opts.description ?? opts.summary;
+    const body = {
+      fields: {
+        project: { key: projectKey },
+        summary: opts.summary,
+        issuetype: { name: opts.issueType ?? "Bug" },
+        labels: opts.labels ?? [],
+        ...(opts.priority ? { priority: { name: opts.priority } } : {}),
+        description: {
+          type: "doc",
+          version: 1,
+          content: descText.split(/\n{2,}/).map((block) => ({
+            type: "paragraph",
+            content: [{ type: "text", text: block.trim() }],
+          })),
+        },
+      },
+    };
+    const created = await this.request<{ key: string; id: string }>(
+      "/rest/api/3/issue",
+      { method: "POST", body: JSON.stringify(body) }
+    );
+    return created ?? null;
+  }
 }
 
 export const jiraClient = new JiraClient();

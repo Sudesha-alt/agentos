@@ -92,6 +92,13 @@ export const canaryRunRepo = {
     });
   },
 
+  async updateFindingJiraKey(findingId: string, jiraKey: string) {
+    return prisma.canaryFinding.update({
+      where: { id: findingId },
+      data: { jiraKeyCreated: jiraKey },
+    });
+  },
+
   async nightlySummary(since: Date) {
     const runs = await prisma.canaryRun.findMany({
       where: { startedAt: { gte: since }, status: "COMPLETED" },

@@ -78,12 +78,18 @@ export async function completeTicketInJira(
 
   if (settings.attachQaComment) {
     try {
-      await attachQaReportToJira(
-        jiraKey,
-        payload.qa,
-        payload.executionReport as unknown as QaExecutionReport | undefined
-      );
-      result.qaAttached = true;
+      // Skip if already posted during QA_AGENT stage (label set by attachQaReportToJira)
+      const labels = await client.getIssueLabels(jiraKey);
+      if (labels.includes("qa-generated")) {
+        result.qaAttached = true;
+      } else {
+        await attachQaReportToJira(
+          jiraKey,
+          payload.qa,
+          payload.executionReport as unknown as QaExecutionReport | undefined
+        );
+        result.qaAttached = true;
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       result.errors.push(`QA comment: ${msg}`);
