@@ -39,7 +39,7 @@ export function buildPmPipelineContext(record: PmAnalysisRecord): PmPipelineCont
       pmHandoff: buildTechAgentHandoffFromRecord(record),
       pmSystemDesign: record.systemDesign ?? null,
       pmTaskBreakdown: record.taskBreakdown ?? null,
-      synthesisSummary: {
+      synthesisSummary: record.synthesisSummary ?? {
         historicalCoverage: 0,
         reusedPatterns: [],
         knownFailures: [],

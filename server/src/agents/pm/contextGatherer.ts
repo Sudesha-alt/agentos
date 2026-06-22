@@ -8,8 +8,9 @@ import { retriever } from "../../rag/retriever";
 import { jiraTool } from "../../tools/jiraTool";
 import { logger } from "../../utils/logger";
 import { companyIntelligence } from "../../companyIntelligence";
-import type { PmTicketInput } from "./types";
+import type { PmTicketInput, SynthesisSummary } from "./types";
 import { enrichTicketFromJira } from "./ticketEnrichment";
+import type { RetrievalResult } from "../../rag/retriever";
 
 export interface PmContextBundle {
   reporterTier: string;
@@ -32,6 +33,10 @@ export interface PmContextBundle {
   capacityRemaining: string;
   inflightCount: string;
   branchName: string;
+  /** Structured synthesis computed from RAG hits — for enrichedPrdDocument */
+  synthesisSummary: SynthesisSummary;
+  /** Full content of top prd/implementation RAG hits — for {{similar_past_work}} prompt block */
+  similarPastWork: Array<{ jiraKey: string; contentType: string; similarity: number; content: string; summary?: string }>;
 }
 
 function inferReporterTier(labels: string[], reporter: string): string {
@@ -163,7 +168,71 @@ async function buildCandidateFilesList(
   }
 }
 
-async function buildSimilarTicketsList(ticket: PmTicketInput): Promise<string> {
+const FAILURE_SIGNAL_RE = /bug|fail|broke|broken|crash|error|regression|incident|outage|defect/i;
+const SIMILARITY_BORDERLINE_THRESHOLD = 0.62;
+
+function computeSynthesisSummary(
+  ragHits: RetrievalResult[],
+  similarPastWork: Array<{ jiraKey: string; contentType: string; similarity: number; content: string; summary?: string }>
+): SynthesisSummary {
+  const total = ragHits.length;
+  if (total === 0) {
+    return { historicalCoverage: 0, reusedPatterns: [], knownFailures: [], impliedRequirements: [], blockingGaps: 0 };
+  }
+
+  const deepHits = ragHits.filter(
+    (h) => h.contentType === "prd" || h.contentType === "implementation"
+  );
+  const historicalCoverage = parseFloat((deepHits.length / total).toFixed(2));
+
+  const reusedPatterns = similarPastWork
+    .filter((h) => h.contentType === "implementation")
+    .map((h) => {
+      const firstLine = h.content.split("\n").find((l) => l.trim().length > 10) ?? h.summary ?? h.jiraKey;
+      return `${h.jiraKey}: ${firstLine.slice(0, 120).trim()}`;
+    })
+    .slice(0, 5);
+
+  const knownFailures = ragHits
+    .filter((h) => {
+      const text = [h.content, h.metadata?.summary ?? ""].join(" ");
+      return FAILURE_SIGNAL_RE.test(text);
+    })
+    .map((h) => {
+      const label = h.metadata?.summary ?? h.content.slice(0, 80).trim();
+      return `${h.jiraKey}: ${label}`;
+    })
+    .slice(0, 5);
+
+  const impliedRequirements = ragHits
+    .filter((h) => h.contentType === "prd" && h.similarity >= 0.7)
+    .map((h) => {
+      const line = h.content.split("\n").find((l) => l.trim().length > 20) ?? "";
+      return line.slice(0, 120).trim();
+    })
+    .filter(Boolean)
+    .slice(0, 5);
+
+  const blockingGaps = ragHits.filter(
+    (h) => h.similarity < SIMILARITY_BORDERLINE_THRESHOLD
+  ).length;
+
+  return { historicalCoverage, reusedPatterns, knownFailures, impliedRequirements, blockingGaps };
+}
+
+interface SimilarTicketsResult {
+  list: string;
+  synthesisSummary: SynthesisSummary;
+  similarPastWork: Array<{ jiraKey: string; contentType: string; similarity: number; content: string; summary?: string }>;
+}
+
+async function buildSimilarTicketsList(ticket: PmTicketInput): Promise<SimilarTicketsResult> {
+  const empty: SimilarTicketsResult = {
+    list: "none found",
+    synthesisSummary: { historicalCoverage: 0, reusedPatterns: [], knownFailures: [], impliedRequirements: [], blockingGaps: 0 },
+    similarPastWork: [],
+  };
+
   try {
     const ragHits = await retriever.retrieveForPmAgent(
       {
@@ -175,13 +244,34 @@ async function buildSimilarTicketsList(ticket: PmTicketInput): Promise<string> {
     );
 
     if (ragHits.length > 0) {
-      return ragHits
+      // Full content for prd/implementation hits — these feed the {{similar_past_work}} block
+      const similarPastWork = ragHits
+        .filter((h) => h.contentType === "prd" || h.contentType === "implementation")
+        .sort((a, b) => b.similarity - a.similarity)
+        .slice(0, 6)
+        .map((h) => ({
+          jiraKey: h.jiraKey,
+          contentType: h.contentType,
+          similarity: h.similarity,
+          content: h.content,
+          summary: typeof h.metadata?.summary === "string" ? h.metadata.summary : undefined,
+        }));
+
+      const list = ragHits
         .map((hit) => {
-          const snippet = hit.content.replace(/\s+/g, " ").slice(0, 120);
-          const source = hit.metadata.source === "keyword_fallback" ? "keyword" : "semantic";
+          // Extended snippet for prd/implementation hits; brief for others
+          const maxLen = hit.contentType === "prd" || hit.contentType === "implementation" ? 400 : 120;
+          const snippet = hit.content.replace(/\s+/g, " ").slice(0, maxLen);
+          const source = hit.metadata?.source === "keyword_fallback" ? "keyword" : "semantic";
           return `${hit.jiraKey} [${hit.contentType}, ${source}, sim=${hit.similarity.toFixed(2)}]: ${snippet}`;
         })
         .join("\n");
+
+      return {
+        list,
+        synthesisSummary: computeSynthesisSummary(ragHits, similarPastWork),
+        similarPastWork,
+      };
     }
 
     const { listJiraIssues } = await import("../../jira-sync/issueRepository");
@@ -194,9 +284,12 @@ async function buildSimilarTicketsList(ticket: PmTicketInput): Promise<string> {
       .filter((i) => i.jiraKey !== ticket.jiraKey)
       .slice(0, 5);
     if (localMatches.length > 0) {
-      return localMatches
-        .map((t) => `${t.jiraKey}: ${t.summary} (${t.status}, synced)`)
-        .join("; ");
+      return {
+        ...empty,
+        list: localMatches
+          .map((t) => `${t.jiraKey}: ${t.summary} (${t.status}, synced)`)
+          .join("; "),
+      };
     }
 
     const related = await jiraTool.fetchRelated({
@@ -204,15 +297,18 @@ async function buildSimilarTicketsList(ticket: PmTicketInput): Promise<string> {
       relationshipTypes: ["linked", "same_components", "epic_children"],
     });
     if (related.tickets.length > 0) {
-      return related.tickets
-        .slice(0, 8)
-        .map((t) => `${t.key}: ${t.summary} (${t.status}, ${t.relationship})`)
-        .join("; ");
+      return {
+        ...empty,
+        list: related.tickets
+          .slice(0, 8)
+          .map((t) => `${t.key}: ${t.summary} (${t.status}, ${t.relationship})`)
+          .join("; "),
+      };
     }
 
-    return "none found";
+    return empty;
   } catch {
-    return "unavailable (retrieval failed)";
+    return { ...empty, list: "unavailable (retrieval failed)" };
   }
 }
 
@@ -321,8 +417,11 @@ export async function gatherPmContext(
   const scope = resolveRepoScope();
   const branchName = scope?.defaultBranch ?? "main";
 
-  let similarTicketsList = "none found";
-  similarTicketsList = await buildSimilarTicketsList(ticket);
+  const {
+    list: similarTicketsList,
+    synthesisSummary,
+    similarPastWork,
+  } = await buildSimilarTicketsList(ticket);
 
   const { list: candidateFilesListRaw, paths } = await buildCandidateFilesList(
     ticket,
@@ -372,5 +471,7 @@ export async function gatherPmContext(
     capacityRemaining: "40% (mock — connect sprint tooling for live data)",
     inflightCount,
     branchName,
+    synthesisSummary,
+    similarPastWork,
   };
 }

@@ -396,6 +396,8 @@ export async function runVirinPipeline(input: {
       completedAt: undefined,
       neelMode: mode,
       context: { ...ctx, ticket },
+      synthesisSummary: ctx.synthesisSummary,
+      similarPastWork: ctx.similarPastWork,
     });
     if (!updated) throw new Error(`Virin record missing for ${jiraKey}`);
     record = updated;
@@ -412,6 +414,8 @@ export async function runVirinPipeline(input: {
       stageMeta: [],
       neelMode: mode,
       startedAt: new Date().toISOString(),
+      synthesisSummary: ctx.synthesisSummary,
+      similarPastWork: ctx.similarPastWork,
     });
   }
 
@@ -878,6 +882,18 @@ async function runSolutioning(
   return false;
 }
 
+function formatSimilarPastWork(
+  hits: Array<{ jiraKey: string; contentType: string; similarity: number; content: string; summary?: string }> | undefined
+): string {
+  if (!hits || hits.length === 0) return "No similar past PRDs or implementation plans found.";
+  return hits
+    .map((h) => {
+      const label = h.summary ? `${h.jiraKey} — ${h.summary}` : h.jiraKey;
+      return `## ${label} [${h.contentType}, sim=${h.similarity.toFixed(2)}]\n${h.content.trim()}`;
+    })
+    .join("\n\n---\n\n");
+}
+
 async function runPrdGeneration(
   jiraKey: string,
   ticket: PmTicketInput,
@@ -892,6 +908,7 @@ async function runPrdGeneration(
     competitor_analysis: competitorBlock(record),
     codebase_analysis_json: JSON.stringify(record.codebaseAnalysis ?? {}, null, 2),
     codebase_intelligence: qctx.codebase_intelligence,
+    similar_past_work: formatSimilarPastWork(record.similarPastWork),
     jira_key: jiraKey,
     ticket_summary: ticket.summary,
     today_iso: new Date().toISOString(),

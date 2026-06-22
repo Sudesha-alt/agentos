@@ -3,6 +3,7 @@ import { retry } from "../../utils/retry";
 import type {
   GitFileContent,
   GitProviderClient,
+  GitPullRequest,
   GitPushFile,
   GitRepoContext,
   GitTreeItem,
@@ -207,6 +208,32 @@ export function createGithubProvider(
       );
 
       return { sha: newCommit.sha };
+    },
+
+    async createPullRequest(ctx, headBranch, baseBranch, title, body, draft = true) {
+      const pr = await githubPost<{
+        number: number;
+        html_url: string;
+        title: string;
+        state: string;
+        draft: boolean;
+      }>(
+        `/repos/${ctx.workspace}/${ctx.repoSlug}/pulls`,
+        {
+          title,
+          body,
+          head: headBranch,
+          base: baseBranch,
+          draft,
+        }
+      );
+      return {
+        number: pr.number,
+        url: pr.html_url,
+        title: pr.title,
+        state: pr.state,
+        draft: pr.draft,
+      } satisfies GitPullRequest;
     },
   };
 }

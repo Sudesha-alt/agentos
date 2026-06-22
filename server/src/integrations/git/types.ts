@@ -26,6 +26,14 @@ export interface GitPushFile {
   content: string;
 }
 
+export interface GitPullRequest {
+  number: number;
+  url: string;
+  title: string;
+  state: string;
+  draft: boolean;
+}
+
 export interface GitProviderClient {
   readonly provider: GitProviderId;
   testConnection(ctx: GitRepoContext): Promise<{ fullName: string; defaultBranch?: string }>;
@@ -44,4 +52,12 @@ export interface GitProviderClient {
     files: GitPushFile[],
     commitMessage: string
   ): Promise<{ sha: string }>;
+  createPullRequest(
+    ctx: GitRepoContext,
+    headBranch: string,
+    baseBranch: string,
+    title: string,
+    body: string,
+    draft?: boolean
+  ): Promise<GitPullRequest>;
 }

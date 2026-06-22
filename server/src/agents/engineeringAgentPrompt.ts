@@ -4,9 +4,11 @@ const CONTENT_PLAN_RULES = `
 You are planning a CONTENT deliverable (documentation, curriculum, policy, playbook).
 - Map each acceptance criterion to a document section or checklist item in criteriaMapping.
 - components represent document sections or deliverable parts (not code modules).
-- apiChanges and databaseChanges MUST be empty arrays.
-- Include implementationMode: "content" and targetFiles listing every doc path to create/update.
-- targetFiles must match deliverableFiles from the PRD when provided.
+- apiChanges and databaseChanges MUST be empty arrays [].
+- Set implementationMode to "content" (JSON string, not the literal text "code | content").
+- targetFiles MUST list every doc path to create/update (match PRD deliverableFiles).
+- Use estimatedDays as fractional agent-pipeline days (minimum 0.25 per component, e.g. 0.5 = ~4 hours).
+- Return ONLY a single JSON object — no markdown fences or prose before/after.
 `.trim();
 
 export function buildEngineeringAgentSystemPrompt(
@@ -48,11 +50,13 @@ Output valid JSON matching this structure:
     }
   ],
   "blockers": ["string — anything that must be resolved before starting"],
-  "implementationMode": "code | content",
-  "targetFiles": ["repo paths to create or modify"],
-  "confidenceScore": number between 0 and 1,
+  "implementationMode": "${mode}",
+  "targetFiles": ["docs/example.md"],
+  "confidenceScore": 0.85,
   "confidenceReason": "string"
 }
+
+Note: implementationMode must be the string "content" or "code". targetFiles is required for content mode.
 
 Rules:
 - Every acceptance criterion in the PRD must appear in criteriaMapping.

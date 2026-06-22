@@ -209,6 +209,14 @@ export interface EngineeringHandoff {
   message?: string;
 }
 
+export interface SynthesisSummary {
+  historicalCoverage: number;        // 0–1: fraction of hits that are prd/implementation (we've done similar before)
+  reusedPatterns: string[];          // implementation patterns found in past similar work
+  knownFailures: string[];           // past tickets with bug/failure signals from same area
+  impliedRequirements: string[];     // requirements implied by similar past tickets
+  blockingGaps: number;              // count of near-miss RAG hits (borderline similarity)
+}
+
 export interface PmAnalysisRecord {
   id: string;
   jiraKey: string;
@@ -216,6 +224,10 @@ export interface PmAnalysisRecord {
   currentStage: PmStageId | null;
   ticketInput: PmTicketInput;
   context: Record<string, unknown>;
+  /** Computed from RAG hits during context gathering */
+  synthesisSummary?: SynthesisSummary;
+  /** Full content of the top similar PRD/implementation hits (for PRD prompt) */
+  similarPastWork?: Array<{ jiraKey: string; contentType: string; similarity: number; content: string; summary?: string }>;
   /** Virin agent identity */
   agentName?: "Virin";
   neelMode?: VirinRunMode;

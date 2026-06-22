@@ -1,0 +1,370 @@
+import { exec } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { dirname, join } from "node:path";
+import { promisify } from "node:util";
+import { gitClient } from "../integrations/gitProvider";
+import { SANDBOX_BASE, sandboxManager } from "../qa/testing/sandboxManager";
+import { logger } from "../utils/logger";
+
+const execAsync = promisify(exec);
+
+export interface WorkspaceHandle {
+  pipelineId: string;
+  workspaceDir: string;
+  /** The per-ticket work branch (e.g. agentos/AG-61) */
+  branchName: string;
+  /** The source/default branch the workspace was cloned from (e.g. main) */
+  sourceBranch: string;
+}
+
+// Per-process registry — keyed by pipelineId
+const activeWorkspaces = new Map<string, WorkspaceHandle>();
+
+/** Sanitize a Jira key into a valid branch name segment */
+export function sanitizeBranchSegment(jiraKey: string): string {
+  return jiraKey.toLowerCase().replace(/[^a-z0-9-]/g, "-");
+}
+
+/** Derive the per-ticket engineering branch name */
+export function resolveEngineeringBranchName(jiraKey: string): string {
+  const env = process.env.ENGINEERING_TARGET_BRANCH;
+  if (env) return env; // allow env override (single-branch mode)
+  return `agentos/${sanitizeBranchSegment(jiraKey)}`;
+}
+
+async function configureGitUser(workspaceDir: string): Promise<void> {
+  await execAsync('git config user.email "agentos@agentos.ai"', { cwd: workspaceDir, timeout: 10_000 });
+  await execAsync('git config user.name "AgentOS"', { cwd: workspaceDir, timeout: 10_000 });
+}
+
+/**
+ * Create a persistent workspace for an engineering run.
+ * Clones the source branch, creates the per-ticket work branch, and installs deps.
+ */
+export async function createEngWorkspace(
+  pipelineId: string,
+  jiraKey: string,
+  sourceBranch: string
+): Promise<WorkspaceHandle> {
+  const runId = `${pipelineId}-eng`;
+  const workspaceDir = join(SANDBOX_BASE, runId);
+
+  mkdirSync(workspaceDir, { recursive: true });
+
+  // Clone source branch (shallow)
+  const repoUrl = await gitClient.cloneUrl();
+  await execAsync(
+    `git clone --depth 1 --branch ${sourceBranch} ${repoUrl} .`,
+    { cwd: workspaceDir, timeout: 120_000 }
+  );
+
+  await configureGitUser(workspaceDir);
+
+  // Set up the per-ticket work branch
+  const targetBranch = resolveEngineeringBranchName(jiraKey);
+  try {
+    // Try to fetch existing remote branch and resume from it
+    await execAsync(
+      `git fetch origin ${targetBranch} --depth 1`,
+      { cwd: workspaceDir, timeout: 30_000 }
+    );
+    await execAsync(
+      `git checkout -b ${targetBranch} FETCH_HEAD`,
+      { cwd: workspaceDir, timeout: 10_000 }
+    );
+    logger.info({ pipelineId, targetBranch }, "resuming existing engineering branch");
+  } catch {
+    // Branch doesn't exist remotely — create fresh from source HEAD
+    await execAsync(
+      `git checkout -b ${targetBranch}`,
+      { cwd: workspaceDir, timeout: 10_000 }
+    );
+    logger.info({ pipelineId, targetBranch }, "created new engineering branch");
+  }
+
+  // Install dependencies once (slow but needed for type checking)
+  await sandboxManager.installDependencies(workspaceDir);
+
+  const handle: WorkspaceHandle = {
+    pipelineId,
+    workspaceDir,
+    branchName: targetBranch,
+    sourceBranch,
+  };
+  activeWorkspaces.set(pipelineId, handle);
+
+  logger.info(
+    { pipelineId, workspaceDir, branchName: targetBranch, sourceBranch },
+    "engineering workspace ready"
+  );
+  return handle;
+}
+
+export function getEngWorkspace(pipelineId: string): WorkspaceHandle | undefined {
+  return activeWorkspaces.get(pipelineId);
+}
+
+export function destroyEngWorkspace(pipelineId: string): void {
+  const handle = activeWorkspaces.get(pipelineId);
+  if (!handle) return;
+  activeWorkspaces.delete(pipelineId);
+  if (existsSync(handle.workspaceDir)) {
+    rmSync(handle.workspaceDir, { recursive: true, force: true });
+    logger.debug(
+      { pipelineId, workspaceDir: handle.workspaceDir },
+      "engineering workspace destroyed"
+    );
+  }
+}
+
+// ─── File operations ─────────────────────────────────────────────────────────
+
+function guardPath(workspaceDir: string, filePath: string): string {
+  const abs = join(workspaceDir, filePath);
+  // Prevent path traversal
+  if (!abs.startsWith(workspaceDir + "/") && abs !== workspaceDir) {
+    throw new Error(`Path traversal denied: ${filePath}`);
+  }
+  return abs;
+}
+
+export function workspaceReadFile(workspaceDir: string, filePath: string): string {
+  const abs = guardPath(workspaceDir, filePath);
+  return readFileSync(abs, "utf8");
+}
+
+export function workspaceWriteFile(
+  workspaceDir: string,
+  filePath: string,
+  content: string
+): void {
+  const abs = guardPath(workspaceDir, filePath);
+  mkdirSync(dirname(abs), { recursive: true });
+  writeFileSync(abs, content, "utf8");
+}
+
+export function workspaceDeleteFile(workspaceDir: string, filePath: string): void {
+  const abs = guardPath(workspaceDir, filePath);
+  if (existsSync(abs)) rmSync(abs);
+}
+
+export function workspaceListDir(workspaceDir: string, dirPath: string): string[] {
+  const abs = guardPath(workspaceDir, dirPath || ".");
+  if (!existsSync(abs)) return [];
+  return readdirSync(abs).map((name) => {
+    const full = join(abs, name);
+    return statSync(full).isDirectory() ? name + "/" : name;
+  });
+}
+
+/**
+ * Apply a string find-and-replace edit to an existing file.
+ * Returns how many occurrences were replaced.
+ */
+export function workspaceApplyEdit(
+  workspaceDir: string,
+  filePath: string,
+  oldString: string,
+  newString: string
+): { replaced: boolean; occurrences: number } {
+  const abs = guardPath(workspaceDir, filePath);
+  if (!existsSync(abs)) {
+    throw new Error(`File not found: ${filePath}`);
+  }
+  const original = readFileSync(abs, "utf8");
+  const occurrences = original.split(oldString).length - 1;
+  if (occurrences === 0) return { replaced: false, occurrences: 0 };
+  const updated = original.split(oldString).join(newString);
+  writeFileSync(abs, updated, "utf8");
+  return { replaced: true, occurrences };
+}
+
+export function workspaceFileExists(workspaceDir: string, filePath: string): boolean {
+  try {
+    const abs = guardPath(workspaceDir, filePath);
+    return existsSync(abs);
+  } catch {
+    return false;
+  }
+}
+
+// ─── Git operations ───────────────────────────────────────────────────────────
+
+export async function workspaceGitStatus(workspaceDir: string): Promise<string> {
+  const { stdout } = await execAsync("git status --short", {
+    cwd: workspaceDir,
+    timeout: 15_000,
+  });
+  return stdout.trim();
+}
+
+export async function workspaceGitDiff(workspaceDir: string, filePath?: string): Promise<string> {
+  const cmd = filePath ? `git diff HEAD -- ${filePath}` : "git diff HEAD";
+  const { stdout } = await execAsync(cmd, { cwd: workspaceDir, timeout: 15_000 });
+  return stdout.slice(0, 20_000);
+}
+
+export interface WorkspaceChangedFile {
+  path: string;
+  status: "modified" | "added" | "deleted" | "renamed";
+}
+
+export async function workspaceGetChangedFiles(
+  workspaceDir: string
+): Promise<WorkspaceChangedFile[]> {
+  const { stdout } = await execAsync("git status --short --porcelain", {
+    cwd: workspaceDir,
+    timeout: 15_000,
+  });
+  if (!stdout.trim()) return [];
+
+  return stdout
+    .trim()
+    .split("\n")
+    .map((line) => {
+      const code = line.slice(0, 2).trim();
+      const path = line.slice(3).trim();
+      let status: WorkspaceChangedFile["status"] = "modified";
+      if (code === "A" || code === "??") status = "added";
+      else if (code === "D") status = "deleted";
+      else if (code === "R") status = "renamed";
+      return { path, status };
+    });
+}
+
+/**
+ * Stage all changes, create a commit, push the per-ticket branch, and return
+ * the new commit SHA. Returns null if there are no changes to commit.
+ */
+export async function workspaceCommitAndPush(
+  workspaceDir: string,
+  commitMessage: string
+): Promise<{ sha: string; pushedBranch: string } | null> {
+  const status = await workspaceGitStatus(workspaceDir);
+  if (!status) {
+    logger.info({ workspaceDir }, "nothing to commit — workspace is clean");
+    return null;
+  }
+
+  // Stage everything
+  await execAsync("git add -A", { cwd: workspaceDir, timeout: 30_000 });
+
+  // Commit
+  await execAsync(`git commit -m ${JSON.stringify(commitMessage)}`, {
+    cwd: workspaceDir,
+    timeout: 30_000,
+  });
+
+  // Get the current branch and commit SHA
+  const [{ stdout: shaOut }, { stdout: branchOut }] = await Promise.all([
+    execAsync("git rev-parse HEAD", { cwd: workspaceDir, timeout: 10_000 }),
+    execAsync("git rev-parse --abbrev-ref HEAD", { cwd: workspaceDir, timeout: 10_000 }),
+  ]);
+
+  const pushedBranch = branchOut.trim();
+  const sha = shaOut.trim();
+
+  // Push (--set-upstream handles new branches)
+  await execAsync(`git push --set-upstream origin ${pushedBranch}`, {
+    cwd: workspaceDir,
+    timeout: 60_000,
+  });
+
+  logger.info({ workspaceDir, pushedBranch, sha }, "workspace committed and pushed");
+  return { sha, pushedBranch };
+}
+
+/** Run an allowlisted command inside the workspace. */
+export const ALLOWED_COMMAND_PREFIXES = [
+  "npm run ",
+  "npm test",
+  "npx tsc",
+  "npx eslint",
+  "npx prettier",
+  "node ",
+  "tsc ",
+  "eslint ",
+  "prettier ",
+  "git status",
+  "git diff",
+  "git log --oneline",
+];
+
+export function isCommandAllowed(command: string): boolean {
+  const trimmed = command.trim();
+  return ALLOWED_COMMAND_PREFIXES.some((prefix) => trimmed.startsWith(prefix));
+}
+
+export async function workspaceRunCommand(
+  workspaceDir: string,
+  command: string,
+  subdir?: string
+): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+  if (!isCommandAllowed(command)) {
+    throw new Error(
+      `Command not allowed: "${command}". Allowed prefixes: ${ALLOWED_COMMAND_PREFIXES.join(", ")}`
+    );
+  }
+  const cwd = subdir ? join(workspaceDir, subdir) : workspaceDir;
+  if (!cwd.startsWith(workspaceDir)) throw new Error("Path traversal denied");
+
+  try {
+    const { stdout, stderr } = await execAsync(command, {
+      cwd,
+      timeout: 120_000,
+      env: { ...process.env, CI: "true" },
+    });
+    return {
+      stdout: stdout.slice(0, 8_000),
+      stderr: stderr.slice(0, 4_000),
+      exitCode: 0,
+    };
+  } catch (err: unknown) {
+    const e = err as { stdout?: string; stderr?: string; code?: number };
+    return {
+      stdout: (e.stdout ?? "").slice(0, 8_000),
+      stderr: (e.stderr ?? (err instanceof Error ? err.message : String(err))).slice(0, 4_000),
+      exitCode: e.code ?? 1,
+    };
+  }
+}
+
+/** Fast literal grep over the workspace directory. */
+export async function workspaceGrep(
+  workspaceDir: string,
+  pattern: string,
+  fileGlob?: string
+): Promise<Array<{ file: string; line: number; text: string }>> {
+  const globArg = fileGlob ? `--include="${fileGlob}"` : "";
+  const cmd = `grep -rn ${globArg} --max-count=5 -F ${JSON.stringify(pattern)} .`;
+  try {
+    const { stdout } = await execAsync(cmd, {
+      cwd: workspaceDir,
+      timeout: 15_000,
+    });
+    return stdout
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .slice(0, 50)
+      .map((line) => {
+        const m = line.match(/^(.+?):(\d+):(.*)$/);
+        if (!m) return null;
+        return { file: m[1].replace(/^\.\//, ""), line: Number(m[2]), text: m[3] };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+  } catch (err: unknown) {
+    // grep exits with 1 when no matches — that's fine
+    const e = err as { code?: number; stdout?: string };
+    if (e.code === 1) return [];
+    throw err;
+  }
+}
