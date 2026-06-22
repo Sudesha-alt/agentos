@@ -11,7 +11,7 @@ import {
   ROI_ASSUMPTIONS,
   SOCIAL_PROOF,
   SOLUTION,
-} from "./marketingPageContent";
+} from "../marketingPageContent";
 
 function SectionHeader({ kicker, headline, subhead, center = true }) {
   return (
