@@ -10,11 +10,11 @@ export default function MarketingFooter() {
             <span className="flex size-9 items-center justify-center rounded-2xl bg-white/10 font-bold">
               A
             </span>
-            <span className="font-[Poppins] text-lg font-semibold">Agentos</span>
+            <span className="font-[Poppins] text-lg font-semibold">AgentOX</span>
           </div>
           <p className="mt-4 max-w-xs text-[14px] leading-relaxed text-white/60">
-            From Jira intake to PRD, implementation, and QA gates — Virin, Ananta, and Neel run your
-            pipeline end to end.
+            From Jira ticket to shipped code — Virin, Ananta, and Neel run your pipeline with
+            validation gates that ensure what gets built is exactly what was specified.
           </p>
           <div className="mt-6 flex gap-3">
             {["in", "x", "gh"].map((s) => (
@@ -93,7 +93,7 @@ export default function MarketingFooter() {
             ))}
           </div>
           <div className="flex flex-wrap items-center justify-center gap-4 text-[12px] text-white/45">
-            <span>© {new Date().getFullYear()} Agentos</span>
+            <span>© {new Date().getFullYear()} AgentOX</span>
             <a href="#" className="hover:text-white/70">
               Privacy
             </a>

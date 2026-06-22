@@ -1,7 +1,13 @@
+import { AGENT_DETAILS, HERO as HERO_CONTENT } from "./marketingPageContent";
+
+export { HERO_CONTENT as HERO };
+
 export const NAV_LINKS = [
+  { label: "Solution", href: "#solution" },
   { label: "Agents", href: "#agents" },
   { label: "Pricing", href: "#pricing" },
-  { label: "Clients", href: "#clients" },
+  { label: "ROI", href: "#roi" },
+  { label: "FAQ", href: "#faq" },
   { label: "Contact", href: "/contact" },
 ];
 
@@ -16,18 +22,13 @@ export const AGENTS = [
     chapterSubtitle: "Virin shapes the spec your team can ship",
     name: "Virin",
     role: "Product",
-    roleDetail: "PM & discovery",
+    roleDetail: AGENT_DETAILS.virin.roleLabel,
     gradient: "olive",
     image: "/marketing/agents/virin.png",
-    headline: "Shapes the spec your team can ship",
-    teammateIntro:
-      "Hi, I'm Virin — your Product teammate. I take rough ideas and Jira tickets, run discovery against company context, and hand off a PRD the whole team trusts.",
-    body: "Discovery Q&A, company validation, and PRD gates — all before engineering touches the ticket.",
-    bullets: [
-      "Grounded discovery from company + codebase",
-      "PRD with acceptance criteria",
-      "Clean handoff to Tech and QA",
-    ],
+    headline: AGENT_DETAILS.virin.tagline,
+    teammateIntro: AGENT_DETAILS.virin.intro,
+    body: "Four-stage discovery, historical context, gap analysis, and PRD generation — all before engineering touches the ticket.",
+    bullets: AGENT_DETAILS.virin.produces,
     sectionId: "agent-virin",
     appPath: "/app/pm-agents",
   },
@@ -40,18 +41,13 @@ export const AGENTS = [
     chapterSubtitle: "Ananta plans against your real codebase",
     name: "Ananta",
     role: "Tech",
-    roleDetail: "Build & integrate",
+    roleDetail: AGENT_DETAILS.ananta.roleLabel,
     gradient: "amber",
     image: "/marketing/agents/ananta.png",
-    headline: "Builds against your real repository",
-    teammateIntro:
-      "I'm Ananta — your Tech teammate. I read the PRD, search your indexed repo, and draft implementation steps your engineers can execute without guesswork.",
-    body: "Codebase intelligence, implementation plans, and engineering gates — aligned to what Virin specified.",
-    bullets: [
-      "Module search across your GitHub index",
-      "Step-by-step implementation plan",
-      "Engineering gate before QA",
-    ],
+    headline: AGENT_DETAILS.ananta.tagline,
+    teammateIntro: AGENT_DETAILS.ananta.intro,
+    body: "Reads your actual codebase, maps acceptance criteria to code, writes production-quality files, and opens a draft PR.",
+    bullets: AGENT_DETAILS.ananta.produces,
     sectionId: "agent-ananta",
     appPath: "/app/ananta",
   },
@@ -64,18 +60,13 @@ export const AGENTS = [
     chapterSubtitle: "Neel signs off before anything ships",
     name: "Neel",
     role: "QA",
-    roleDetail: "Test & release",
+    roleDetail: AGENT_DETAILS.neel.roleLabel,
     gradient: "lavender",
     image: "/marketing/agents/neel.png",
-    headline: "Signs off before anything ships",
-    teammateIntro:
-      "I'm Neel — your QA teammate. I generate test cases from the PRD, track coverage, run canary checks, and hold the gate until we're confident — then write back to Jira.",
-    body: "Test validation, QA Center tracking, and completion writeback — closing the loop for the team.",
-    bullets: [
-      "Test cases from acceptance criteria",
-      "QA coverage threshold + canary pass",
-      "Jira completion writeback",
-    ],
+    headline: AGENT_DETAILS.neel.tagline,
+    teammateIntro: AGENT_DETAILS.neel.intro,
+    body: "Generates tests for every code path, runs them in an isolated sandbox, and produces a report that tells engineering exactly what to fix.",
+    bullets: AGENT_DETAILS.neel.produces,
     sectionId: "agent-neel",
     appPath: "/app/qa",
   },
@@ -91,20 +82,20 @@ export const AGENT_CHAPTERS = [
     chapterRoman: "IV",
     chapterTitle: "One Pipeline",
     chapterSubtitle: "Three agents, one full pipeline",
-    name: "AgentOS Pipeline",
+    name: "AgentOX Pipeline",
     role: "Full loop",
     roleDetail: "Jira → PRD → build → QA",
     gradient: "cream",
     image: null,
     coverAgents: ["virin", "ananta", "neel"],
-    headline: "Every handoff compounds team intelligence",
+    headline: "Three agents. One pipeline. Zero lost context.",
     teammateIntro:
-      "Virin, Ananta, and Neel hand off in sequence — company context, codebase memory, and pipeline history carry forward on every ticket.",
-    body: "From the first Jira ticket to completion writeback, the full pipeline runs with human gates at every critical step.",
+      "Virin, Ananta, and Neel hand off in sequence — with validation gates between every step so nothing gets lost in translation.",
+    body: "From Jira ticket to PRD, implementation, QA report, and structured writeback — with human review at every gate.",
     bullets: [
-      "End-to-end flow from Jira ticket to completion",
-      "Human approval at PRD, engineering, and QA gates",
-      "Audit trail and writeback to Jira when done",
+      "PRD validation gate before engineering starts",
+      "Implementation gate before QA runs",
+      "QA validation gate before merge",
     ],
     sectionId: "agent-pipeline",
     appPath: "/login",
@@ -136,16 +127,7 @@ export const CLIENT_LOGOS = [
 ];
 
 export const CLIENT_METRICS = [
-  { value: "Jira", label: "ticket → PRD pipeline" },
+  { value: "60%", label: "typical rework reduction" },
+  { value: "<2h", label: "ticket to PR-ready" },
   { value: "3", label: "validation gates before ship" },
-  { value: "100%", label: "audit trail coverage" },
 ];
-
-export const HERO = {
-  headline: "AgentOS lets you run an entire pipeline with agents",
-  subhead: "Discovery, engineering, and QA — from Jira to ship.",
-  cta: "Get started",
-  ctaHref: "/login",
-  secondaryCta: "Meet the agents",
-  secondaryHref: "#agents",
-};

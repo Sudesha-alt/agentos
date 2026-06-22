@@ -68,7 +68,7 @@ function ChapterBook({ chapter, isActive, onSelect }) {
           <ChapterCoverArt chapter={chapter} />
         </div>
         <div className="at-chapter-foot">
-          <span>by AgentOS</span>
+          <span>by AgentOX</span>
           <span>2026</span>
         </div>
         <p className="at-chapter-cta">
@@ -184,11 +184,11 @@ export default function AgentChaptersSection() {
             Meet the agents
           </p>
           <h2 className="mt-2 text-[clamp(1.75rem,3vw,2.25rem)] font-bold text-[#2B2D33]">
-            Learn how AgentOS runs your pipeline
+            Three agents. One pipeline. Zero lost context.
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-[15px] leading-relaxed text-[#6B6B6B]">
-            Four chapters — Product, Engineering, QA, and the full loop. Click a book to read what
-            each agent does.
+            Virin (Product), Ananta (Engineering), and Neel (QA) — with validation gates between
+            every handoff. Click a chapter to read what each agent produces.
           </p>
         </div>
 

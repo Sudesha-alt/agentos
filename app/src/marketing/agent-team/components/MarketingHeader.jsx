@@ -106,12 +106,12 @@ export default function MarketingHeader() {
       }`}
     >
       <div className="at-marketing-header-inner">
-        <Link to="/" className="at-marketing-logo" aria-label="Agentos home">
+        <Link to="/" className="at-marketing-logo" aria-label="AgentOX home">
           <span className={`at-marketing-logo-mark ${lightHeader ? "at-marketing-logo-light" : ""}`}>
             A
           </span>
           <span className={`at-marketing-logo-text ${lightHeader ? "text-white" : "text-[#2B2D33]"}`}>
-            Agentos
+            AgentOX
           </span>
         </Link>
 
