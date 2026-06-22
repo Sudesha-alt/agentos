@@ -8,7 +8,7 @@ import { createBitbucketProvider } from "./git/bitbucketProvider";
 import { createGithubProvider } from "./git/githubProvider";
 import type { GitFileContent, GitProviderClient, GitTreeItem } from "./git/types";
 
-export type { GitFileContent, GitTreeItem, GitProviderId, GitPushFile } from "./git/types";
+export type { GitFileContent, GitTreeItem, GitProviderId, GitPullRequest, GitPushFile } from "./git/types";
 
 function clientFor(creds: StoredGitCredentials): GitProviderClient {
   if (creds.provider === "bitbucket") {
@@ -51,5 +51,16 @@ export const gitClient = {
   ): Promise<{ sha: string }> {
     const ctx = getRepoContext();
     return getGitClient().pushFilesToBranch(ctx, targetBranch, sourceBranch, files, commitMessage);
+  },
+
+  async createPullRequest(
+    headBranch: string,
+    baseBranch: string,
+    title: string,
+    body: string,
+    draft = true
+  ): Promise<import("./git/types").GitPullRequest> {
+    const ctx = getRepoContext();
+    return getGitClient().createPullRequest(ctx, headBranch, baseBranch, title, body, draft);
   },
 };

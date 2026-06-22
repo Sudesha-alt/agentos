@@ -132,6 +132,11 @@ export default function AnantaTicketWorkspace({
     run.currentStageLabel ??
     (run.currentStage ? formatStageLabel(run.currentStage) : "Unknown stage");
   const statusLabel = run.statusLabel ?? formatStatusLabel(run.status);
+  const isPlanParseFailure = run.failureReason?.includes("unparseable");
+  const codingStarted = run.recentEvents?.some(
+    (e) =>
+      e.event === "ENGINEERING_CODING_STARTED" || e.event === "ENGINEERING_CODING_COMPLETED"
+  );
 
   async function handleResumePipeline() {
     setResumeError(null);
@@ -157,11 +162,17 @@ export default function AnantaTicketWorkspace({
             {run.failureReason ??
               "No failure details were recorded. Check the pipeline audit log for more context."}
           </p>
-          {run.filesCreated === 0 && run.filesModified === 0 ? (
+          {isPlanParseFailure ? (
+            <p className="mt-2 text-[13px] text-app-ink-dim">
+              Ananta failed while building the implementation plan (before writing any files).
+              Resume the pipeline to retry — ensure the PRD lists{" "}
+              <span className="font-mono">deliverableFiles</span> for document tickets.
+            </p>
+          ) : run.filesCreated === 0 && run.filesModified === 0 && codingStarted ? (
             <p className="mt-2 text-[13px] text-app-ink-dim">
               Ananta did not stage any source files. For document-only tickets (like curriculum
-              updates), the agent may need explicit file paths in the PRD, or the run may have
-              timed out before writing output.
+              updates), ensure the PRD includes explicit file paths in{" "}
+              <span className="font-mono">deliverableFiles</span>.
             </p>
           ) : null}
           {run.recentEvents?.length ? (
@@ -242,8 +253,28 @@ export default function AnantaTicketWorkspace({
               <span className="font-mono text-app-ink">{run.branch}</span>
               {run.prNumber ? (
                 <>
-                  {" "}
-                  · PR #{run.prNumber} {run.prDraft ? "(Draft)" : ""}
+                  {" · "}
+                  {run.prUrl ? (
+                    <a
+                      href={run.prUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-indigo hover:underline"
+                    >
+                      PR #{run.prNumber}
+                    </a>
+                  ) : (
+                    <span className="font-medium text-indigo">PR #{run.prNumber}</span>
+                  )}
+                  {run.prDraft ? (
+                    <span className="ml-1 rounded-full bg-warning/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warning">
+                      Draft
+                    </span>
+                  ) : (
+                    <span className="ml-1 rounded-full bg-success/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-success">
+                      Open
+                    </span>
+                  )}
                 </>
               ) : null}
             </p>

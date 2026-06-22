@@ -32,6 +32,7 @@ export interface EngineeringRunListItem {
 
 export interface EngineeringRunDetail extends EngineeringRunListItem {
   prNumber: number | null;
+  prUrl: string | null;
   prDraft: boolean;
   durationMinutes: number;
   costUsd: number;
@@ -80,12 +81,23 @@ function resolveBranchName(): string {
   return process.env.ENGINEERING_CODING_BRANCH ?? "agentos/engineering";
 }
 
+async function loadBranchPrForPipeline(jiraKey: string, pipelineId: string) {
+  // First try to find the actual branch used in audit logs (per-ticket branch)
+  const pushLog = await prisma.auditLog.findFirst({
+    where: { pipelineId, event: "ENGINEERING_PUSHED_TO_BRANCH" },
+    orderBy: { timestamp: "desc" },
+  });
+  const branchFromLog = (pushLog?.metadata as { targetBranch?: string } | null)?.targetBranch;
+
+  return loadBranchPr(jiraKey, branchFromLog);
+}
+
 function ticketSummary(ticket: Ticket): string {
   const normalized = ticket.normalizedData as { summary?: string } | null;
   return normalized?.summary?.trim() || ticket.jiraKey;
 }
 
-function mapFileChange(action: "create" | "modify"): "created" | "modified" {
+function mapFileChange(action: "create" | "modify" | "delete"): "created" | "modified" {
   return action === "create" ? "created" : "modified";
 }
 
@@ -344,15 +356,18 @@ async function loadImplementationOutput(
   return log.output as unknown as ImplementationOutput;
 }
 
-async function loadBranchPr(jiraKey: string) {
+async function loadBranchPr(jiraKey: string, branchName?: string | null) {
+  const where = branchName
+    ? { jiraKey, branchName }
+    : { jiraKey };
   const row = await prisma.branchState.findFirst({
-    where: { jiraKey },
+    where,
     orderBy: { updatedAt: "desc" },
   });
   if (!row?.prUrl) return null;
   const match = row.prUrl.match(/\/pull\/(\d+)/);
   return {
-    prNumber: match ? Number(match[1]) : null,
+    prNumber: row.prNumber ?? (match ? Number(match[1]) : null),
     prUrl: row.prUrl,
     draft: row.prStatus !== "open",
   };
@@ -381,13 +396,13 @@ function resolveRunDeliverableContext(
   return { implementationMode, deliverableFiles };
 }
 
-function buildDetail(
+async function buildDetail(
   pipeline: Pipeline & { ticket: Ticket },
   impl: ImplementationOutput | null,
   logs: AuditLog[],
   costUsd: number,
   failure: FailureInfo
-): EngineeringRunDetail {
+): Promise<EngineeringRunDetail> {
   const staged = getStagedFilesForRun(pipeline.id);
   const files = buildFiles(pipeline.id, impl);
   const criteriaTotal = impl?.criteriaMapping?.length ?? 0;
@@ -407,6 +422,9 @@ function buildDetail(
       ? pipeline.completedAt.getTime() - pipeline.startedAt.getTime()
       : Date.now() - pipeline.startedAt.getTime();
 
+  // Load PR info from BranchState (written after push in orchestrator)
+  const branchPr = await loadBranchPrForPipeline(pipeline.ticket.jiraKey, pipeline.id);
+
   return {
     pipelineId: pipeline.id,
     jiraKey: pipeline.ticket.jiraKey,
@@ -423,8 +441,9 @@ function buildDetail(
       : null,
     canResume: pipeline.status === "FAILED",
     recentEvents: buildRecentEvents(logs),
-    prNumber: null,
-    prDraft: true,
+    prNumber: branchPr?.prNumber ?? null,
+    prUrl: branchPr?.prUrl ?? null,
+    prDraft: branchPr?.draft ?? true,
     durationMinutes: Math.max(1, Math.round(durationMs / 60_000)),
     costUsd,
     toolCallCount: logs.filter((l) => l.event === "CODING_TOOL_CALL_COMPLETED").length,
@@ -512,16 +531,16 @@ export async function getEngineeringRun(
   });
   const costUsd = stageLogs.reduce((sum, l) => sum + (l.costUsd ?? 0), 0);
 
-  const detail = buildDetail(pipeline, impl, logs, costUsd, failure);
-  const prInfo = await loadBranchPr(pipeline.ticket.jiraKey);
-  if (prInfo) {
-    detail.prNumber = prInfo.prNumber;
+  const detail = await buildDetail(pipeline, impl, logs, costUsd, failure);
+
+  // If prNumber is already set from BranchState, also populate the pr object for compatibility
+  if (detail.prNumber && detail.prUrl) {
     detail.pr = {
       title: `${pipeline.ticket.jiraKey}: ${ticketSummary(pipeline.ticket)}`,
       description: impl?.codingSummary ?? impl?.summary ?? "",
       labels: ["agent-generated"],
-      draft: prInfo.draft,
-      url: prInfo.prUrl,
+      draft: detail.prDraft,
+      url: detail.prUrl,
       reviewers: [],
     };
   }

@@ -98,7 +98,7 @@ ${deliverableFiles.length ? `\nDeliverable details:\n${deliverableFiles.map((f) 
   return `
 Jira: ${input.jiraKey}
 Pipeline: ${input.pipelineId}
-Branch: ${input.branchName}
+Working branch: ${input.branchName}
 Implementation mode: ${mode}
 PM context attached: ${input.pmContext ? "yes" : "no"}
 
@@ -145,7 +145,9 @@ ${generatedPrd?.implementationDeltaSummary ? `CODEBASE DELTA (build only net-new
 
 ${input.compileFeedback ? `SANDBOX COMPILE/TEST FEEDBACK — fix these errors before finishing:\n${input.compileFeedback}` : ""}
 
-Begin PHASE 1: read and search the codebase on branch "${input.branchName}",
-then PHASE 2: stage ${mode === "content" ? "document" : "source"} file changes, then return the final JSON summary.
+Begin PHASE 1: explore the codebase (list_dir, grep, search_codebase, read_file),
+PHASE 2: implement using edit_file / write_file,
+PHASE 3: verify with run_command (type-checker), fix errors,
+PHASE 4: return the final JSON summary.
   `.trim();
 }

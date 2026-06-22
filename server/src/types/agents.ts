@@ -45,7 +45,7 @@ export interface CriterionMapping {
 
 export interface CodeChange {
   filePath: string;
-  action: "create" | "modify";
+  action: "create" | "modify" | "delete";
   summary: string;
   linesChanged?: number;
 }

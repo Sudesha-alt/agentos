@@ -18,7 +18,7 @@ export abstract class BaseAgent<TParsed = Record<string, unknown>> {
   async run(
     pipelineId: string,
     userPrompt: string,
-    options?: { systemPrompt?: string }
+    options?: { systemPrompt?: string; jsonMode?: boolean; maxTokens?: number }
   ): Promise<AgentOutput<TParsed>> {
     const startTime = Date.now();
     const system = options?.systemPrompt ?? this.systemPrompt;
@@ -32,7 +32,8 @@ export abstract class BaseAgent<TParsed = Record<string, unknown>> {
         chatCompletionText({
           system,
           user: userPrompt,
-          maxTokens: this.maxTokens,
+          maxTokens: options?.maxTokens ?? this.maxTokens,
+          jsonMode: options?.jsonMode ?? false,
         }),
       { attempts: 3, baseDelayMs: 1200 }
     );

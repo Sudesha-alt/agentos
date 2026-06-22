@@ -300,6 +300,9 @@ Codebase constraints:
 Codebase intelligence (modules, similar work, candidate files):
 {{codebase_intelligence}}
 
+Similar past PRDs and implementation plans (full content — use these to identify reusable patterns, existing infrastructure, and implied requirements; do NOT copy them verbatim):
+{{similar_past_work}}
+
 Jira: {{jira_key}}
 Title: {{ticket_summary}}
 
@@ -310,8 +313,8 @@ Quality bar:
 - Technical considerations include codebase findings with file paths
 - existingCapabilities MUST list what the repo already provides for this ticket
 - netNewWork MUST list only what must be built/changed (delta work)
-- reuseFromCodebase MUST cite modules/patterns to extend
-- implementationDeltaSummary MUST explain already-built vs net-new in 2-4 sentences
+- reuseFromCodebase MUST cite modules/patterns to extend — cross-reference the "Similar past PRDs and implementation plans" block above
+- implementationDeltaSummary MUST explain already-built vs net-new in 2-4 sentences, mentioning any relevant past work from the similar_past_work block
 - Open questions are real and named with owner
 - effortEstimate and complexitySummary use AgentOS agent pipeline wall-clock hours (Virin → Ananta → Neel), NOT human developer sprint days. Typical ranges: XS 30–90 min, S 1–3 h, M 3–8 h, L 8–16 h, XL 16–40 h.
 - If the ticket is a document/content deliverable (curriculum, policy, playbook, documentation):
