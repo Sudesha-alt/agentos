@@ -1,0 +1,350 @@
+/* Legacy marketing sections (problem, agents, pricing, etc.) inside Torus shell */
+
+.torus-marketing .legacy-marketing {
+  position: relative;
+  z-index: 1;
+}
+
+.torus-marketing .legacy-marketing section {
+  padding: 48px 0;
+}
+
+.torus-marketing .legacy-marketing .text-\[\#2B2D33\] {
+  color: var(--text) !important;
+}
+
+.torus-marketing .legacy-marketing .text-\[\#6B6B6B\] {
+  color: var(--text-mid) !important;
+}
+
+.torus-marketing .legacy-marketing .text-\[\#6B6B6B\]\/40 {
+  color: color-mix(in srgb, var(--text-mid) 40%, transparent) !important;
+}
+
+.torus-marketing .legacy-marketing .text-red-600 {
+  color: var(--error) !important;
+}
+
+.torus-marketing .legacy-marketing .text-emerald-700 {
+  color: var(--success) !important;
+}
+
+.torus-marketing .legacy-marketing .text-indigo {
+  color: var(--accent) !important;
+}
+
+.torus-marketing .legacy-marketing .bg-\[\#FAF7F0\],
+.torus-marketing .legacy-marketing .bg-\[\#FAF7F0\]\/60,
+.torus-marketing .legacy-marketing .bg-\[\#FAF7F0\]\/75,
+.torus-marketing .legacy-marketing .bg-white {
+  background: var(--surface) !important;
+}
+
+.torus-marketing .legacy-marketing .border-\[\#E8E4DE\],
+.torus-marketing .legacy-marketing .border-t,
+.torus-marketing .legacy-marketing .border-y {
+  border-color: var(--line) !important;
+}
+
+.torus-marketing .legacy-marketing .ring-\[\#A8C53A\]\/40 {
+  --tw-ring-color: color-mix(in srgb, var(--accent) 40%, transparent) !important;
+}
+
+.torus-marketing .legacy-marketing .bg-\[\#A8C53A\]\/20,
+.torus-marketing .legacy-marketing .bg-\[\#A8C53A\]\/25 {
+  background: var(--accent-dim) !important;
+}
+
+.torus-marketing .legacy-marketing .text-\[\#A8C53A\] {
+  color: var(--accent) !important;
+}
+
+.torus-marketing .legacy-marketing .accent-\[\#A8C53A\] {
+  accent-color: var(--accent) !important;
+}
+
+.torus-marketing .legacy-marketing .at-card {
+  background: var(--surface);
+  border: var(--lw) solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.torus-marketing .legacy-marketing .at-btn-charcoal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 14px 24px;
+  min-height: 44px;
+  background: var(--accent);
+  color: var(--black);
+  border: none;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.1s ease-out;
+}
+
+.torus-marketing .legacy-marketing .at-btn-charcoal:hover {
+  background: color-mix(in srgb, var(--accent) 85%, black);
+}
+
+.torus-marketing .legacy-marketing .at-metric {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 4vw, 2.75rem);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.torus-marketing .legacy-marketing .t-section-kicker {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.torus-marketing .legacy-marketing input,
+.torus-marketing .legacy-marketing select,
+.torus-marketing .legacy-marketing textarea {
+  background: var(--bg) !important;
+  border: var(--lw) solid var(--line) !important;
+  color: var(--text) !important;
+  border-radius: 0 !important;
+  font-family: var(--font-body);
+}
+
+.torus-marketing .legacy-marketing input:focus,
+.torus-marketing .legacy-marketing select:focus,
+.torus-marketing .legacy-marketing textarea:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.torus-marketing .legacy-marketing table th,
+.torus-marketing .legacy-marketing table td {
+  border-color: var(--line) !important;
+}
+
+.torus-marketing .legacy-marketing details summary {
+  list-style: none;
+}
+
+.torus-marketing .legacy-marketing details summary::-webkit-details-marker {
+  display: none;
+}
+
+/* Integration marquee */
+.torus-marketing .legacy-marketing .at-marquee-logos-track,
+.torus-marketing .legacy-marketing .at-marquee-track {
+  animation: torus-marquee 40s linear infinite;
+}
+
+.torus-marketing .legacy-marketing .at-marquee-logos:hover .at-marquee-logos-track,
+.torus-marketing .legacy-marketing .at-marquee:hover .at-marquee-track {
+  animation-play-state: paused;
+}
+
+.torus-marketing .legacy-marketing .at-logo-pill {
+  border: var(--lw) solid var(--line);
+  background: var(--surface);
+  padding: 12px 20px;
+  min-height: 52px;
+}
+
+@keyframes torus-marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+/* Agent chapter books — Torus palette */
+.torus-marketing .legacy-marketing .at-chapter-row {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  gap: 20px;
+  overflow-x: auto;
+  padding: 4px 4px 12px;
+  scroll-snap-type: x proximity;
+}
+
+@media (min-width: 768px) {
+  .torus-marketing .legacy-marketing .at-chapter-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 290px));
+    justify-content: center;
+    overflow-x: visible;
+    gap: 20px;
+    padding: 0;
+  }
+}
+
+@media (min-width: 1280px) {
+  .torus-marketing .legacy-marketing .at-chapter-row {
+    grid-template-columns: repeat(4, 290px);
+    gap: 24px;
+  }
+}
+
+.torus-marketing .legacy-marketing .at-chapter-book {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: stretch;
+  width: 290px;
+  min-height: 350px;
+  scroll-snap-align: center;
+  padding: 0;
+  border: var(--lw) solid var(--line);
+  cursor: pointer;
+  border-radius: 0;
+  overflow: hidden;
+  background: transparent;
+  box-shadow: none;
+  transition: border-color 0.2s ease-out;
+}
+
+.torus-marketing .legacy-marketing .at-chapter-book:hover,
+.torus-marketing .legacy-marketing .at-chapter-book-active {
+  border-color: var(--accent);
+}
+
+.torus-marketing .legacy-marketing .at-chapter-spine {
+  width: 16px;
+  flex-shrink: 0;
+  background: var(--accent-dim);
+  border-right: var(--lw) solid var(--line);
+}
+
+.torus-marketing .legacy-marketing .at-chapter-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--surface);
+}
+
+.torus-marketing .legacy-marketing .at-chapter-head {
+  padding: 32px 20px 26px;
+}
+
+.torus-marketing .legacy-marketing .at-chapter-title {
+  margin: 0;
+  max-width: 200px;
+  white-space: pre-line;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 110%;
+  letter-spacing: -0.4px;
+  color: var(--text);
+}
+
+.torus-marketing .legacy-marketing .at-chapter-rule {
+  height: 1px;
+  margin: 0 20px;
+  background: var(--line);
+}
+
+.torus-marketing .legacy-marketing .at-chapter-roman {
+  padding: 10px 20px 0;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 500;
+  line-height: 1.45;
+  color: var(--text-faint);
+}
+
+.torus-marketing .legacy-marketing .at-chapter-art-wrap {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  padding: 0 12px 8px;
+}
+
+.torus-marketing .legacy-marketing .at-chapter-art {
+  width: 100%;
+  min-height: 120px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.torus-marketing .legacy-marketing .at-chapter-art-olive,
+.torus-marketing .legacy-marketing .at-chapter-art-amber,
+.torus-marketing .legacy-marketing .at-chapter-art-lavender,
+.torus-marketing .legacy-marketing .at-chapter-art-pipeline,
+.torus-marketing .legacy-marketing .at-chapter-art-cream,
+.torus-marketing .legacy-marketing .at-chapter-art-fallback {
+  background: var(--accent-dim);
+  border-top: var(--lw) solid var(--line);
+}
+
+.torus-marketing .legacy-marketing .at-chapter-foot {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 20px 12px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 1px;
+  color: var(--text-faint);
+  border-top: var(--lw) solid var(--line);
+}
+
+.torus-marketing .legacy-marketing .at-chapter-cta {
+  padding: 10px 20px 16px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.torus-marketing .legacy-marketing .at-chapter-book:hover .at-chapter-cta,
+.torus-marketing .legacy-marketing .at-chapter-book-active .at-chapter-cta {
+  color: var(--accent);
+}
+
+.torus-marketing .legacy-marketing .at-integration-logo {
+  filter: grayscale(1) opacity(0.7);
+  transition: filter 0.2s ease-out;
+}
+
+.torus-marketing.torus-light .legacy-marketing .at-integration-logo {
+  filter: grayscale(1) opacity(0.55);
+}
+
+.torus-marketing .legacy-marketing .at-logo-pill:hover .at-integration-logo {
+  filter: none;
+  opacity: 1;
+}
+
+.torus-marketing .legacy-marketing .rounded-lg,
+.torus-marketing .legacy-marketing .rounded-full,
+.torus-marketing .legacy-marketing .rounded-2xl {
+  border-radius: 0 !important;
+}
+
+.torus-marketing .legacy-marketing h2 {
+  font-family: var(--font-body);
+  font-weight: 500;
+}
+
+.torus-marketing .legacy-marketing section > div > .mb-10 p:first-child {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent) !important;
+}
+
+
+@media (prefers-reduced-motion: reduce) {
+  .torus-marketing .legacy-marketing .at-marquee-logos-track,
+  .torus-marketing .legacy-marketing .at-marquee-track {
+    animation: none;
+  }
+}
