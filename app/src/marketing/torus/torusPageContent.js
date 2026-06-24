@@ -9,7 +9,10 @@ export const BRAND = {
 
 export const NAV_LINKS = [
   { label: "INTELLIGENCE", href: "#platform" },
-  { label: "PIPELINE", href: "#workflow" },
+  { label: "AGENTS", href: "#agents" },
+  { label: "PRICING", href: "#pricing" },
+  { label: "ROI", href: "#roi" },
+  { label: "FAQ", href: "#faq" },
 ];
 
 export const HERO = {
@@ -19,7 +22,7 @@ export const HERO = {
   primaryCta: "REQUEST EARLY ACCESS",
   primaryHref: "/login",
   secondaryCta: "WATCH DEMO",
-  secondaryHref: "#platform",
+  secondaryHref: "#solution",
   fallback: "or email",
 };
 
