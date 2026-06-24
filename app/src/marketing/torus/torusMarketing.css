@@ -1,0 +1,1572 @@
+/* Torus-inspired marketing layout — scoped to .torus-marketing */
+
+.torus-marketing {
+  --black: #000000;
+  --gray-950: #080808;
+  --gray-900: #141414;
+  --gray-800: #222222;
+  --gray-700: #333333;
+  --gray-600: #4a4a4a;
+  --gray-400: #8a8a8a;
+  --gray-300: #9a9a9a;
+  --gray-200: #d4d4d4;
+  --white: #ffffff;
+  --accent: #e67e22;
+  --accent-dim: rgba(230, 126, 34, 0.12);
+  --success: #4a7a5b;
+  --warning: #9a7b3c;
+  --error: #8b4049;
+  --info: #4a6a8a;
+  --bg: var(--black);
+  --text: var(--gray-200);
+  --text-mid: var(--gray-300);
+  --text-dim: var(--gray-400);
+  --text-faint: var(--gray-600);
+  --surface: var(--gray-950);
+  --lw: 1px;
+  --line: var(--gray-700);
+  --line-faint: rgba(255, 255, 255, 0.12);
+  --font-display: "Space Grotesk", sans-serif;
+  --font-body: "IBM Plex Sans", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+  --ease-plot: cubic-bezier(0.25, 0, 0.2, 1);
+
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  position: relative;
+}
+
+.torus-marketing.torus-light {
+  --accent: #b85a00;
+  --accent-dim: rgba(184, 90, 0, 0.08);
+  --bg: #f5f3f0;
+  --text: #1a1a1a;
+  --text-mid: #4a4a4a;
+  --text-dim: #777777;
+  --text-faint: #999999;
+  --surface: #edeae6;
+  --line: #d4d0cc;
+  --line-faint: rgba(0, 0, 0, 0.1);
+}
+
+.torus-marketing .logo-dark {
+  display: none;
+}
+
+.torus-marketing.torus-light .logo-light {
+  display: none;
+}
+
+.torus-marketing.torus-light .logo-dark {
+  display: inline;
+}
+
+.torus-marketing .page {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 48px;
+  position: relative;
+}
+
+.torus-marketing .mode-toggle {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+  background: transparent;
+  border: var(--lw) solid var(--line);
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: color 0.1s ease-out, border-color 0.1s ease-out;
+}
+
+.torus-marketing .mode-toggle:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.torus-marketing .plot-reveal {
+  clip-path: inset(0 100% 100% 0);
+  transition: clip-path 0.6s var(--ease-plot);
+}
+
+.torus-marketing .plot-reveal.revealed {
+  clip-path: inset(0 0 0 0);
+}
+
+.torus-marketing .stagger-reveal > * {
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.9s var(--ease-plot), transform 0.9s var(--ease-plot);
+}
+
+.torus-marketing .stagger-reveal.revealed > * {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.torus-marketing .stagger-reveal.revealed > *:nth-child(1) { transition-delay: 0ms; }
+.torus-marketing .stagger-reveal.revealed > *:nth-child(2) { transition-delay: 0.3s; }
+.torus-marketing .stagger-reveal.revealed > *:nth-child(3) { transition-delay: 0.6s; }
+.torus-marketing .stagger-reveal.revealed > *:nth-child(4) { transition-delay: 0.9s; }
+
+.torus-marketing .grid-patch {
+  position: absolute;
+  background-image:
+    linear-gradient(var(--line-faint) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line-faint) 1px, transparent 1px);
+  background-size: 32px 32px;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 0.6s var(--ease-plot);
+}
+
+.torus-marketing .grid-patch.revealed {
+  opacity: 1;
+}
+
+.torus-marketing .grid-patch-hero {
+  top: 0;
+  right: 0;
+  width: 55%;
+  height: 520px;
+  mask-image: radial-gradient(ellipse 80% 75% at 100% 0%, black 60%, transparent 90%);
+  opacity: 1;
+}
+
+.torus-marketing .grid-patch-email {
+  left: 0;
+  width: 45%;
+  height: 320px;
+  mask-image: radial-gradient(ellipse 75% 70% at 0% 60%, black 55%, transparent 85%);
+}
+
+.torus-marketing .grid-patch-steps {
+  right: -40px;
+  bottom: -120px;
+  width: 55%;
+  height: 420px;
+  mask-image: radial-gradient(ellipse 75% 65% at 80% 40%, black 40%, transparent 80%);
+}
+
+.torus-marketing .grid-patch-cta {
+  right: 0;
+  width: 50%;
+  height: 300px;
+  mask-image: radial-gradient(ellipse 75% 70% at 100% 40%, black 50%, transparent 85%);
+}
+
+.torus-marketing .grid-glow {
+  position: absolute;
+  pointer-events: none;
+  z-index: 0;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 60%);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.6s var(--ease-plot);
+}
+
+.torus-marketing.torus-light .grid-glow {
+  background: radial-gradient(circle, rgba(230, 126, 34, 0.2) 0%, transparent 60%);
+}
+
+.torus-marketing .grid-glow.revealed {
+  opacity: 1;
+}
+
+.torus-marketing .grid-glow-hero {
+  top: 80px;
+  right: 120px;
+  animation: torus-grid-drift-h 16s ease-in-out infinite;
+}
+
+.torus-marketing .grid-glow-email {
+  top: 80px;
+  left: 60px;
+  animation: torus-grid-drift-h 18s ease-in-out infinite;
+  animation-delay: -5s;
+}
+
+.torus-marketing .grid-glow-steps {
+  bottom: -20px;
+  right: 60px;
+  animation: torus-grid-drift-v 20s ease-in-out infinite;
+  animation-delay: -8s;
+}
+
+.torus-marketing .grid-glow-cta {
+  top: 40px;
+  right: 100px;
+  animation: torus-grid-drift-h 17s ease-in-out infinite reverse;
+  animation-delay: -12s;
+}
+
+@keyframes torus-grid-drift-h {
+  0%, 100% { transform: translate(0); }
+  50% { transform: translate(140px); }
+}
+
+@keyframes torus-grid-drift-v {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(100px); }
+}
+
+.torus-marketing .rings-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  overflow: clip;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.torus-marketing .ambient-rings {
+  position: absolute;
+  pointer-events: none;
+}
+
+.torus-marketing .ambient-rings ellipse {
+  fill: none;
+}
+
+.torus-marketing .ambient-rings .ring {
+  stroke: #ffffff17;
+  stroke-width: 1;
+}
+
+.torus-marketing .ambient-rings .ring-faint {
+  stroke: #ffffff0d;
+  stroke-width: 0.5;
+}
+
+.torus-marketing.torus-light .ambient-rings .ring {
+  stroke: #0000001f;
+}
+
+.torus-marketing.torus-light .ambient-rings .ring-faint {
+  stroke: #00000012;
+}
+
+.torus-marketing .ambient-rings .ring-bead {
+  stroke: #ffffff40;
+  stroke-width: 1.5;
+  stroke-dasharray: 80 8000;
+  animation: torus-ring-bead 25s linear infinite;
+}
+
+.torus-marketing .ring-bead-b {
+  animation-duration: 18s;
+  animation-direction: reverse;
+}
+
+.torus-marketing .ring-bead-c {
+  animation-duration: 30s;
+  animation-delay: -12s;
+}
+
+.torus-marketing .ring-bead-d {
+  animation-duration: 14s;
+  animation-direction: reverse;
+  animation-delay: -6s;
+}
+
+.torus-marketing.torus-light .ambient-rings .ring-bead {
+  stroke: #0003;
+}
+
+@keyframes torus-ring-bead {
+  0% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -9000; }
+}
+
+.torus-marketing .ring-top {
+  top: -600px;
+  right: -1800px;
+  width: 3000px;
+  height: 2400px;
+}
+
+.torus-marketing .ring-mid {
+  top: 1400px;
+  left: -2000px;
+  width: 3200px;
+  height: 2600px;
+}
+
+.torus-marketing .connector {
+  display: flex;
+  align-items: center;
+  margin: 64px 0 40px;
+  position: relative;
+  z-index: 1;
+  scroll-margin-top: 72px;
+}
+
+.torus-marketing .connector-line {
+  flex: 1;
+  height: 0;
+  border-top: var(--lw) solid var(--line);
+  transform: scaleX(0);
+  transition: transform 0.9s var(--ease-plot);
+}
+
+.torus-marketing .connector.revealed .connector-line {
+  transform: scaleX(1);
+}
+
+.torus-marketing .connector-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 3px;
+  color: var(--text-mid);
+  padding: 0 16px;
+  white-space: nowrap;
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 0.6s var(--ease-plot) 0.5s;
+}
+
+.torus-marketing .connector.revealed .connector-label {
+  clip-path: inset(0 0 0 0);
+}
+
+.torus-marketing .connector-dot {
+  width: 4px;
+  height: 4px;
+  border: var(--lw) solid var(--line);
+  border-radius: 50%;
+  flex-shrink: 0;
+  transform: scale(0);
+  transition: transform 0.4s var(--ease-plot) 0.7s;
+}
+
+.torus-marketing .connector.revealed .connector-dot {
+  transform: scale(1);
+}
+
+.torus-marketing .connector-first .connector-line {
+  transition-delay: 1.8s;
+}
+
+.torus-marketing .connector-first .connector-label {
+  transition-delay: 2.3s;
+}
+
+.torus-marketing .connector-first .connector-dot {
+  transition-delay: 2.5s;
+}
+
+@keyframes torus-nav-enter {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes torus-nav-border-draw {
+  0% { clip-path: inset(0 50% 0 50%); }
+  100% { clip-path: inset(0 0 0 0); }
+}
+
+@keyframes torus-hero-plot {
+  0% { opacity: 0; transform: translateY(12px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.torus-marketing .site-nav {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  border-bottom: var(--lw) solid var(--line);
+  background: #000c;
+  backdrop-filter: blur(12px) saturate(1.2);
+  animation: torus-nav-enter 0.5s var(--ease-plot) both;
+}
+
+.torus-marketing.torus-light .site-nav {
+  background: #f5f3f0cc;
+}
+
+.torus-marketing .site-nav::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--line);
+  animation: torus-nav-border-draw 0.6s var(--ease-plot) 0.3s both;
+}
+
+.torus-marketing .nav-inner {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 0 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  gap: 12px;
+}
+
+.torus-marketing .nav-brand {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 5px;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-decoration: none;
+  color: var(--text);
+  transform: translateY(4px);
+}
+
+.torus-marketing .nav-links {
+  display: flex;
+  gap: 24px;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.torus-marketing .nav-links::-webkit-scrollbar {
+  display: none;
+}
+
+.torus-marketing .nav-links a {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: var(--text-mid);
+  text-decoration: none;
+  transition: color 0.1s ease-out;
+  padding: 20px 0;
+}
+
+.torus-marketing .nav-links a:hover,
+.torus-marketing .nav-links a.active {
+  color: var(--accent);
+}
+
+.torus-marketing .nav-signin {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 2px;
+  padding: 10px 16px;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  text-decoration: none;
+  margin-left: 8px;
+  transition: background 0.1s, color 0.1s;
+}
+
+.torus-marketing .nav-signin:hover {
+  background: var(--accent);
+  color: var(--bg);
+}
+
+.torus-marketing .nav-toggle {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: none;
+  border: var(--lw) solid var(--line);
+  cursor: pointer;
+  color: var(--text-mid);
+  font-family: var(--font-mono);
+  font-size: 18px;
+}
+
+.torus-marketing .mobile-nav {
+  display: none;
+  position: fixed;
+  top: 64px;
+  left: 0;
+  right: 0;
+  z-index: 49;
+  background: var(--bg);
+  border-bottom: var(--lw) solid var(--line);
+  padding: 16px 20px;
+  flex-direction: column;
+}
+
+.torus-marketing .mobile-nav.open {
+  display: flex;
+}
+
+.torus-marketing .mobile-nav a {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 2px;
+  color: var(--text-mid);
+  text-decoration: none;
+  padding: 14px 0;
+  border-bottom: var(--lw) solid var(--line);
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.torus-marketing .mobile-nav a:last-child {
+  border-bottom: none;
+}
+
+.torus-marketing .mobile-nav a:hover {
+  color: var(--accent);
+}
+
+.torus-marketing .hero {
+  padding: 200px 0 120px;
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.torus-marketing .hero-torus {
+  position: absolute;
+  right: -60px;
+  top: 45%;
+  transform: translateY(-50%);
+  width: 400px;
+  height: 400px;
+  opacity: 0.2;
+  pointer-events: none;
+  color: var(--text);
+}
+
+.torus-marketing .hero-brand {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 48px;
+  animation: torus-hero-plot 0.7s var(--ease-plot) 0.2s both;
+}
+
+.torus-marketing h1.wordmark {
+  font-family: var(--font-display);
+  font-size: 84px;
+  font-weight: 300;
+  letter-spacing: 20px;
+  text-transform: uppercase;
+  line-height: 1;
+  margin: 0;
+  margin-right: -20px;
+}
+
+.torus-marketing .wordmark-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 4px;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+.torus-marketing .wordmark-sub-line {
+  width: 32px;
+  height: 0;
+  border-top: var(--lw) solid var(--line);
+}
+
+.torus-marketing .hero-headline {
+  font-family: var(--font-body);
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1.2;
+  margin: 0 0 20px;
+  animation: torus-hero-plot 0.7s var(--ease-plot) 0.9s both;
+}
+
+.torus-marketing .hero-description {
+  font-family: var(--font-body);
+  font-size: 17px;
+  font-weight: 400;
+  color: var(--text-mid);
+  line-height: 1.7;
+  max-width: 600px;
+  margin: 0;
+  animation: torus-hero-plot 0.7s var(--ease-plot) 1.15s both;
+}
+
+.torus-marketing .hero-cta {
+  display: flex;
+  gap: 16px;
+  margin-top: 48px;
+  animation: torus-hero-plot 0.7s var(--ease-plot) 1.4s both;
+}
+
+.torus-marketing .hero .cta-fallback {
+  animation: torus-hero-plot 0.6s var(--ease-plot) 1.65s both;
+}
+
+.torus-marketing .cta-fallback {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 12px;
+  display: block;
+}
+
+.torus-marketing .cta-fallback a {
+  color: var(--text-dim);
+  text-decoration: none;
+  transition: color 0.1s ease-out;
+}
+
+.torus-marketing .cta-fallback a:hover {
+  color: var(--accent);
+}
+
+.torus-marketing .section {
+  padding-bottom: 48px;
+  position: relative;
+  z-index: 1;
+}
+
+.torus-marketing .section-reveal {
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 1s var(--ease-plot), transform 1s var(--ease-plot);
+}
+
+.torus-marketing .section-reveal.revealed {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.torus-marketing .mission-wrap {
+  position: relative;
+}
+
+.torus-marketing .mission-headline {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 300;
+  line-height: 1.3;
+  letter-spacing: 0.5px;
+  margin: 0 0 32px;
+}
+
+.torus-marketing .mission-body p {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--text-mid);
+  line-height: 1.7;
+  margin: 0 0 8px;
+}
+
+.torus-marketing .mission-body strong {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.torus-marketing .mission-body p:has(strong) {
+  margin-top: 24px;
+}
+
+.torus-marketing .beyond-ai-intro p {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--text-mid);
+  line-height: 1.7;
+  margin: 0 0 8px;
+}
+
+.torus-marketing .beyond-ai-intro p:last-child {
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 0;
+}
+
+.torus-marketing .beyond-ai-intro {
+  margin-bottom: 32px;
+}
+
+.torus-marketing .beyond-ai-point {
+  padding: 12px 0;
+}
+
+.torus-marketing .beyond-ai-point:first-child {
+  padding-top: 0;
+}
+
+.torus-marketing .beyond-ai-point h3 {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  margin: 0 0 8px;
+}
+
+.torus-marketing .beyond-ai-point p {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--text-mid);
+  line-height: 1.7;
+  margin: 0;
+}
+
+.torus-marketing .btn {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  padding: 14px 24px;
+  border: none;
+  cursor: pointer;
+  min-height: 44px;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  transition: color 0.1s ease-out, border-color 0.1s ease-out, background 0.1s ease-out;
+}
+
+.torus-marketing .btn-primary {
+  background: var(--accent);
+  color: var(--black);
+}
+
+.torus-marketing .btn-primary:hover {
+  background: color-mix(in srgb, var(--accent) 85%, black);
+}
+
+.torus-marketing .btn-secondary {
+  background: transparent;
+  color: var(--text);
+  border: var(--lw) solid var(--line);
+}
+
+.torus-marketing .btn-secondary:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.torus-marketing .btn-sm {
+  font-size: 10px;
+  padding: 8px 16px;
+  min-height: auto;
+}
+
+.torus-marketing .dashboard-intro {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--text-mid);
+  line-height: 1.6;
+  margin-bottom: 24px;
+  max-width: 600px;
+  padding-left: 16px;
+  border-left: var(--lw) solid var(--accent);
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 0.6s var(--ease-plot) 3s;
+}
+
+.torus-marketing .dashboard-intro.revealed {
+  clip-path: inset(0 0 0 0);
+}
+
+.torus-marketing .mockup-frame {
+  border: var(--lw) solid transparent;
+  position: relative;
+  z-index: 1;
+  background: var(--bg);
+  transition: border-color 0.5s var(--ease-plot);
+}
+
+.torus-marketing .mockup-frame.revealed {
+  border-color: var(--line);
+}
+
+.torus-marketing .mockup-titleblock {
+  display: flex;
+  border-bottom: var(--lw) solid var(--line);
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 0.6s var(--ease-plot) 0.3s;
+}
+
+.torus-marketing .mockup-frame.revealed .mockup-titleblock {
+  clip-path: inset(0 0 0 0);
+}
+
+.torus-marketing .titleblock-brand {
+  padding: 10px 20px;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  border-right: var(--lw) solid var(--line);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 200px;
+  box-sizing: border-box;
+}
+
+.torus-marketing .titleblock-nav {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.torus-marketing .titleblock-nav-item {
+  padding: 10px 16px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  color: var(--text-faint);
+  border-right: var(--lw) solid var(--line);
+  display: flex;
+  align-items: center;
+}
+
+.torus-marketing .titleblock-nav-item.active {
+  color: var(--accent);
+}
+
+.torus-marketing .mockup-content {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  min-height: 460px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.5s var(--ease-plot) 0.6s, transform 0.5s var(--ease-plot) 0.6s;
+  position: relative;
+}
+
+.torus-marketing .mockup-frame.revealed .mockup-content {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.torus-marketing .mockup-sidebar {
+  border-right: var(--lw) solid var(--line);
+  background: var(--bg);
+}
+
+.torus-marketing .sidebar-group {
+  border-bottom: var(--lw) solid var(--line);
+}
+
+.torus-marketing .sidebar-group-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--text-faint);
+  padding: 10px 14px 4px;
+}
+
+.torus-marketing .sidebar-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.torus-marketing .sidebar-row.active {
+  color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.torus-marketing .dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.torus-marketing .dot-live {
+  background: var(--accent);
+}
+
+.torus-marketing .dot-learning {
+  border: var(--lw) solid var(--text-dim);
+}
+
+.torus-marketing .dot-ready {
+  background: var(--success);
+}
+
+.torus-marketing .mockup-main {
+  padding: 20px;
+}
+
+.torus-marketing .main-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: var(--lw) solid var(--line);
+}
+
+.torus-marketing .main-title {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 500;
+}
+
+.torus-marketing .main-meta-row {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  margin-top: 4px;
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.torus-marketing .meta-accent {
+  color: var(--accent);
+}
+
+.torus-marketing .agent-block {
+  background: var(--surface);
+  border: var(--lw) solid var(--line);
+}
+
+.torus-marketing .agent-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: var(--lw) solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--text-dim);
+}
+
+.torus-marketing .agent-block-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--accent);
+}
+
+.torus-marketing .agent-block-body {
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--text-mid);
+}
+
+.torus-marketing .agent-block-body .hl {
+  color: var(--text);
+}
+
+.torus-marketing .agent-block-body .accent {
+  color: var(--accent);
+}
+
+.torus-marketing .flag-rule {
+  opacity: 0.5;
+  font-size: 0.85em;
+}
+
+.torus-marketing .agent-block-actions {
+  display: flex;
+  border-top: var(--lw) solid var(--line);
+}
+
+.torus-marketing .agent-block-actions span {
+  flex: 1;
+  border-right: var(--lw) solid var(--line);
+  text-align: center;
+  padding: 12px 8px;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.torus-marketing .agent-block-actions span:last-child {
+  border-right: none;
+}
+
+.torus-marketing .agent-block-actions span.action-accent {
+  color: var(--accent);
+}
+
+.torus-marketing .role-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border: var(--lw) solid var(--accent);
+  background: var(--accent-dim);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--accent);
+  min-width: 120px;
+  justify-content: center;
+  animation: torus-role-glow 2s ease-in-out infinite;
+}
+
+.torus-marketing .role-switch:hover {
+  background: var(--accent);
+  color: var(--bg);
+  animation: none;
+}
+
+.torus-marketing .role-switch-label {
+  display: none;
+}
+
+.torus-marketing .role-switch-label.active {
+  display: inline;
+}
+
+@keyframes torus-role-glow {
+  0%, 100% { box-shadow: 0 0 4px var(--accent-dim); }
+  50% { box-shadow: 0 0 12px var(--accent), 0 0 24px var(--accent-dim); }
+}
+
+.torus-marketing .role-content {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.torus-marketing .role-content.active {
+  visibility: visible;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.torus-marketing .mockup-sidebar.role-content {
+  grid-row: 1;
+  grid-column: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.torus-marketing .mockup-main.role-content {
+  grid-row: 1;
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.torus-marketing .titleblock-nav.role-content {
+  display: none;
+}
+
+.torus-marketing .titleblock-nav.role-content.active {
+  display: flex;
+}
+
+.torus-marketing .email-layout {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 24px;
+  align-items: stretch;
+}
+
+.torus-marketing .email-frame {
+  border: var(--lw) solid transparent;
+  transition: border-color 0.5s var(--ease-plot);
+  display: flex;
+  flex-direction: column;
+}
+
+.torus-marketing .section-reveal.revealed .email-frame {
+  border-color: var(--line);
+}
+
+.torus-marketing .email-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--line);
+  border: var(--lw) solid var(--line);
+}
+
+.torus-marketing .email-sidebar-card {
+  background: var(--bg);
+  padding: 20px;
+}
+
+.torus-marketing .email-sidebar.stagger-reveal > * {
+  opacity: 1;
+  transform: none;
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 0.7s var(--ease-plot);
+}
+
+.torus-marketing .email-sidebar.stagger-reveal.revealed > * {
+  clip-path: inset(0 0 0 0);
+}
+
+.torus-marketing .email-sidebar-card-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.torus-marketing .email-sidebar-card h3 {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 500;
+  margin: 0 0 8px;
+}
+
+.torus-marketing .email-sidebar-card p {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--text-mid);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.torus-marketing .email-bar {
+  display: grid;
+  grid-template-columns: 48px 1fr;
+  border-bottom: var(--lw) solid var(--line);
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 0.5s var(--ease-plot);
+}
+
+.torus-marketing .section-reveal.revealed .email-bar {
+  clip-path: inset(0 0 0 0);
+}
+
+.torus-marketing .email-bar-label {
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  letter-spacing: 1px;
+  border-right: var(--lw) solid var(--line);
+}
+
+.torus-marketing .email-bar-value {
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-mid);
+}
+
+.torus-marketing .email-subject {
+  color: var(--text);
+}
+
+.torus-marketing .email-body-area {
+  flex: 1;
+  padding: 16px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text-mid);
+  clip-path: inset(0 0 100% 0);
+  transition: clip-path 0.6s var(--ease-plot) 0.6s;
+}
+
+.torus-marketing .section-reveal.revealed .email-body-area {
+  clip-path: inset(0 0 0 0);
+}
+
+.torus-marketing .email-torus-block {
+  margin: 16px 0;
+  border: var(--lw) solid var(--line);
+}
+
+.torus-marketing .email-torus-header {
+  padding: 8px 12px;
+  background: var(--accent-dim);
+  border-bottom: var(--lw) solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--accent);
+}
+
+.torus-marketing .email-torus-body {
+  padding: 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--text-mid);
+}
+
+.torus-marketing .email-sig {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: var(--lw) solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+.torus-marketing .cta-section {
+  padding: 96px 0;
+  position: relative;
+  z-index: 1;
+}
+
+.torus-marketing .cta-section::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--lw);
+  background: var(--line);
+}
+
+.torus-marketing .cta-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+
+.torus-marketing .cta-section h2 {
+  font-family: var(--font-body);
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1.3;
+  max-width: 500px;
+  margin: 0 0 12px;
+}
+
+.torus-marketing .cta-description {
+  font-family: var(--font-body);
+  font-size: 15px;
+  color: var(--text-mid);
+  line-height: 1.7;
+  max-width: 440px;
+  margin-bottom: 32px;
+}
+
+.torus-marketing .cta-buttons {
+  display: flex;
+  gap: 16px;
+}
+
+.torus-marketing .cta-wrap {
+  position: relative;
+}
+
+.torus-marketing .cta-logo {
+  position: absolute;
+  right: -40px;
+  top: 50%;
+  transform: translateY(-50%);
+  opacity: 0.6;
+  color: var(--text);
+}
+
+.torus-marketing .site-footer {
+  border-top: none;
+  padding: 40px 0 48px;
+  position: relative;
+  z-index: 1;
+}
+
+.torus-marketing .site-footer::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  right: 50%;
+  height: 1px;
+  background: var(--line);
+  transition: left 0.6s var(--ease-plot), right 0.6s var(--ease-plot);
+}
+
+.torus-marketing .site-footer.revealed::before {
+  left: 0;
+  right: 0;
+}
+
+.torus-marketing .footer-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.4s var(--ease-plot) 0.4s, transform 0.4s var(--ease-plot) 0.4s;
+}
+
+.torus-marketing .site-footer.revealed .footer-inner {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.torus-marketing .footer-brand {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.torus-marketing .footer-tagline {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--text-faint);
+}
+
+.torus-marketing .footer-contact {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  text-decoration: none;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.torus-marketing .footer-contact:hover {
+  color: var(--accent);
+}
+
+.torus-marketing .footer-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  letter-spacing: 1px;
+}
+
+.torus-marketing .skip-link {
+  position: absolute;
+  top: -100px;
+  left: 16px;
+  padding: 8px 16px;
+  background: var(--accent);
+  color: var(--black);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  z-index: 200;
+  text-decoration: none;
+}
+
+.torus-marketing .skip-link:focus {
+  top: 8px;
+}
+
+.torus-marketing *:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .torus-marketing *,
+  .torus-marketing *::before,
+  .torus-marketing *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+  }
+
+  .torus-marketing .connector-line,
+  .torus-marketing .connector-dot,
+  .torus-marketing .connector-label,
+  .torus-marketing .section-reveal,
+  .torus-marketing .mockup-frame,
+  .torus-marketing .mockup-content,
+  .torus-marketing .dashboard-intro,
+  .torus-marketing .footer-inner {
+    opacity: 1;
+    transform: none;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@media (min-width: 1440px) {
+  .torus-marketing .page,
+  .torus-marketing .nav-inner {
+    max-width: 1200px;
+    padding: 0 64px;
+  }
+
+  .torus-marketing h1.wordmark {
+    font-size: 96px;
+    letter-spacing: 24px;
+  }
+
+  .torus-marketing .hero-headline {
+    font-size: 36px;
+  }
+
+  .torus-marketing .email-layout {
+    grid-template-columns: 1fr 320px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .torus-marketing .page,
+  .torus-marketing .nav-inner {
+    padding: 0 32px;
+  }
+
+  .torus-marketing h1.wordmark {
+    font-size: 64px;
+    letter-spacing: 14px;
+  }
+
+  .torus-marketing .mockup-content {
+    grid-template-columns: 160px 1fr;
+  }
+
+  .torus-marketing .titleblock-brand {
+    width: 160px;
+  }
+}
+
+@media (max-width: 768px) {
+  .torus-marketing .page,
+  .torus-marketing .nav-inner {
+    padding: 0 20px;
+  }
+
+  .torus-marketing h1.wordmark {
+    font-size: 44px;
+    letter-spacing: 10px;
+  }
+
+  .torus-marketing .hero {
+    padding: 120px 0 64px;
+  }
+
+  .torus-marketing .hero-headline {
+    font-size: 24px;
+  }
+
+  .torus-marketing .hero-torus,
+  .torus-marketing .cta-logo {
+    display: none;
+  }
+
+  .torus-marketing .mockup-content {
+    grid-template-columns: 1fr;
+  }
+
+  .torus-marketing .mockup-sidebar.role-content {
+    display: none;
+  }
+
+  .torus-marketing .mockup-main.role-content {
+    grid-column: 1;
+  }
+
+  .torus-marketing .titleblock-brand {
+    width: auto;
+    min-width: 0;
+    padding: 10px 12px;
+    font-size: 12px;
+    letter-spacing: 2px;
+  }
+
+  .torus-marketing .titleblock-nav-item:nth-child(n + 4) {
+    display: none;
+  }
+
+  .torus-marketing .email-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .torus-marketing .grid-patch,
+  .torus-marketing .grid-glow,
+  .torus-marketing .rings-container {
+    display: none;
+  }
+
+  .torus-marketing .nav-links,
+  .torus-marketing .nav-signin {
+    display: none;
+  }
+
+  .torus-marketing .nav-toggle {
+    display: flex;
+  }
+
+  .torus-marketing .cta-section h2 {
+    font-size: 24px;
+  }
+
+  .torus-marketing .mission-headline {
+    font-size: 22px;
+  }
+}
+
+@media (max-width: 480px) {
+  .torus-marketing .hero {
+    padding: 100px 0 48px;
+  }
+
+  .torus-marketing h1.wordmark {
+    font-size: 36px;
+    letter-spacing: 8px;
+  }
+
+  .torus-marketing .wordmark-sub {
+    font-size: 9px;
+    letter-spacing: 1.5px;
+    white-space: normal;
+  }
+
+  .torus-marketing .hero-headline {
+    font-size: 18px;
+  }
+
+  .torus-marketing .hero-description {
+    font-size: 15px;
+  }
+
+  .torus-marketing .hero-cta {
+    flex-direction: column;
+  }
+
+  .torus-marketing .cta-buttons {
+    flex-direction: column;
+  }
+
+  .torus-marketing .footer-inner {
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .torus-marketing .footer-right {
+    border-top: var(--lw) solid var(--line);
+    padding-top: 16px;
+  }
+}
