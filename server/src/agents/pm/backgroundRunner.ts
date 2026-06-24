@@ -1,6 +1,8 @@
 import { withOrganizationContext } from "../../api/orgRequestContext";
 import { getActiveOrganizationId } from "../../organization/context";
 import { logger } from "../../utils/logger";
+import { autoStartEngineeringFromVirin } from "./autoStartEngineering";
+import { isHandoffTransferred } from "./handoffStatus";
 import { pmAnalysisStore } from "./store";
 
 const running = new Set<string>();
@@ -80,5 +82,14 @@ export function startPmAnalysisInBackground(
     .finally(() => {
       running.delete(key);
       clearPmAnalysisCancel(key);
+
+      const record = pmAnalysisStore.get(key);
+      if (
+        record?.status === "COMPLETED" &&
+        record.generatedPrd &&
+        !isHandoffTransferred(record.engineeringHandoff?.status)
+      ) {
+        void autoStartEngineeringFromVirin(key);
+      }
     });
 }

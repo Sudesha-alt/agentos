@@ -48,30 +48,31 @@ export async function shouldEnqueueJiraKey(
   }
 
   const virinRecord = pmAnalysisStore.get(jiraKey);
-  if (
-    virinRecord &&
-    (virinRecord.status === "RUNNING" ||
-      virinRecord.status === "AWAITING_INPUT" ||
-      virinRecord.status === "AWAITING_CONFIRMATION" ||
-      isPmAnalysisRunning(jiraKey))
-  ) {
-    return {
-      enqueue: false,
-      reason: "virin_active",
-      message: `${jiraKey} Virin analysis is active (${virinRecord.status})`,
-    };
-  }
 
-  if (
-    virinRecord?.status === "COMPLETED" &&
-    source !== "manual" &&
-    !options.engineeringOnly
-  ) {
-    return {
-      enqueue: false,
-      reason: "virin_completed",
-      message: `${jiraKey} Virin analysis completed — engineering pipeline may already be queued`,
-    };
+  // Post-Virin engineering handoff — skip Virin guards (auto-start runs before
+  // backgroundRunner clears `running`, which would otherwise look "virin_active").
+  if (!options.engineeringOnly) {
+    if (
+      virinRecord &&
+      (virinRecord.status === "RUNNING" ||
+        virinRecord.status === "AWAITING_INPUT" ||
+        virinRecord.status === "AWAITING_CONFIRMATION" ||
+        isPmAnalysisRunning(jiraKey))
+    ) {
+      return {
+        enqueue: false,
+        reason: "virin_active",
+        message: `${jiraKey} Virin analysis is active (${virinRecord.status})`,
+      };
+    }
+
+    if (virinRecord?.status === "COMPLETED" && source !== "manual") {
+      return {
+        enqueue: false,
+        reason: "virin_completed",
+        message: `${jiraKey} Virin analysis completed — engineering pipeline may already be queued`,
+      };
+    }
   }
 
   const ticket = await ticketRepo.findByJiraKey(jiraKey);
