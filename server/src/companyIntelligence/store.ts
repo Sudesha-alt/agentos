@@ -92,7 +92,7 @@ export async function getCompanyProfile(
   const orgId = resolveOrganizationId(organizationId);
   if (orgId) {
     const row = await prisma.companyProfile.findUnique({
-      where: { organizationId },
+      where: { organizationId: orgId },
     });
     if (row) return rowToProfile(row);
   }
