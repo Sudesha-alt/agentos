@@ -28,11 +28,18 @@ const VAGUE_PATTERNS = [
 
 const BDD_PATTERN = /\bgiven\b.+\bwhen\b.+\bthen\b/i;
 
+export type PrdValidationSource = "discovery" | "pm_agents";
+
+export interface ValidatePrdOptions {
+  /** Virin PRDs already passed product review — skip discovery-only confidence gate. */
+  source?: PrdValidationSource;
+}
+
 /**
  * The PRD gate refuses output that is structurally invalid, contains
  * untestable language, or that lacks an explicit failure surface.
  */
-export function validatePrd(prd: unknown): ValidationResult {
+export function validatePrd(prd: unknown, options?: ValidatePrdOptions): ValidationResult {
   const issues: ValidationIssue[] = [];
   const amberFlags: string[] = [];
 
@@ -83,7 +90,7 @@ export function validatePrd(prd: unknown): ValidationResult {
       "Open questions present but confidence is high. Verify reviewer expectation."
     );
   }
-  if (data.confidenceScore < 0.7) {
+  if (data.confidenceScore < 0.7 && options?.source !== "pm_agents") {
     issues.push({
       code: "LOW_CONFIDENCE",
       severity: "error",

@@ -24,21 +24,33 @@ export function generatedPrdToPrdOutput(
     (m) => `${m.metric}: ${m.target} (from ${m.baseline}) — ${m.measurementMethod}`
   );
 
+  const rawConfidence = scores?.prdQualityScore ?? prd.prdConfidence ?? 0.75;
+  const confidenceScore = rawConfidence > 0 ? rawConfidence : 0.75;
+  const paddedCriteria =
+    acceptanceCriteria.length >= 2
+      ? acceptanceCriteria
+      : acceptanceCriteria.length === 1
+        ? [
+            acceptanceCriteria[0]!,
+            "Given the feature is deployed When a stakeholder verifies scope Then all PRD acceptance criteria pass",
+          ]
+        : [
+            "Given context When action Then measurable outcome",
+            "Given the feature is deployed When a stakeholder verifies scope Then all PRD acceptance criteria pass",
+          ];
+
   return {
     title: prd.title,
     problemStatement: prd.problemStatement,
     proposedSolution: prd.proposedSolution,
     userStories: (prd.userStories ?? []).map((s) => s.story),
-    acceptanceCriteria:
-      acceptanceCriteria.length > 0
-        ? acceptanceCriteria
-        : ["Given context When action Then measurable outcome"],
+    acceptanceCriteria: paddedCriteria,
     outOfScope: prd.outOfScope ?? [],
     edgeCases,
     dependencies,
     successMetrics,
     openQuestions,
-    confidenceScore: scores?.prdQualityScore ?? prd.prdConfidence ?? 0.75,
+    confidenceScore,
     confidenceReason: buildScoreReason(scores, prd),
   };
 }

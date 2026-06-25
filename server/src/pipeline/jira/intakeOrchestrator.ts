@@ -23,6 +23,8 @@ import { classifyAiWorkerIntake } from "../../integrations/intentClassifier";
 import { getActiveOrganizationId } from "../../organization/context";
 import { logger } from "../../utils/logger";
 import type { PmPipelineContext } from "../../agents/pm/pmPipelineContext";
+import { buildPmPipelineContext } from "../../agents/pm/pmPipelineContext";
+import { isHandoffTransferred } from "../../agents/pm/handoffStatus";
 import { runPmAnalysisPipeline } from "../../agents/pm/orchestrator";
 import { startPmAnalysisInBackground, isPmAnalysisRunning } from "../../agents/pm/backgroundRunner";
 import { pmAnalysisStore } from "../../agents/pm/store";
@@ -188,6 +190,7 @@ export async function tryIntakeEnqueue(
     const batchItems: Array<{ ticketId: string; jiraKey: string }> = [];
     let skipped = 0;
     let virinStarted = 0;
+    let engineeringHandoffEnqueued = 0;
 
     logger.info(
       {
@@ -334,6 +337,27 @@ export async function tryIntakeEnqueue(
               "virin_active",
               `${taskKey} Virin analysis already active`
             );
+          } else if (
+            existingVirin?.status === "COMPLETED" &&
+            existingVirin.generatedPrd &&
+            !isHandoffTransferred(existingVirin.engineeringHandoff?.status)
+          ) {
+            const pmContext = buildPmPipelineContext(existingVirin);
+            const handoff = await tryEngineeringIntakeEnqueue(
+              taskKey,
+              pmContext,
+              normalizeSource(source)
+            );
+            engineeringHandoffEnqueued += handoff.enqueued;
+            skipped += handoff.skipped;
+            if (handoff.enqueued === 0) {
+              await recordSkip(
+                taskKey,
+                source,
+                "virin_completed",
+                `${taskKey} Virin completed but engineering handoff was not enqueued`
+              );
+            }
           } else {
             skipped += 1;
             await recordSkip(
@@ -355,7 +379,7 @@ export async function tryIntakeEnqueue(
           )
         : { started: false, enqueued: 0 };
 
-    const totalEnqueued = batchResult.enqueued + virinStarted;
+    const totalEnqueued = batchResult.enqueued + virinStarted + engineeringHandoffEnqueued;
 
     if (totalEnqueued > 0) {
       const rootSummary =
@@ -365,7 +389,8 @@ export async function tryIntakeEnqueue(
       await recordEnqueue(decomposed.sourceKey, source, {
         summary: rootSummary,
         issueType: decomposed.sourceIssueType,
-        pipelineStarted: batchResult.started || virinStarted > 0,
+        pipelineStarted:
+          batchResult.started || virinStarted > 0 || engineeringHandoffEnqueued > 0,
       });
     } else if (skipped > 0) {
       await recordSkip(
@@ -380,7 +405,7 @@ export async function tryIntakeEnqueue(
       sourceKey: decomposed.sourceKey,
       enqueued: totalEnqueued,
       skipped,
-      started: batchResult.started || virinStarted > 0,
+      started: batchResult.started || virinStarted > 0 || engineeringHandoffEnqueued > 0,
       groups: decomposed.groups.map((g) => ({
         storyKey: g.storyKey,
         taskKeys: g.taskKeys,

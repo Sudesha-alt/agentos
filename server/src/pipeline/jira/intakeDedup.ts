@@ -6,6 +6,7 @@ import { getActiveOrganizationId } from "../../organization/context";
 import { logger } from "../../utils/logger";
 import { pmAnalysisStore } from "../../agents/pm/store";
 import { isPmAnalysisRunning } from "../../agents/pm/backgroundRunner";
+import { isHandoffTransferred } from "../../agents/pm/handoffStatus";
 
 export type IntakeSkipReason =
   | "already_queued"
@@ -67,11 +68,14 @@ export async function shouldEnqueueJiraKey(
     }
 
     if (virinRecord?.status === "COMPLETED" && source !== "manual") {
-      return {
-        enqueue: false,
-        reason: "virin_completed",
-        message: `${jiraKey} Virin analysis completed — engineering pipeline may already be queued`,
-      };
+      if (isHandoffTransferred(virinRecord.engineeringHandoff?.status)) {
+        return {
+          enqueue: false,
+          reason: "virin_completed",
+          message: `${jiraKey} Virin analysis completed — engineering pipeline already queued or running`,
+        };
+      }
+      // Virin finished but Ananta handoff did not start — allow intake to retry engineering enqueue.
     }
   }
 
@@ -88,14 +92,18 @@ export async function shouldEnqueueJiraKey(
     : null;
 
   if (activePipeline) {
-    return {
-      enqueue: false,
-      reason: "pipeline_active",
-      message: `${jiraKey} already has an active pipeline (${activePipeline.status})`,
-    };
+    if (options.engineeringOnly && activePipeline.status === "PAUSED") {
+      // Stale classic discovery pause — Virin handoff may replace with pmContext run.
+    } else {
+      return {
+        enqueue: false,
+        reason: "pipeline_active",
+        message: `${jiraKey} already has an active pipeline (${activePipeline.status})`,
+      };
+    }
   }
 
-  if (ticket?.status === "PROCESSING") {
+  if (ticket?.status === "PROCESSING" && !options.engineeringOnly) {
     return {
       enqueue: false,
       reason: "already_processing",
@@ -103,7 +111,7 @@ export async function shouldEnqueueJiraKey(
     };
   }
 
-  if (ticket?.status === "AWAITING_HUMAN") {
+  if (ticket?.status === "AWAITING_HUMAN" && !options.engineeringOnly) {
     return {
       enqueue: false,
       reason: "awaiting_human",
@@ -138,7 +146,7 @@ export async function shouldEnqueueJiraKey(
       };
     }
 
-    if (source !== "manual") {
+    if (source !== "manual" && !options.engineeringOnly) {
       const failedPipeline = await prisma.pipeline.findFirst({
         where: { ticketId: ticket.id, status: "FAILED" },
         orderBy: { startedAt: "desc" },

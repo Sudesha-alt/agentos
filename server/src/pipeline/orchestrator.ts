@@ -216,7 +216,11 @@ export class PipelineOrchestrator {
         normalizedTicket.jiraKey,
         normalizedTicket,
       );
-      const prdValidation = await this.validatePrdStage(pipeline.id, productStage.agentOutput);
+      const prdValidation = await this.validatePrdStage(
+        pipeline.id,
+        productStage.agentOutput,
+        normalizedTicket.pmContext ? { source: "pm_agents" } : undefined
+      );
       await orgIntelligence.captureValidation({
         pipelineId: pipeline.id,
         jiraKey: normalizedTicket.jiraKey,
@@ -458,7 +462,11 @@ export class PipelineOrchestrator {
       if (prdValLog?.validationResult) {
         prdValidation = prdValLog.validationResult as unknown as ValidationResult;
       } else {
-        prdValidation = await this.validatePrdStage(pipelineId, productStage.agentOutput);
+        prdValidation = await this.validatePrdStage(
+          pipelineId,
+          productStage.agentOutput,
+          normalizedTicket.pmContext ? { source: "pm_agents" } : undefined
+        );
       }
       if (!(await this.continueOrPause(pipelineId, "PRD_VALIDATION", prdValidation))) {
         await ticketRepo.setStatus(ticket.id, "AWAITING_HUMAN");
@@ -909,14 +917,15 @@ export class PipelineOrchestrator {
 
   private async validatePrdStage(
     pipelineId: string,
-    output: AgentOutput<PrdOutput>
+    output: AgentOutput<PrdOutput>,
+    options?: { source?: "discovery" | "pm_agents" }
   ): Promise<ValidationResult> {
     const stageLog = await pipelineRepo.startStage({
       pipelineId,
       stage: "PRD_VALIDATION",
       inputJson: output.parsed as unknown as Prisma.InputJsonValue,
     });
-    const result = validatePrd(output.parsed);
+    const result = validatePrd(output.parsed, options);
     await pipelineRepo.completeStage({
       stageLogId: stageLog.id,
       output: result as unknown as Prisma.InputJsonValue,
