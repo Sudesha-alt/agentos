@@ -38,6 +38,44 @@ async function bootstrap(): Promise<void> {
   if (pmLoaded > 0) {
     logger.info({ count: pmLoaded }, "restored PM analyses from store");
   }
+
+  await recoverPipelineStateOnBoot().catch((err) => {
+    logger.warn({ err }, "startup pipeline queue recovery failed");
+  });
+  await hydrateQueueFromDb().catch((err) => {
+    logger.warn({ err }, "startup queue drain failed");
+  });
+
+  if (process.env.SENTRY_DSN) {
+    Sentry.init({ dsn: process.env.SENTRY_DSN });
+  }
+
+  const port = Number(process.env.PORT ?? 4000);
+  const app = createApp();
+
+  const server = app.listen(port, () => {
+    logger.info({ port }, "agentos-server listening");
+  });
+
+  initCodebaseVizWebSocket(server);
+
+  void runDeferredStartupTasks();
+
+  function shutdown(signal: string): void {
+    logger.info({ signal }, "shutting down");
+    void disconnectPrisma().finally(() => {
+      server.close(() => {
+        process.exit(0);
+      });
+      setTimeout(() => process.exit(1), 10_000).unref();
+    });
+  }
+
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+}
+
+async function runDeferredStartupTasks(): Promise<void> {
   await backfillEngineeringHandoffRecords().catch((err) => {
     logger.warn({ err }, "engineering handoff backfill failed");
   });
@@ -60,44 +98,10 @@ async function bootstrap(): Promise<void> {
 
   startJiraSyncScheduler();
   startIntakePollScheduler();
-  // startCanaryScheduler() removed — canary runs only with QA gate per pipeline
-
-  await recoverPipelineStateOnBoot().catch((err) => {
-    logger.warn({ err }, "startup pipeline queue recovery failed");
-  });
-  await hydrateQueueFromDb().catch((err) => {
-    logger.warn({ err }, "startup queue drain failed");
-  });
 
   await scanIntakeFromSyncedIssues().catch((err) => {
     logger.warn({ err }, "startup AI Worker intake scan failed");
   });
-
-  if (process.env.SENTRY_DSN) {
-    Sentry.init({ dsn: process.env.SENTRY_DSN });
-  }
-
-  const port = Number(process.env.PORT ?? 4000);
-  const app = createApp();
-
-  const server = app.listen(port, () => {
-    logger.info({ port }, "agentos-server listening");
-  });
-
-  initCodebaseVizWebSocket(server);
-
-  function shutdown(signal: string): void {
-    logger.info({ signal }, "shutting down");
-    void disconnectPrisma().finally(() => {
-      server.close(() => {
-        process.exit(0);
-      });
-      setTimeout(() => process.exit(1), 10_000).unref();
-    });
-  }
-
-  process.on("SIGINT", () => shutdown("SIGINT"));
-  process.on("SIGTERM", () => shutdown("SIGTERM"));
 }
 
 void bootstrap();

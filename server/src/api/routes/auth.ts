@@ -182,14 +182,15 @@ router.post("/reset-password", async (req, res) => {
 });
 
 router.get("/session", async (req, res) => {
-  const token = extractAuthToken(req);
-  if (!token) {
-    res.status(401).json({ error: "unauthorized" });
+  const { resolveSessionFromAuthHeader, resolveUserFromAuthHeader, issueSessionForUserId } =
+    await import("./authSession");
+
+  const fastSession = resolveSessionFromAuthHeader(req);
+  if (fastSession) {
+    res.json(fastSession);
     return;
   }
-  const { resolveUserFromAuthHeader, issueSessionForUserId } = await import(
-    "./authSession"
-  );
+
   const user = resolveUserFromAuthHeader(req);
   if (!user) {
     res.status(401).json({ error: "unauthorized" });
