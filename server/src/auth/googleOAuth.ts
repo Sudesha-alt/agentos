@@ -120,7 +120,7 @@ export async function fetchGoogleUserProfile(
   return {
     sub: body.sub,
     email: body.email.trim().toLowerCase(),
-    emailVerified: body.email_verified !== false,
+    emailVerified: body.email_verified ?? true,
     name: body.name?.trim() || body.email.split("@")[0] || "Google User",
     picture: body.picture,
   };
