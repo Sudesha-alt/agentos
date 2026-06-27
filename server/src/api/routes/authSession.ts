@@ -15,7 +15,87 @@ export type SessionUser = {
 
 type AuthTokenPayload = SessionUser & {
   issuedAt: string;
+  onboardingCompleted?: boolean;
 };
+
+export type AuthSessionResponse = {
+  token: string;
+  issuedAt: string;
+  user: SessionUser;
+  organization?: {
+    id: string;
+    name: string;
+    domain: string;
+    slug: string;
+    role: OrgRole;
+  };
+  onboardingCompleted: boolean;
+};
+
+function buildSessionResponse(
+  token: string,
+  payload: AuthTokenPayload
+): AuthSessionResponse {
+  const user: SessionUser = {
+    id: payload.id,
+    email: payload.email,
+    name: payload.name,
+    organizationId: payload.organizationId,
+    organizationName: payload.organizationName,
+    organizationDomain: payload.organizationDomain,
+    organizationSlug: payload.organizationSlug,
+    organizationRole: payload.organizationRole,
+  };
+
+  const organization =
+    payload.organizationId &&
+    payload.organizationSlug &&
+    payload.organizationName &&
+    payload.organizationDomain &&
+    payload.organizationRole
+      ? {
+          id: payload.organizationId,
+          name: payload.organizationName,
+          domain: payload.organizationDomain,
+          slug: payload.organizationSlug,
+          role: payload.organizationRole,
+        }
+      : undefined;
+
+  return {
+    token,
+    issuedAt: payload.issuedAt,
+    user,
+    organization,
+    onboardingCompleted: payload.onboardingCompleted ?? false,
+  };
+}
+
+/** True when JWT already carries enough state — skip DB round-trip on GET /auth/session. */
+export function canUseFastSessionPath(payload: AuthTokenPayload): boolean {
+  if (typeof payload.onboardingCompleted !== "boolean") return false;
+
+  if (!payload.onboardingCompleted) {
+    return !payload.organizationId;
+  }
+
+  return Boolean(payload.organizationId && payload.organizationSlug);
+}
+
+export function resolveSessionFromAuthHeader(req: {
+  header: (name: string) => string | undefined;
+  query: { token?: string };
+}): AuthSessionResponse | null {
+  const token = extractAuthToken(req);
+  if (!token) return null;
+
+  const payload = verifyAuthToken(token);
+  if (!payload) return null;
+
+  if (!canUseFastSessionPath(payload)) return null;
+
+  return buildSessionResponse(token, payload);
+}
 
 const registeredEmails = new Set<string>(["demo@agentos.ai"]);
 
@@ -171,36 +251,23 @@ export async function issueSessionForUserId(userId: string) {
   const membership = await getOrganizationForUser(user.id);
   const sessionUser = sessionUserFromMembership(user, membership);
 
-  const issuedAt = new Date().toISOString();
-  const token = signAuthToken({ ...sessionUser, issuedAt });
-
   const { getOnboarding } = await import("../../onboarding/store");
   const onboarding = await getOnboarding(sessionUser.id);
+  const onboardingCompleted = onboarding?.completed ?? false;
 
-  if (membership) {
-    const { warmOrganizationJiraCredentials, activateOrganizationJiraContext } =
-      await import("../../pipeline/jira/credentialsStore");
-    const { setActiveOrganizationId } = await import("../../organization/context");
-    setActiveOrganizationId(membership.organization.id);
-    await warmOrganizationJiraCredentials(membership.organization.id);
-    activateOrganizationJiraContext(membership.organization.id);
-  }
-
-  return {
-    token,
+  const issuedAt = new Date().toISOString();
+  const token = signAuthToken({
+    ...sessionUser,
     issuedAt,
-    user: sessionUser,
-    organization: membership
-      ? {
-          id: membership.organization.id,
-          name: membership.organization.name,
-          domain: membership.organization.domain,
-          slug: membership.organization.slug,
-          role: membership.role,
-        }
-      : undefined,
-    onboardingCompleted: onboarding?.completed ?? false,
-  };
+    onboardingCompleted,
+  });
+
+  return buildSessionResponse(token, {
+    ...sessionUser,
+    issuedAt,
+    onboardingCompleted,
+    organizationRole: membership?.role ?? sessionUser.organizationRole,
+  });
 }
 
 export async function createAuthSession(email: string) {
@@ -225,10 +292,7 @@ export async function createAuthSession(email: string) {
   if (normalizedEmail === "demo@agentos.ai") {
     const session = await issueSessionForUserId(user.id);
     await seedDemoOnboarding(session.user.id, session.user.email, session.user.name);
-    return {
-      ...session,
-      onboardingCompleted: true,
-    };
+    return issueSessionForUserId(user.id);
   }
 
   await ensureOnboarding({

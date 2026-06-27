@@ -152,6 +152,15 @@ const mockAuthAdapter = {
   async getSession() {
     return readStoredSession();
   },
+  async getGoogleAuthStatus() {
+    return { googleAvailable: false };
+  },
+  getGoogleAuthStartUrl() {
+    throw new Error("Google sign-in is not available in mock mode.");
+  },
+  async completeGoogleAuth() {
+    throw new Error("Google sign-in is not available in mock mode.");
+  },
   async login(payload) {
     const parsed = LoginRequestSchema.parse(payload);
     const registered = readRegisteredEmails();
@@ -309,6 +318,27 @@ const restAuthAdapter = {
     }
     clearStoredSession();
   },
+  async getGoogleAuthStatus() {
+    try {
+      return await authJsonFetch(apiPath("/api", "/auth/google/status"));
+    } catch {
+      return { googleAvailable: false };
+    }
+  },
+  getGoogleAuthStartUrl(returnTo = "/app") {
+    const params = new URLSearchParams({ returnTo });
+    return apiPath("/api", `/auth/google/start?${params.toString()}`);
+  },
+  async completeGoogleAuth(code) {
+    const session = LoginResponseSchema.parse(
+      await authJsonFetch(apiPath("/api", "/auth/google/complete"), {
+        method: "POST",
+        body: JSON.stringify({ code }),
+      })
+    );
+    persistSession(session);
+    return session;
+  },
 };
 
 export const authAdapter =
@@ -320,4 +350,16 @@ export function requestPasswordReset(payload) {
 
 export function resetPassword(payload) {
   return authAdapter.resetPassword(payload);
+}
+
+export function getGoogleAuthStatus() {
+  return authAdapter.getGoogleAuthStatus();
+}
+
+export function getGoogleAuthStartUrl(returnTo) {
+  return authAdapter.getGoogleAuthStartUrl(returnTo);
+}
+
+export function completeGoogleAuth(code) {
+  return authAdapter.completeGoogleAuth(code);
 }

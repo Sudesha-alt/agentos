@@ -2,7 +2,19 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../providers/useAuth";
 import AppPreloader from "./AppPreloader";
 
-const MIN_BOOT_MS = 600;
+function hasStoredAuthToken() {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = window.localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    return Boolean(parsed?.token);
+  } catch {
+    return false;
+  }
+}
+
+const MIN_BOOT_MS = 0;
 
 function removeInitialLoader() {
   document.getElementById("app-initial-loader")?.remove();
@@ -38,11 +50,11 @@ export default function AppBootstrapGate({ children }) {
     const revealTimer = window.setTimeout(() => {
       removeInitialLoader();
       setShowApp(true);
-    }, 420);
+    }, 120);
 
     const unmountTimer = window.setTimeout(() => {
       setOverlayMounted(false);
-    }, 860);
+    }, 280);
 
     return () => {
       window.clearTimeout(revealTimer);

@@ -13,6 +13,7 @@ import {
   revokeAuthToken,
 } from "./authSession";
 import { logger } from "../../utils/logger";
+import authGoogleRouter from "./authGoogle";
 
 const router = Router();
 
@@ -97,7 +98,16 @@ router.post("/login", async (req, res) => {
   }
 
   const user = await prisma.user.findUnique({ where: { email } });
-  const passwordOk = user ? await verifyPassword(password, user.passwordHash) : false;
+  if (!user?.passwordHash) {
+    res.status(401).json({
+      error: "invalid_credentials",
+      message: user
+        ? "This account uses Google sign-in. Continue with Google instead."
+        : INVALID_LOGIN_MESSAGE,
+    });
+    return;
+  }
+  const passwordOk = await verifyPassword(password, user.passwordHash);
 
   if (!user || !passwordOk) {
     res.status(401).json({
@@ -182,14 +192,15 @@ router.post("/reset-password", async (req, res) => {
 });
 
 router.get("/session", async (req, res) => {
-  const token = extractAuthToken(req);
-  if (!token) {
-    res.status(401).json({ error: "unauthorized" });
+  const { resolveSessionFromAuthHeader, resolveUserFromAuthHeader, issueSessionForUserId } =
+    await import("./authSession");
+
+  const fastSession = resolveSessionFromAuthHeader(req);
+  if (fastSession) {
+    res.json(fastSession);
     return;
   }
-  const { resolveUserFromAuthHeader, issueSessionForUserId } = await import(
-    "./authSession"
-  );
+
   const user = resolveUserFromAuthHeader(req);
   if (!user) {
     res.status(401).json({ error: "unauthorized" });
@@ -210,5 +221,7 @@ router.post("/logout", (req, res) => {
   if (token) revokeAuthToken(token);
   res.json({ ok: true });
 });
+
+router.use("/google", authGoogleRouter);
 
 export default router;

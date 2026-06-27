@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { DEMO_CREDENTIAL_HINT } from "../entities/auth";
+import { DEMO_CREDENTIAL_HINT, getGoogleAuthStartUrl, getGoogleAuthStatus } from "../entities/auth";
 import MarketingGridBackground from "../marketing/agent-team/components/MarketingGridBackground";
 import { useAuth } from "../shared/providers/useAuth";
 import { DATA_MODE } from "../shared/config/app";
@@ -15,6 +15,8 @@ export default function Login() {
   const [email, setEmail] = useState(isSignup ? "" : DEMO_CREDENTIAL_HINT.email);
   const [password, setPassword] = useState(isSignup ? "" : DEMO_CREDENTIAL_HINT.password);
   const [pending, setPending] = useState(false);
+  const [googlePending, setGooglePending] = useState(false);
+  const [googleAvailable, setGoogleAvailable] = useState(false);
   const [error, setError] = useState("");
 
   const destination = useMemo(() => {
@@ -23,6 +25,16 @@ export default function Login() {
     }
     return "/app";
   }, [location.state]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getGoogleAuthStatus().then((status) => {
+      if (!cancelled) setGoogleAvailable(Boolean(status?.googleAvailable));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function onSubmit(event) {
     event.preventDefault();
@@ -53,6 +65,12 @@ export default function Login() {
     } finally {
       setPending(false);
     }
+  }
+
+  function handleGoogleSignIn() {
+    setGooglePending(true);
+    setError("");
+    window.location.href = getGoogleAuthStartUrl(destination);
   }
 
   return (
@@ -111,12 +129,33 @@ export default function Login() {
 
             <button
               type="submit"
-              disabled={pending}
+              disabled={pending || googlePending}
               className="at-btn-charcoal w-full py-3.5 text-[15px] font-semibold disabled:opacity-50"
             >
               {pending ? "Please wait…" : isSignup ? "Create Account" : "Log In"}
             </button>
           </form>
+
+          {googleAvailable ? (
+            <>
+              <div className="my-6 flex items-center gap-3">
+                <div className="h-px flex-1 bg-[#E8E4DE]" />
+                <span className="text-[12px] font-medium uppercase tracking-wide text-[#6B6B6B]">
+                  or
+                </span>
+                <div className="h-px flex-1 bg-[#E8E4DE]" />
+              </div>
+              <button
+                type="button"
+                disabled={pending || googlePending}
+                onClick={handleGoogleSignIn}
+                className="flex w-full items-center justify-center gap-3 rounded-2xl border border-[#E8E4DE] bg-white px-4 py-3.5 text-[15px] font-semibold text-[#2B2D33] transition hover:border-[#2B2D33]/20 disabled:opacity-50"
+              >
+                <GoogleMark />
+                {googlePending ? "Redirecting to Google…" : "Continue with Google"}
+              </button>
+            </>
+          ) : null}
 
           <div className="mt-6 text-center text-[13px] text-[#6B6B6B]">
             {isSignup ? (
@@ -166,5 +205,28 @@ function Field({ id, label, value, onChange, type, required }) {
         className="mt-2 w-full rounded-2xl border border-[#E8E4DE] bg-[#FAF7F0]/50 px-4 py-3 text-[15px] text-[#2B2D33]"
       />
     </label>
+  );
+}
+
+function GoogleMark() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
+      <path
+        fill="#FFC107"
+        d="M43.611 20.083H42V20H24v8h11.303C33.654 32.657 29.083 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C33.64 6.053 28.991 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"
+      />
+      <path
+        fill="#FF3D00"
+        d="M6.306 14.691l6.571 4.819C14.655 16.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C33.64 6.053 28.991 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"
+      />
+      <path
+        fill="#4CAF50"
+        d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"
+      />
+      <path
+        fill="#1976D2"
+        d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.219 8-11.303 8-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44c7.682 0 14.344-4.337 17.694-10.691z"
+      />
+    </svg>
   );
 }

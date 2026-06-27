@@ -14,6 +14,7 @@ import AppBootstrapGate from "./shared/ui/AppBootstrapGate";
 import AppPageFallback from "./shared/ui/AppPageFallback";
 
 const Login = lazy(() => import("./pages/Login"));
+const GoogleAuthCallback = lazy(() => import("./pages/GoogleAuthCallback"));
 const Onboarding = lazy(() => import("./pages/Onboarding"));
 const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
 const ResetPasswordPage = lazy(() =>
@@ -55,6 +56,7 @@ function App() {
                 </PublicOnlyRoute>
               }
             />
+            <Route path="/auth/google/callback" element={<GoogleAuthCallback />} />
             <Route
               path="/forgot-password"
               element={
