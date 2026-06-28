@@ -401,6 +401,38 @@ function GitIntegrationContent({ setup, refetch, embedded = false }) {
                   ) : null}
                 </p>
               ) : null}
+              {githubApp?.installationPermissions &&
+              !githubApp.installationPermissions.ok ? (
+                <div className="rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm text-ink">
+                  <p className="font-medium text-ink">
+                    GitHub App is missing permissions required for Ananta to push code.
+                  </p>
+                  <p className="mt-2 text-ink-dim">
+                    Missing:{" "}
+                    <span className="font-mono text-[12px]">
+                      {githubApp.installationPermissions.missing.join(", ")}
+                    </span>
+                  </p>
+                  <p className="mt-2 text-ink-dim">
+                    Set <strong className="text-ink">Contents (Code)</strong> to{" "}
+                    <strong className="text-ink">Read and write</strong> on the GitHub App,
+                    save, then accept the permission update on your installation.
+                  </p>
+                  {githubApp.permissionsFixUrl || githubApp.installationPermissions.fixUrl ? (
+                    <a
+                      href={
+                        githubApp.permissionsFixUrl ??
+                        githubApp.installationPermissions.fixUrl
+                      }
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-3 inline-block text-indigo underline"
+                    >
+                      Open GitHub App permissions settings
+                    </a>
+                  ) : null}
+                </div>
+              ) : null}
               {githubApp?.capabilities?.length ? (
                 <ul className="grid gap-2 sm:grid-cols-2 text-sm text-muted">
                   {githubApp.capabilities.map((item) => (

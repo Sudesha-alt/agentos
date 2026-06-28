@@ -13,11 +13,13 @@ import {
 } from "../src/engineering/engineeringWorkspace";
 import { runEngineeringCodingAgentic } from "../src/engineeringCodingAgent";
 import type { ImplementationOutput, PrdOutput } from "../src/types/agents";
+import { TEST_REPO_BRANCH, TEST_REPO_URL } from "./testRepoConfig";
 
 const PIPELINE_ID = "";
 const JIRA_KEY = "DEMO-99";
-const REPO_URL = "https://github.com/Sudesha-agentos/sudesh_anna_test.git";
-const REPO_BRANCH = "test";
+
+const REPO_URL = TEST_REPO_URL;
+const REPO_BRANCH = TEST_REPO_BRANCH;
 const TARGET_FILE = "src/lib/utils.ts";
 
 const prd: PrdOutput = {

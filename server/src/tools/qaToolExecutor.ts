@@ -8,6 +8,7 @@ import {
   type QaRecommendation,
 } from "../qa/report/reportGenerator";
 import { getQaArtifacts } from "../qa/qaArtifactStore";
+import { resolveRepoScope } from "../codebaseIntelligence/repoScope";
 import { testRunner, type TestRunResult } from "../qa/testing/testRunner";
 import {
   runSecurityScanInSandbox,
@@ -25,8 +26,21 @@ function arrayOfStrings(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === "string");
 }
 
-function defaultBranch(branchName?: string): string {
-  return branchName || process.env.QA_DEFAULT_BRANCH || "main";
+function defaultBranch(pipelineId: string, branchName?: string): string {
+  if (branchName?.trim()) {
+    return branchName.trim();
+  }
+  const fromArtifacts = getQaArtifacts(pipelineId).implementationBranch;
+  if (fromArtifacts?.trim()) {
+    return fromArtifacts.trim();
+  }
+  const scope = resolveRepoScope();
+  return (
+    process.env.QA_DEFAULT_BRANCH?.trim() ||
+    process.env.GITHUB_DEFAULT_BRANCH?.trim() ||
+    scope?.defaultBranch ||
+    "main"
+  );
 }
 
 export async function executeQaToolCall(
@@ -54,7 +68,7 @@ export async function executeQaToolCall(
     switch (toolCall.name) {
       case "read_implementation_files": {
         const paths = arrayOfStrings(toolCall.input.file_paths).slice(0, 10);
-        const branch = defaultBranch(stringValue(toolCall.input.branch_name));
+        const branch = defaultBranch(pipelineId, stringValue(toolCall.input.branch_name));
         const files = await Promise.all(
           paths.map(async (filePath) => {
             try {
@@ -76,7 +90,7 @@ export async function executeQaToolCall(
 
       case "search_implementation": {
         const query = stringValue(toolCall.input.query);
-        const branch = defaultBranch(stringValue(toolCall.input.branch_name));
+        const branch = defaultBranch(pipelineId, stringValue(toolCall.input.branch_name));
         const hits = await codebaseQueryService.searchCodebaseSemantically({
           query,
           branchName: branch,
@@ -102,7 +116,7 @@ export async function executeQaToolCall(
       }
 
       case "read_existing_tests": {
-        const branch = defaultBranch(stringValue(toolCall.input.branch_name));
+        const branch = defaultBranch(pipelineId, stringValue(toolCall.input.branch_name));
         const testType = stringValue(toolCall.input.test_type, "any");
         let tree: Array<{ path: string; type: string }> = [];
         try {
@@ -137,7 +151,7 @@ export async function executeQaToolCall(
 
       case "analyse_code_paths": {
         const filePath = stringValue(toolCall.input.file_path);
-        const branch = defaultBranch(stringValue(toolCall.input.branch_name));
+        const branch = defaultBranch(pipelineId, stringValue(toolCall.input.branch_name));
         const functionName = stringValue(toolCall.input.function_name, "all");
         let content = "";
         try {
@@ -179,7 +193,7 @@ export async function executeQaToolCall(
       case "write_test_file": {
         const filePath = stringValue(toolCall.input.file_path);
         const content = stringValue(toolCall.input.content);
-        const branch = defaultBranch(stringValue(toolCall.input.branch_name));
+        const branch = defaultBranch(pipelineId, stringValue(toolCall.input.branch_name));
         const commitMessage = stringValue(toolCall.input.commit_message);
         const artifacts = getQaArtifacts(pipelineId);
         artifacts.stagedTestFiles.push({
@@ -200,7 +214,7 @@ export async function executeQaToolCall(
       }
 
       case "run_tests": {
-        const branch = defaultBranch(stringValue(toolCall.input.branch_name));
+        const branch = defaultBranch(pipelineId, stringValue(toolCall.input.branch_name));
         const runType = stringValue(toolCall.input.run_type, "full_suite") as
           | "new_tests_only"
           | "regression_only"
@@ -228,7 +242,7 @@ export async function executeQaToolCall(
       }
 
       case "run_security_scan": {
-        const branch = defaultBranch(stringValue(toolCall.input.branch_name));
+        const branch = defaultBranch(pipelineId, stringValue(toolCall.input.branch_name));
         const timeoutSeconds =
           typeof toolCall.input.timeout_seconds === "number"
             ? toolCall.input.timeout_seconds

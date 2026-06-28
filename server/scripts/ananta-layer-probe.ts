@@ -17,12 +17,14 @@ import { buildEngineeringCodingInitialUserMessage } from "../src/engineeringCodi
 import { executeEngineeringCodingToolCall } from "../src/tools/engineeringCodingToolExecutor";
 import { validateImplementation } from "../src/validators/implementationValidator";
 import type { ImplementationOutput, PrdOutput } from "../src/types/agents";
+import { TEST_REPO_BRANCH, TEST_REPO_URL } from "./testRepoConfig";
 
 /** Empty pipelineId skips auditRepo DB writes (tool-layer isolation). */
 const PIPELINE_ID = "";
 const JIRA_KEY = "DEMO-LAYER-1";
-const REPO_URL = "https://github.com/Sudesha-agentos/sudesh_anna_test.git";
-const REPO_BRANCH = "test";
+
+const REPO_URL = TEST_REPO_URL;
+const REPO_BRANCH = TEST_REPO_BRANCH;
 const TARGET_FILE = "src/lib/utils.ts";
 
 const prd: PrdOutput = {

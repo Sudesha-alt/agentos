@@ -13,7 +13,9 @@ import {
 import { getRepoContext } from "../../git-integration/gitCredentialsStore";
 import { resolveRepoIndexBranch } from "../../git-integration/resolveRepoBranch";
 import {
+  checkInstallationPermissions,
   githubAppInstallUrl,
+  githubAppManifestCreateUrl,
   githubAppPublicConfig,
   isGithubAppConfigured,
   listAppInstallations,
@@ -89,6 +91,30 @@ router.get("/integration/setup", async (req, res, next) => {
       const githubApp = githubAppPublicConfig();
       const installUrl = githubAppInstallUrl();
       const callbackUrl = `${base}/git-integration/oauth/github/callback`;
+      const setupUrl = frontendGitUrl(orgSlug) || undefined;
+      const webhookUrl = `${base}/webhooks/github`;
+
+      let installationPermissions: Awaited<
+        ReturnType<typeof checkInstallationPermissions>
+      > | null = null;
+      let activeInstallationId = setupState.git?.installationId ?? null;
+      if (!activeInstallationId) {
+        try {
+          const latest = await getLatestGithubInstallState();
+          activeInstallationId = latest?.installationId ?? null;
+        } catch {
+          /* optional */
+        }
+      }
+      if (activeInstallationId && isGithubAppConfigured()) {
+        try {
+          installationPermissions = await checkInstallationPermissions(
+            activeInstallationId
+          );
+        } catch (err) {
+          logger.warn({ err, activeInstallationId }, "installation permission check failed");
+        }
+      }
 
       res.json({
         publicApiBase: base,
@@ -103,12 +129,19 @@ router.get("/integration/setup", async (req, res, next) => {
           ...githubApp,
           installUrl,
           callbackUrl,
-          setupUrl: frontendGitUrl(orgSlug) || undefined,
-          webhookUrl: `${base}/webhooks/github`,
+          setupUrl,
+          webhookUrl,
+          manifestCreateUrl: githubAppManifestCreateUrl({
+            webhookUrl,
+            setupUrl: setupUrl ?? callbackUrl,
+            callbackUrl,
+            appUrl: setupUrl ?? callbackUrl,
+          }),
+          installationPermissions,
         },
         webhooks: {
           github: {
-            url: `${base}/webhooks/github`,
+            url: webhookUrl,
             events: ["push", "pull_request"],
             secretEnv: "GITHUB_APP_WEBHOOK_SECRET",
             managedByApp: isGithubAppConfigured(),

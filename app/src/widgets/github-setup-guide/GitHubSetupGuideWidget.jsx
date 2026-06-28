@@ -56,14 +56,38 @@ export default function GitHubSetupGuideWidget({
 
           <GuideSection number="1" title="Create a GitHub App">
             <p className="text-[14px] leading-relaxed text-ink-dim">
-              Register an app under your org or personal account with repository permissions
-              for contents, pull requests, metadata, webhooks, and actions (read).
+              Register an app under your org or personal account.{" "}
+              <strong className="text-ink">Contents (Code) must be Read and write</strong>{" "}
+              so Ananta can push branches — read-only Contents will block engineering pushes.
             </p>
+            {githubApp?.permissions?.length ? (
+              <ul className="mt-3 space-y-1 rounded-[0.85rem] border border-hairline bg-canvas/40 px-4 py-3 font-mono text-[11px] text-ink-dim">
+                {githubApp.permissions.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            ) : null}
+            {githubApp?.permissionsFixUrl ? (
+              <p className="mt-3 text-[13px] text-ink-dim">
+                Existing app with wrong permissions?{" "}
+                <a
+                  href={githubApp.permissionsFixUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-indigo underline"
+                >
+                  Fix permissions on GitHub
+                </a>
+              </p>
+            ) : null}
             <ol className="mt-3 list-decimal space-y-2 pl-5 text-[14px] text-ink-dim">
               <li>
                 Go to{" "}
                 <a
-                  href="https://github.com/settings/apps/new"
+                  href={
+                    githubApp?.manifestCreateUrl ??
+                    "https://github.com/settings/apps/new"
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-indigo underline"
@@ -71,6 +95,12 @@ export default function GitHubSetupGuideWidget({
                   GitHub → Settings → Developer settings → GitHub Apps → New
                 </a>
                 .
+              </li>
+              <li>
+                Under <strong className="text-ink">Repository permissions</strong>, set{" "}
+                <strong className="text-ink">Contents → Read and write</strong> (not read-only).
+                Also enable pull requests, metadata, actions (read), workflows, and repository hooks
+                as listed above.
               </li>
               <li>
                 Set callback and webhook URLs from step 2 below. Enable{" "}

@@ -25,6 +25,7 @@
     "test:compile": "tsx --test src/engineering/workspaceCompile.test.ts",
     "probe:ananta": "tsx scripts/ananta-layer-probe.ts",
     "test:ananta-layers": "tsx scripts/ananta-layer-test.ts",
+    "test:ananta-branch": "tsx scripts/ananta-branch-test.ts",
     "eval:retrieval": "tsx scripts/eval-retrieval.ts"
   },
   "dependencies": {
