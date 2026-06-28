@@ -1,5 +1,8 @@
 import { resolveRepoScope } from "../codebaseIntelligence/repoScope";
-import { resolveEngineeringBranchName } from "../engineering/engineeringWorkspace";
+import {
+  resolveEngineeringBranchName,
+  resolveFallbackApiPushBranch,
+} from "../engineering/engineeringWorkspace";
 import { resolveCodingBranchName } from "../engineeringCodingAgent/inputBuilder";
 import { auditRepo } from "../db/repositories/auditRepo";
 
@@ -29,6 +32,7 @@ export async function resolveImplementationBranchForQa(
   const scope = resolveRepoScope();
   return (
     resolveEngineeringBranchName(jiraKey) ||
+    resolveFallbackApiPushBranch() ||
     process.env.QA_DEFAULT_BRANCH?.trim() ||
     process.env.GITHUB_DEFAULT_BRANCH?.trim() ||
     scope?.defaultBranch ||

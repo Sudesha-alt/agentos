@@ -18,10 +18,11 @@ Read ALL relevant implementation files before writing tests.
         },
         branch_name: {
           type: "string",
-          description: "Branch containing the implementation",
+          description:
+            "Optional — omit to use the Ananta implementation branch automatically",
         },
       },
-      required: ["file_paths", "branch_name"],
+      required: ["file_paths"],
     },
   },
   {
@@ -34,13 +35,13 @@ validation logic, or middleware on a specific branch.
       type: "object" as const,
       properties: {
         query: { type: "string" },
-        branch_name: { type: "string" },
+        branch_name: { type: "string", description: "Optional — omit to use implementation branch" },
         filter_patterns: {
           type: "array",
           items: { type: "string" },
         },
       },
-      required: ["query", "branch_name"],
+      required: ["query"],
     },
   },
   {
@@ -52,13 +53,16 @@ and conventions. Call this before writing any new test files.
     input_schema: {
       type: "object" as const,
       properties: {
-        branch_name: { type: "string" },
+        branch_name: {
+          type: "string",
+          description: "Optional — omit to use implementation branch",
+        },
         test_type: {
           type: "string",
           enum: ["unit", "integration", "e2e", "any"],
         },
       },
-      required: ["branch_name"],
+      required: ["test_type"],
     },
   },
   {
@@ -72,9 +76,12 @@ happy paths, edge cases, error paths, security paths, concurrency paths.
       properties: {
         file_path: { type: "string" },
         function_name: { type: "string" },
-        branch_name: { type: "string" },
+        branch_name: {
+          type: "string",
+          description: "Optional — omit to use implementation branch",
+        },
       },
-      required: ["file_path", "branch_name"],
+      required: ["file_path"],
     },
   },
   {
@@ -92,9 +99,12 @@ and acceptance criteria. Use write_test_file to persist executable tests.
           type: "array",
           items: { type: "object" },
         },
-        branch_name: { type: "string" },
+        branch_name: {
+          type: "string",
+          description: "Optional — omit to use implementation branch",
+        },
       },
-      required: ["target_file", "test_file_path", "test_cases", "branch_name"],
+      required: ["target_file", "test_file_path", "test_cases"],
     },
   },
   {
@@ -107,10 +117,13 @@ Write a complete, executable test file. Every test must have real assertions.
       properties: {
         file_path: { type: "string" },
         content: { type: "string" },
-        branch_name: { type: "string" },
+        branch_name: {
+          type: "string",
+          description: "Optional — omit to use implementation branch",
+        },
         commit_message: { type: "string" },
       },
-      required: ["file_path", "content", "branch_name", "commit_message"],
+      required: ["file_path", "content", "commit_message"],
     },
   },
   {
@@ -125,14 +138,17 @@ Execute tests in an isolated sandbox. Returns pass/fail per test with errors and
           type: "array",
           items: { type: "string" },
         },
-        branch_name: { type: "string" },
+        branch_name: {
+          type: "string",
+          description: "Optional — omit to use implementation branch",
+        },
         run_type: {
           type: "string",
           enum: ["new_tests_only", "regression_only", "full_suite"],
         },
         timeout_seconds: { type: "number" },
       },
-      required: ["branch_name", "run_type"],
+      required: ["run_type"],
     },
   },
   {
@@ -162,10 +178,13 @@ Always call this after run_tests and before generate_qa_report.
     input_schema: {
       type: "object" as const,
       properties: {
-        branch_name: { type: "string" },
+        branch_name: {
+          type: "string",
+          description: "Optional — omit to use implementation branch",
+        },
         timeout_seconds: { type: "number" },
       },
-      required: ["branch_name"],
+      required: [],
     },
   },
   {

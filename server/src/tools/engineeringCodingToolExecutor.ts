@@ -14,6 +14,8 @@ import {
   workspaceWriteFile,
 } from "../engineering/engineeringWorkspace";
 import { githubClient } from "../integrations/githubClient";
+import { resolveToolFilePath } from "../integrations/git/normalizePushFiles";
+import { resolveRepoScope } from "../codebaseIntelligence/repoScope";
 import { logger } from "../utils/logger";
 import type { ToolCallInput, ToolCallResult } from "./executor";
 
@@ -63,7 +65,25 @@ function arrayOfStrings(value: unknown): string[] {
 }
 
 function defaultBranch(branchName?: string): string {
-  return branchName || process.env.GITHUB_DEFAULT_BRANCH || "main";
+  if (branchName?.trim()) return branchName.trim();
+  return (
+    resolveRepoScope()?.defaultBranch ||
+    process.env.GITHUB_DEFAULT_BRANCH?.trim() ||
+    "main"
+  );
+}
+
+function requireFilePath(
+  toolCall: ToolCallInput
+): { filePath: string } | { error: string } {
+  const filePath = resolveToolFilePath(toolCall.input as Record<string, unknown>);
+  if (!filePath) {
+    return {
+      error:
+        "file_path is required and must be a non-empty repo-relative path (e.g. docs/curriculum/guide.md).",
+    };
+  }
+  return { filePath };
 }
 
 export async function executeEngineeringCodingToolCall(
@@ -116,7 +136,12 @@ export async function executeEngineeringCodingToolCall(
 
       // ── Reading ─────────────────────────────────────────────────────────────
       case "read_file": {
-        const filePath = stringValue(toolCall.input.file_path);
+        const resolved = requireFilePath(toolCall);
+        if ("error" in resolved) {
+          result = { error: resolved.error };
+          break;
+        }
+        const filePath = resolved.filePath;
         metaQuery = filePath;
 
         if (workspace) {
@@ -150,7 +175,12 @@ export async function executeEngineeringCodingToolCall(
 
       // Backward-compat alias
       case "read_source_file": {
-        const filePath = stringValue(toolCall.input.file_path);
+        const resolved = requireFilePath(toolCall);
+        if ("error" in resolved) {
+          result = { error: resolved.error };
+          break;
+        }
+        const filePath = resolved.filePath;
         const branch = defaultBranch(stringValue(toolCall.input.branch_name));
         metaQuery = filePath;
 
@@ -230,7 +260,12 @@ export async function executeEngineeringCodingToolCall(
 
       // ── Incremental edit ────────────────────────────────────────────────────
       case "edit_file": {
-        const filePath = stringValue(toolCall.input.file_path);
+        const resolved = requireFilePath(toolCall);
+        if ("error" in resolved) {
+          result = { error: resolved.error };
+          break;
+        }
+        const filePath = resolved.filePath;
         const oldString = stringValue(toolCall.input.old_string);
         const newString = stringValue(toolCall.input.new_string);
         const summary = stringValue(toolCall.input.summary);
@@ -264,9 +299,21 @@ export async function executeEngineeringCodingToolCall(
 
       // ── Full-file write ─────────────────────────────────────────────────────
       case "write_file":
-      // Backward-compat: write_source_file maps to write_file
       case "write_source_file": {
-        const filePath = stringValue(toolCall.input.file_path);
+        const resolved = requireFilePath(toolCall);
+        if ("error" in resolved) {
+          await auditRepo.log(pipelineId, "CODING_TOOL_CALL_FAILED", {
+            tool: toolCall.name,
+            error: resolved.error,
+          });
+          return {
+            toolUseId: toolCall.toolUseId,
+            content: formatToolResult(toolCall.name, { error: resolved.error }),
+            isError: true,
+            meta: { query: toolCall.name, resultsFound: 0 },
+          };
+        }
+        const filePath = resolved.filePath;
         const content = stringValue(toolCall.input.content);
         const summary = stringValue(toolCall.input.summary);
         const action = workspaceFileExists(workspace?.workspaceDir ?? "", filePath)
@@ -293,16 +340,21 @@ export async function executeEngineeringCodingToolCall(
             note: "File written to workspace.",
           };
         } else {
-          // No workspace: fall back to in-memory staging (legacy path)
           const { getCodingArtifacts } = await import("../engineering/codingArtifactStore");
           const artifacts = getCodingArtifacts(pipelineId);
-          artifacts.stagedFiles.push({
+          const existing = artifacts.stagedFiles.findIndex((f) => f.filePath === filePath);
+          const entry = {
             filePath,
             content,
             branchName: defaultBranch(),
             action: action as "create" | "modify",
             summary,
-          });
+          };
+          if (existing >= 0) {
+            artifacts.stagedFiles[existing] = entry;
+          } else {
+            artifacts.stagedFiles.push(entry);
+          }
           emitEngineeringCodingEvent({
             type: "file_staged",
             pipelineId,
@@ -326,7 +378,12 @@ export async function executeEngineeringCodingToolCall(
 
       // ── Delete ──────────────────────────────────────────────────────────────
       case "delete_file": {
-        const filePath = stringValue(toolCall.input.file_path);
+        const resolved = requireFilePath(toolCall);
+        if ("error" in resolved) {
+          result = { error: resolved.error };
+          break;
+        }
+        const filePath = resolved.filePath;
         const reason = stringValue(toolCall.input.reason);
         metaQuery = filePath;
 
@@ -393,7 +450,7 @@ export async function executeEngineeringCodingToolCall(
         toolCall.name === "edit_file" ||
         toolCall.name === "read_file" ||
         toolCall.name === "read_source_file"
-          ? stringValue(toolCall.input.file_path)
+          ? resolveToolFilePath(toolCall.input as Record<string, unknown>) || undefined
           : undefined,
     });
 
@@ -410,7 +467,9 @@ export async function executeEngineeringCodingToolCall(
       tool: toolCall.name,
       durationMs,
       displayLabel,
-      filePath: hasFilePath ? stringValue(toolCall.input.file_path) : undefined,
+      filePath: hasFilePath
+        ? resolveToolFilePath(toolCall.input as Record<string, unknown>) || undefined
+        : undefined,
       timestamp: new Date().toISOString(),
     });
 

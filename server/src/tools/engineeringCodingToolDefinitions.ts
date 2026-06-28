@@ -111,6 +111,27 @@ To delete a block, set new_string to an empty string.
   },
 
   {
+    name: "write_source_file",
+    description: `
+Alias for write_file — write the complete content of a documentation or source file.
+Use a repo-relative file_path (e.g. docs/curriculum/guide.md).
+    `.trim(),
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        file_path: { type: "string", description: "Repo-relative path of the file to create or replace" },
+        path: { type: "string", description: "Alias for file_path" },
+        content: { type: "string", description: "Full file content" },
+        summary: {
+          type: "string",
+          description: "One-line description of what this file is",
+        },
+      },
+      required: ["content", "summary"],
+    },
+  },
+
+  {
     name: "write_file",
     description: `
 Write the complete content of a file.
@@ -121,13 +142,14 @@ For modifying existing files, prefer edit_file instead.
       type: "object" as const,
       properties: {
         file_path: { type: "string", description: "Repo-relative path of the file to create" },
+        path: { type: "string", description: "Alias for file_path" },
         content: { type: "string", description: "Full file content" },
         summary: {
           type: "string",
           description: "One-line description of what this file is",
         },
       },
-      required: ["file_path", "content", "summary"],
+      required: ["content", "summary"],
     },
   },
 

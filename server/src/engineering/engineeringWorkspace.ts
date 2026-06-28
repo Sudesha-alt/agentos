@@ -33,11 +33,19 @@ export function sanitizeBranchSegment(jiraKey: string): string {
   return jiraKey.toLowerCase().replace(/[^a-z0-9-]/g, "-");
 }
 
+/** Shared branch for legacy Git Data API pushes (no local workspace). */
+export const LEGACY_API_PUSH_BRANCH = "work/agentos";
+
 /** Derive the per-ticket engineering branch name */
 export function resolveEngineeringBranchName(jiraKey: string): string {
   const env = process.env.ENGINEERING_TARGET_BRANCH;
   if (env) return env; // allow env override (single-branch mode)
   return `agentos/${sanitizeBranchSegment(jiraKey)}`;
+}
+
+/** Branch Ananta pushes to when using the Git Data API fallback path. */
+export function resolveFallbackApiPushBranch(): string {
+  return process.env.ENGINEERING_TARGET_BRANCH?.trim() || LEGACY_API_PUSH_BRANCH;
 }
 
 async function configureGitUser(workspaceDir: string): Promise<void> {

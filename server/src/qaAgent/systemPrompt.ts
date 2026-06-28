@@ -40,6 +40,8 @@ PHASE 4 — QA REPORT
 - Then return the final JSON test plan (see output schema below)
 
 Tool discipline:
+- The implementation branch is in the initial user message — use it for every read/search/test tool call.
+- Never read from main or the repo default branch unless that IS the implementation branch.
 - Never skip read_existing_tests before write_test_file.
 - Never write placeholder assertions — every test must be real.
 - Always run_tests after writing tests when GITHUB_TOKEN is available.

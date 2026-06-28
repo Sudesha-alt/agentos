@@ -45,7 +45,8 @@ export async function runQaAgentic(
 ): Promise<QaAgentRunResult> {
   const branchName = resolveQaBranchName(
     input.implementationBranch ??
-      (await resolveImplementationBranchForQa(input.pipelineId, input.jiraKey))
+      (await resolveImplementationBranchForQa(input.pipelineId, input.jiraKey)),
+    input.jiraKey
   );
   const mode = input.implementationMode ?? input.implementation.implementationMode ?? "code";
   clearQaArtifacts(input.pipelineId);

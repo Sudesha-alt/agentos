@@ -1,5 +1,6 @@
 import { Buffer } from "node:buffer";
 import { retry } from "../../utils/retry";
+import { normalizePushFiles } from "./normalizePushFiles";
 import type {
   GitFileContent,
   GitProviderClient,
@@ -148,6 +149,8 @@ export function createGithubProvider(
     },
 
     async pushFilesToBranch(ctx, targetBranch, sourceBranch, files, commitMessage) {
+      const pushFiles = normalizePushFiles(files);
+
       // Get the source branch tip SHA to use as the base commit
       const refData = await githubFetch<{ object: { sha: string } }>(
         `/repos/${ctx.workspace}/${ctx.repoSlug}/git/ref/heads/${encodeURIComponent(sourceBranch)}`
@@ -172,7 +175,7 @@ export function createGithubProvider(
 
       // Create blobs for each file
       const treeItems = await Promise.all(
-        files.map(async (file: GitPushFile) => {
+        pushFiles.map(async (file: GitPushFile) => {
           const blob = await githubPost<{ sha: string }>(
             `/repos/${ctx.workspace}/${ctx.repoSlug}/git/blobs`,
             { content: Buffer.from(file.content).toString("base64"), encoding: "base64" }

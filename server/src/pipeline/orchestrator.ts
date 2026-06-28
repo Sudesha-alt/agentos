@@ -4,6 +4,7 @@ import { buildEngineeringAgentSystemPrompt } from "../agents/engineeringAgentPro
 import { normalizeImplementationOutput } from "../agents/normalizeImplementationOutput";
 import { runCanaryCycle } from "../canaryAgent";
 import { runEngineeringCodingAgentic } from "../engineeringCodingAgent";
+import { resolveCodingBranchName } from "../engineeringCodingAgent/inputBuilder";
 import {
   clearCodingArtifacts,
   getCodingArtifacts,
@@ -19,12 +20,14 @@ import {
   createEngWorkspace,
   destroyEngWorkspace,
   getEngWorkspace,
+  resolveFallbackApiPushBranch,
   workspaceCommitAndPush,
   workspaceGetChangedFiles,
 } from "../engineering/engineeringWorkspace";
 import { runWorkspaceSafetyCompile } from "../engineering/workspaceCompile";
 import { publishPipelineArtifact, mirrorPmContextArtifacts } from "./artifacts";
-import { resolveCodingBranchName } from "../engineeringCodingAgent/inputBuilder";
+import { resolveRepoIndexBranch } from "../git-integration/resolveRepoBranch";
+import { normalizePushFiles } from "../integrations/git/normalizePushFiles";
 import { gitClient } from "../integrations/gitProvider";
 import { getKnowledge } from "../codebaseIntelligence/knowledgeService";
 import { runQaAgentic } from "../qaAgent";
@@ -250,7 +253,7 @@ export class PipelineOrchestrator {
         productStage.agentOutput.parsed,
         productStage.enrichedPrdDocument
       );
-      let implementationOutput = await this.runEngineeringCodingAgent(
+      const codingStage = await this.runEngineeringCodingAgent(
         pipeline.id,
         normalizedTicket,
         productStage.agentOutput.parsed,
@@ -258,6 +261,8 @@ export class PipelineOrchestrator {
         productStage.enrichedPrdDocument,
         engStage.stageLogId
       );
+      const implementationBranch = codingStage.implementationBranch;
+      const implementationOutput = codingStage.output;
       const implementationValidation = await this.validateImplementationStage(
         pipeline.id,
         implementationOutput,
@@ -293,7 +298,8 @@ export class PipelineOrchestrator {
         pipeline.id,
         normalizedTicket.jiraKey,
         productStage.agentOutput.parsed,
-        implementationOutput.parsed
+        implementationOutput.parsed,
+        implementationBranch
       );
       const qaOutput = qaStage.agentOutput;
       await writeQaToTicket(
@@ -486,6 +492,7 @@ export class PipelineOrchestrator {
         );
       }
 
+      let implementationBranch: string | undefined;
       let implementationOutput: AgentOutput<ImplementationOutput>;
       if (!completedStages.has("ENGINEERING_AGENT")) {
         const engStage = await this.runEngineeringAgent(
@@ -494,7 +501,7 @@ export class PipelineOrchestrator {
           productStage.agentOutput.parsed,
           productStage.enrichedPrdDocument
         );
-        implementationOutput = await this.runEngineeringCodingAgent(
+        const codingResult = await this.runEngineeringCodingAgent(
           pipelineId,
           normalizedTicket,
           productStage.agentOutput.parsed,
@@ -502,9 +509,15 @@ export class PipelineOrchestrator {
           productStage.enrichedPrdDocument,
           engStage.stageLogId
         );
+        implementationBranch = codingResult.implementationBranch;
+        implementationOutput = codingResult.output;
       } else {
         const engLog = await pipelineRepo.getStageOutput(pipelineId, "ENGINEERING_AGENT");
-        const parsed = engLog?.output as unknown as ImplementationOutput;
+        const engOutput = engLog?.output as (ImplementationOutput & {
+          implementationBranch?: string;
+        }) | null;
+        const parsed = engOutput as unknown as ImplementationOutput;
+        implementationBranch = engOutput?.implementationBranch;
         implementationOutput = {
           raw: JSON.stringify(engLog?.output),
           parsed,
@@ -512,7 +525,7 @@ export class PipelineOrchestrator {
         };
         const needsCoding = !parsed.codingSummary && !(parsed.codeChanges?.length);
         if (needsCoding) {
-          implementationOutput = await this.runEngineeringCodingAgent(
+          const codingResult = await this.runEngineeringCodingAgent(
             pipelineId,
             normalizedTicket,
             productStage.agentOutput.parsed,
@@ -520,6 +533,8 @@ export class PipelineOrchestrator {
             productStage.enrichedPrdDocument,
             null
           );
+          implementationBranch = codingResult.implementationBranch;
+          implementationOutput = codingResult.output;
         }
       }
 
@@ -560,7 +575,8 @@ export class PipelineOrchestrator {
           pipelineId,
           normalizedTicket.jiraKey,
           productStage.agentOutput.parsed,
-          implementationOutput.parsed
+          implementationOutput.parsed,
+          implementationBranch
         );
       } else {
         const qaLog = await pipelineRepo.getStageOutput(pipelineId, "QA_AGENT");
@@ -1034,7 +1050,10 @@ export class PipelineOrchestrator {
     implementationOutput: AgentOutput<ImplementationOutput>,
     enrichedPrdDocument: Record<string, unknown>,
     stageLogId: string | null
-  ): Promise<AgentOutput<ImplementationOutput>> {
+  ): Promise<{
+    output: AgentOutput<ImplementationOutput>;
+    implementationBranch: string;
+  }> {
     await auditRepo.log(pipelineId, "ENGINEERING_CODING_STARTED", {
       jiraKey: ticket.jiraKey,
       hasPmContext: Boolean(ticket.pmContext),
@@ -1046,7 +1065,9 @@ export class PipelineOrchestrator {
       timestamp: new Date().toISOString(),
     });
 
-    const sourceBranch = resolveCodingBranchName();
+    const sourceBranch = await resolveRepoIndexBranch(
+      resolveRepoScope()?.defaultBranch ?? resolveCodingBranchName()
+    );
     const { implementationMode, deliverableFiles, targetFilePaths } =
       this.resolveImplementationContext(ticket, enrichedPrdDocument);
     const requiredPaths =
@@ -1063,18 +1084,27 @@ export class PipelineOrchestrator {
     }
 
     // Create a persistent workspace: clone + per-ticket branch + npm install
-    let workspace = null;
+    let workspace;
     try {
       workspace = await createEngWorkspace(pipelineId, ticket.jiraKey, sourceBranch);
       await auditRepo.log(pipelineId, "ENGINEERING_WORKSPACE_CREATED", {
         jiraKey: ticket.jiraKey,
         branchName: workspace.branchName,
         workspaceDir: workspace.workspaceDir,
+        sourceBranch,
       });
     } catch (err) {
-      logger.warn(
-        { pipelineId, err },
-        "workspace creation failed — falling back to in-memory mode"
+      const message = err instanceof Error ? err.message : String(err);
+      await auditRepo.log(pipelineId, "ENGINEERING_WORKSPACE_FAILED", {
+        jiraKey: ticket.jiraKey,
+        sourceBranch,
+        error: message,
+      });
+      logger.error({ pipelineId, sourceBranch, err }, "engineering workspace creation failed");
+      throw new Error(
+        `Engineering workspace creation failed for ${ticket.jiraKey} ` +
+          `(clone branch "${sourceBranch}"): ${message}. ` +
+          "Verify Git Integration default branch matches an existing remote branch."
       );
     }
 
@@ -1253,12 +1283,15 @@ export class PipelineOrchestrator {
         // Fallback: Git Data API push (legacy in-memory path)
         const finalStaged = getCodingArtifacts(pipelineId).stagedFiles;
         if (finalStaged.length > 0) {
-          const targetBranch = process.env.ENGINEERING_TARGET_BRANCH ?? "work/agentos";
+          const targetBranch = resolveFallbackApiPushBranch();
           try {
+            const pushFiles = normalizePushFiles(
+              finalStaged.map((f) => ({ filePath: f.filePath, content: f.content }))
+            );
             const apiPush = await gitClient.pushFilesToBranch(
               targetBranch,
               sourceBranch,
-              finalStaged.map((f) => ({ filePath: f.filePath, content: f.content })),
+              pushFiles,
               `[${ticket.jiraKey}] ${codingResult?.codingSummary ?? "Engineering agent changes"}`
             );
             implementationBranch = targetBranch;
@@ -1361,7 +1394,10 @@ export class PipelineOrchestrator {
     if (stageLogId) {
       await pipelineRepo.completeStage({
         stageLogId,
-        output: merged as unknown as Prisma.InputJsonValue,
+        output: {
+          ...merged,
+          implementationBranch,
+        } as unknown as Prisma.InputJsonValue,
         confidenceScore: merged.confidenceScore,
         tokenCount:
           implementationOutput.metadata.inputTokens +
@@ -1374,7 +1410,7 @@ export class PipelineOrchestrator {
     }
 
     await stateManager.advance(pipelineId, "IMPLEMENTATION_VALIDATION");
-    return output;
+    return { output, implementationBranch };
   }
 
   private buildEnrichedPrdSummary(enrichedPrdDocument: Record<string, unknown>): string {
@@ -1503,6 +1539,11 @@ export class PipelineOrchestrator {
     const branchName =
       implementationBranch?.trim() ||
       (await resolveImplementationBranchForQa(pipelineId, jiraKey));
+
+    logger.info(
+      { pipelineId, jiraKey, implementationBranch: branchName },
+      "QA agent reading Ananta implementation branch"
+    );
 
     const retrieved = await retriever.retrieveForQAAgent(prd, jiraKey);
     const input = {

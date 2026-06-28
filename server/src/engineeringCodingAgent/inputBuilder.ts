@@ -87,12 +87,12 @@ export function buildEngineeringCodingInitialUserMessage(
 
   const requiredFilesBlock =
     mode === "content" && requiredPaths.length
-      ? `REQUIRED OUTPUT FILES (you MUST write_source_file each before finishing):
+      ? `REQUIRED OUTPUT FILES (you MUST write_file each before finishing):
 ${requiredPaths.map((p) => `- ${p}`).join("\n")}
 ${deliverableFiles.length ? `\nDeliverable details:\n${deliverableFiles.map((f) => `- ${f.path} (${f.format}): ${f.purpose}`).join("\n")}` : ""}
 `
       : mode === "content"
-        ? `REQUIRED OUTPUT FILES: PRD did not list deliverableFiles — infer doc paths from netNewWork and task breakdown, then write_source_file each.`
+        ? `REQUIRED OUTPUT FILES: PRD did not list deliverableFiles — infer doc paths from netNewWork and task breakdown, then write_file each.`
         : "";
 
   return `

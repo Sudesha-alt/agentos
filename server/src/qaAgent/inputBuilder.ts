@@ -4,6 +4,10 @@ import type {
 } from "../types/agents";
 import type { RetrievedContext } from "../types/pipeline";
 import { resolveRepoScope } from "../codebaseIntelligence/repoScope";
+import {
+  resolveEngineeringBranchName,
+  resolveFallbackApiPushBranch,
+} from "../engineering/engineeringWorkspace";
 import { resolveCodingBranchName } from "../engineeringCodingAgent/inputBuilder";
 import { buildQaAgentContext } from "../pipeline/contextBuilder";
 
@@ -44,12 +48,17 @@ final JSON test plan.
   `.trim();
 }
 
-export function resolveQaBranchName(implementationBranch?: string): string {
+export function resolveQaBranchName(
+  implementationBranch?: string,
+  jiraKey?: string
+): string {
   if (implementationBranch?.trim()) {
     return implementationBranch.trim();
   }
   const scope = resolveRepoScope();
   return (
+    (jiraKey ? resolveEngineeringBranchName(jiraKey) : "") ||
+    resolveFallbackApiPushBranch() ||
     process.env.QA_DEFAULT_BRANCH?.trim() ||
     process.env.GITHUB_DEFAULT_BRANCH?.trim() ||
     scope?.defaultBranch ||

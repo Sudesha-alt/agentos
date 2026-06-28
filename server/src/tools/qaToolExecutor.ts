@@ -27,12 +27,19 @@ function arrayOfStrings(value: unknown): string[] {
 }
 
 function defaultBranch(pipelineId: string, branchName?: string): string {
+  const fromArtifacts = getQaArtifacts(pipelineId).implementationBranch?.trim();
+  if (fromArtifacts) {
+    const requested = branchName?.trim();
+    if (requested && requested !== fromArtifacts) {
+      logger.warn(
+        { pipelineId, requested, implementationBranch: fromArtifacts },
+        "QA tool ignored branch_name — using Ananta implementation branch"
+      );
+    }
+    return fromArtifacts;
+  }
   if (branchName?.trim()) {
     return branchName.trim();
-  }
-  const fromArtifacts = getQaArtifacts(pipelineId).implementationBranch;
-  if (fromArtifacts?.trim()) {
-    return fromArtifacts.trim();
   }
   const scope = resolveRepoScope();
   return (
