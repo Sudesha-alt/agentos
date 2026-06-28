@@ -21,8 +21,8 @@ import {
   getEngWorkspace,
   workspaceCommitAndPush,
   workspaceGetChangedFiles,
-  workspaceRunCommand,
 } from "../engineering/engineeringWorkspace";
+import { runWorkspaceSafetyCompile } from "../engineering/workspaceCompile";
 import { publishPipelineArtifact, mirrorPmContextArtifacts } from "./artifacts";
 import { resolveCodingBranchName } from "../engineeringCodingAgent/inputBuilder";
 import { gitClient } from "../integrations/gitProvider";
@@ -1121,24 +1121,46 @@ export class PipelineOrchestrator {
             );
           }
         }
+      } else {
+        // Code mode — require at least one file change
+        if (workspace) {
+          const changedFiles = await workspaceGetChangedFiles(workspace.workspaceDir);
+          if (changedFiles.length === 0 && codingResult.codeChanges.length === 0) {
+            throw new Error(
+              "Code implementation required at least one file change; Ananta made no edits. Check workspace access and targetFiles, then re-run."
+            );
+          }
+        } else {
+          const staged = getCodingArtifacts(pipelineId).stagedFiles;
+          if (codingResult.codeChanges.length === 0 && staged.length === 0) {
+            throw new Error(
+              "Code implementation required at least one file change; Ananta staged 0 files in fallback mode."
+            );
+          }
+        }
       }
 
-      // Safety gate compile (runs in existing workspace — no extra clone needed)
+      // Safety gate compile (monorepo-aware: server/, app/, or repo root)
       if (implementationMode !== "content" && workspace) {
         try {
-          const compileResult = await workspaceRunCommand(
-            workspace.workspaceDir,
-            "npm run typecheck",
-            "server"
-          );
+          const compileResult = await runWorkspaceSafetyCompile(workspace.workspaceDir);
           await auditRepo.log(pipelineId, "ENGINEERING_SAFETY_COMPILE", {
             jiraKey: ticket.jiraKey,
             exitCode: compileResult.exitCode,
-            success: compileResult.exitCode === 0,
+            success: compileResult.skipped || compileResult.exitCode === 0,
+            skipped: compileResult.skipped,
+            command: compileResult.command,
+            subdir: compileResult.subdir,
+            reason: compileResult.reason,
           });
-          if (compileResult.exitCode !== 0) {
+          if (!compileResult.skipped && compileResult.exitCode !== 0) {
             logger.warn(
-              { pipelineId, stderr: compileResult.stderr },
+              {
+                pipelineId,
+                command: compileResult.command,
+                subdir: compileResult.subdir,
+                stderr: compileResult.stderr,
+              },
               "safety compile failed — committing with [compile-warnings] prefix"
             );
           }

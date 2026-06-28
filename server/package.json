@@ -21,6 +21,10 @@
     "test:roi": "tsx --test src/roi/estimatedRoi.test.ts",
     "test:chunker": "tsx --test src/codebaseIntelligence/astChunker.test.ts",
     "test:chunking": "tsx --test src/rag/chunking.test.ts",
+    "test:workspace": "tsx --test src/engineering/engineeringWorkspace.test.ts",
+    "test:compile": "tsx --test src/engineering/workspaceCompile.test.ts",
+    "probe:ananta": "tsx scripts/ananta-layer-probe.ts",
+    "test:ananta-layers": "tsx scripts/ananta-layer-test.ts",
     "eval:retrieval": "tsx scripts/eval-retrieval.ts"
   },
   "dependencies": {
@@ -37,7 +41,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
     "helmet": "^8.0.0",
-    "js-tiktoken": "^1.0.19",
+    "js-tiktoken": "^1.0.21",
     "openai": "^4.71.0",
     "pg": "^8.16.0",
     "pino": "^9.5.0",

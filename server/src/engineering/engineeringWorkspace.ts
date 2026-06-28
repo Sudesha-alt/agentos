@@ -8,7 +8,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { gitClient } from "../integrations/gitProvider";
 import { SANDBOX_BASE, sandboxManager } from "../qa/testing/sandboxManager";
@@ -112,6 +112,23 @@ export function getEngWorkspace(pipelineId: string): WorkspaceHandle | undefined
   return activeWorkspaces.get(pipelineId);
 }
 
+/** Register an on-disk repo directory for local/demo coding runs (no clone). */
+export function registerEngWorkspaceLocal(
+  pipelineId: string,
+  jiraKey: string,
+  workspaceDir: string,
+  sourceBranch = "main"
+): WorkspaceHandle {
+  const handle: WorkspaceHandle = {
+    pipelineId,
+    workspaceDir,
+    branchName: resolveEngineeringBranchName(jiraKey),
+    sourceBranch,
+  };
+  activeWorkspaces.set(pipelineId, handle);
+  return handle;
+}
+
 export function destroyEngWorkspace(pipelineId: string): void {
   const handle = activeWorkspaces.get(pipelineId);
   if (!handle) return;
@@ -127,13 +144,51 @@ export function destroyEngWorkspace(pipelineId: string): void {
 
 // ─── File operations ─────────────────────────────────────────────────────────
 
-function guardPath(workspaceDir: string, filePath: string): string {
-  const abs = join(workspaceDir, filePath);
-  // Prevent path traversal
-  if (!abs.startsWith(workspaceDir + "/") && abs !== workspaceDir) {
-    throw new Error(`Path traversal denied: ${filePath}`);
+const GREP_SKIP_DIRS = new Set(["node_modules", ".git", "dist", ".next", "coverage"]);
+
+/** Cross-platform check that resolvedTarget stays inside workspace root. */
+function assertInsideWorkspaceRoot(root: string, target: string, label: string): void {
+  const rel = relative(root, target);
+  if (rel.startsWith("..") || isAbsolute(rel)) {
+    throw new Error(`Path traversal denied: ${label}`);
   }
+}
+
+function guardPath(workspaceDir: string, filePath: string): string {
+  const root = resolve(workspaceDir);
+  const abs = resolve(root, filePath);
+  assertInsideWorkspaceRoot(root, abs, filePath);
   return abs;
+}
+
+function toWorkspaceRelativePath(workspaceDir: string, absPath: string): string {
+  return relative(resolve(workspaceDir), absPath).split(sep).join("/");
+}
+
+function matchesFileGlob(filePath: string, fileGlob?: string): boolean {
+  if (!fileGlob) return true;
+  const normalized = filePath.replace(/\\/g, "/");
+  if (fileGlob.startsWith("*.")) {
+    return normalized.endsWith(fileGlob.slice(1));
+  }
+  const escaped = fileGlob.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+  return new RegExp(`^${escaped}$`).test(normalized);
+}
+
+function collectWorkspaceFiles(workspaceDir: string, dirPath: string, out: string[]): void {
+  const absDir = guardPath(workspaceDir, dirPath || ".");
+  if (!existsSync(absDir)) return;
+
+  for (const name of readdirSync(absDir)) {
+    if (GREP_SKIP_DIRS.has(name)) continue;
+    const abs = join(absDir, name);
+    const rel = toWorkspaceRelativePath(workspaceDir, abs);
+    if (statSync(abs).isDirectory()) {
+      collectWorkspaceFiles(workspaceDir, rel, out);
+    } else {
+      out.push(rel);
+    }
+  }
 }
 
 export function workspaceReadFile(workspaceDir: string, filePath: string): string {
@@ -180,9 +235,16 @@ export function workspaceApplyEdit(
     throw new Error(`File not found: ${filePath}`);
   }
   const original = readFileSync(abs, "utf8");
-  const occurrences = original.split(oldString).length - 1;
+  const usesCrLf = original.includes("\r\n");
+  const normOriginal = original.replace(/\r\n/g, "\n");
+  const normOld = oldString.replace(/\r\n/g, "\n");
+  const normNew = newString.replace(/\r\n/g, "\n");
+  const occurrences = normOriginal.split(normOld).length - 1;
   if (occurrences === 0) return { replaced: false, occurrences: 0 };
-  const updated = original.split(oldString).join(newString);
+  let updated = normOriginal.split(normOld).join(normNew);
+  if (usesCrLf) {
+    updated = updated.replace(/\n/g, "\r\n");
+  }
   writeFileSync(abs, updated, "utf8");
   return { replaced: true, occurrences };
 }
@@ -313,8 +375,9 @@ export async function workspaceRunCommand(
       `Command not allowed: "${command}". Allowed prefixes: ${ALLOWED_COMMAND_PREFIXES.join(", ")}`
     );
   }
-  const cwd = subdir ? join(workspaceDir, subdir) : workspaceDir;
-  if (!cwd.startsWith(workspaceDir)) throw new Error("Path traversal denied");
+  const root = resolve(workspaceDir);
+  const cwd = subdir ? resolve(root, subdir) : root;
+  assertInsideWorkspaceRoot(root, cwd, subdir ?? ".");
 
   try {
     const { stdout, stderr } = await execAsync(command, {
@@ -337,34 +400,33 @@ export async function workspaceRunCommand(
   }
 }
 
-/** Fast literal grep over the workspace directory. */
+/** Fast literal grep over the workspace directory (portable — no shell grep). */
 export async function workspaceGrep(
   workspaceDir: string,
   pattern: string,
   fileGlob?: string
 ): Promise<Array<{ file: string; line: number; text: string }>> {
-  const globArg = fileGlob ? `--include="${fileGlob}"` : "";
-  const cmd = `grep -rn ${globArg} --max-count=5 -F ${JSON.stringify(pattern)} .`;
-  try {
-    const { stdout } = await execAsync(cmd, {
-      cwd: workspaceDir,
-      timeout: 15_000,
-    });
-    return stdout
-      .trim()
-      .split("\n")
-      .filter(Boolean)
-      .slice(0, 50)
-      .map((line) => {
-        const m = line.match(/^(.+?):(\d+):(.*)$/);
-        if (!m) return null;
-        return { file: m[1].replace(/^\.\//, ""), line: Number(m[2]), text: m[3] };
-      })
-      .filter((x): x is NonNullable<typeof x> => x !== null);
-  } catch (err: unknown) {
-    // grep exits with 1 when no matches — that's fine
-    const e = err as { code?: number; stdout?: string };
-    if (e.code === 1) return [];
-    throw err;
+  const files: string[] = [];
+  collectWorkspaceFiles(workspaceDir, ".", files);
+
+  const matches: Array<{ file: string; line: number; text: string }> = [];
+  for (const file of files) {
+    if (!matchesFileGlob(file, fileGlob)) continue;
+    let content: string;
+    try {
+      content = workspaceReadFile(workspaceDir, file);
+    } catch {
+      continue;
+    }
+    const lines = content.split(/\r?\n/);
+    let fileMatches = 0;
+    for (let i = 0; i < lines.length; i += 1) {
+      if (!lines[i].includes(pattern)) continue;
+      matches.push({ file, line: i + 1, text: lines[i] });
+      fileMatches += 1;
+      if (fileMatches >= 5 || matches.length >= 50) break;
+    }
+    if (matches.length >= 50) break;
   }
+  return matches;
 }

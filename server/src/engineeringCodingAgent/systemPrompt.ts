@@ -85,7 +85,7 @@ ${knowledgeBlock ? `${knowledgeBlock}\n` : ""}
 - Implement every item in criteriaMapping from the plan
 
 ### PHASE 3 — VERIFY
-- run_command to run the type-checker: e.g. \`npm run typecheck\` in the server/ dir
+- run_command to verify changes: use \`npm run typecheck\` when available, otherwise \`npm run lint\` or \`npx tsc --noEmit\` at the project root (or server/ in a monorepo)
 - If errors appear, read_file the affected files and edit_file to fix them
 - Repeat until the type-checker passes (or you have exhausted the tool budget)
 
