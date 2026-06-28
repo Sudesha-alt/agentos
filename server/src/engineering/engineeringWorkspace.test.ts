@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, it } from "node:test";
@@ -8,6 +8,8 @@ import {
   workspaceReadFile,
   workspaceApplyEdit,
   workspaceGrep,
+  resetEngWorkspaceDir,
+  sanitizeGitShellError,
 } from "./engineeringWorkspace";
 
 describe("engineeringWorkspace path guard (L4)", () => {
@@ -80,5 +82,22 @@ describe("engineeringWorkspace path guard (L4)", () => {
 
   it("cleanup", () => {
     rmSync(workspaceDir, { recursive: true, force: true });
+  });
+});
+
+describe("engineering workspace lifecycle", () => {
+  it("resetEngWorkspaceDir removes a non-empty stale directory", () => {
+    const staleDir = mkdtempSync(join(tmpdir(), "eng-stale-"));
+    writeFileSync(join(staleDir, "leftover.txt"), "stale", "utf8");
+    resetEngWorkspaceDir("pipeline-test", staleDir);
+    assert.equal(existsSync(staleDir), false);
+  });
+
+  it("sanitizeGitShellError redacts embedded git credentials", () => {
+    const raw =
+      "Command failed: git clone https://x-access-token:github_pat_SECRET@github.com/org/repo.git .";
+    const sanitized = sanitizeGitShellError(new Error(raw));
+    assert.doesNotMatch(sanitized, /github_pat_SECRET/);
+    assert.doesNotMatch(sanitized, /x-access-token:github_pat/);
   });
 });

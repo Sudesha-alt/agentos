@@ -21,6 +21,7 @@ import {
   destroyEngWorkspace,
   getEngWorkspace,
   resolveFallbackApiPushBranch,
+  sanitizeGitShellError,
   workspaceCommitAndPush,
   workspaceGetChangedFiles,
 } from "../engineering/engineeringWorkspace";
@@ -1094,13 +1095,13 @@ export class PipelineOrchestrator {
         sourceBranch,
       });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = sanitizeGitShellError(err);
       await auditRepo.log(pipelineId, "ENGINEERING_WORKSPACE_FAILED", {
         jiraKey: ticket.jiraKey,
         sourceBranch,
         error: message,
       });
-      logger.error({ pipelineId, sourceBranch, err }, "engineering workspace creation failed");
+      logger.error({ pipelineId, sourceBranch, err: message }, "engineering workspace creation failed");
       throw new Error(
         `Engineering workspace creation failed for ${ticket.jiraKey} ` +
           `(clone branch "${sourceBranch}"): ${message}. ` +
