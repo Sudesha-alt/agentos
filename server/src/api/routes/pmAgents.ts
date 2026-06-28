@@ -13,6 +13,7 @@ import { buildProductPackageExport } from "../../pipeline/artifacts";
 import { prepareTechAgentHandoff } from "../../agents/tech/orchestrator";
 import { pmAnalysisStore } from "../../agents/pm/store";
 import { buildPmAnalysisListItems, buildPrdSummary } from "../../agents/pm/pmAnalysisCatalog";
+import { ensurePmAnalysisRecordLoaded } from "../../agents/pm/store";
 import { startEngineeringHandoff } from "../../agents/pm/startEngineeringHandoff";
 import type { PmAnalysisListFilter } from "../../agents/pm/handoffStatus";
 import type { PmStageId, PmTicketInput, RetrospectiveInput } from "../../agents/pm/types";
@@ -84,7 +85,10 @@ router.get("/analysis/:ticketId", async (req, res, next) => {
     if (!user?.organizationId) return;
 
     await withOrganizationContext(user.organizationId, async () => {
-      const record = pmAnalysisStore.get(req.params.ticketId);
+      const jiraKey = req.params.ticketId.trim().toUpperCase();
+      const record =
+        (await ensurePmAnalysisRecordLoaded(user.organizationId, jiraKey)) ??
+        pmAnalysisStore.get(jiraKey);
       if (!record) throw new NotFoundError("PM analysis not found");
       res.json({
         ...record,

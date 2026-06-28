@@ -10,8 +10,6 @@ import { loadPipelineJiraCredentialsFromStore } from "./pipeline/jira/credential
 import { initCodebaseVizWebSocket } from "./codebaseIntelligence/codebaseVizHub";
 import { recoverStaleIndexRuns } from "./codebaseIntelligence/indexRecovery";
 import { migrateJiraMirrorToJiraIssue } from "./jira-sync/migrateMirror";
-import { loadPmAnalysesFromStore } from "./agents/pm/store";
-import { backfillEngineeringHandoffRecords } from "./agents/pm/handoffStatus";
 import { loadCanarySettingsFromStore } from "./canaryAgent/settingsStore";
 import { loadPipelineSettingsFromStore } from "./pipeline/settingsStore";
 // canary scheduler removed — canary runs only via pipeline trigger and manual API call
@@ -34,10 +32,6 @@ async function bootstrap(): Promise<void> {
   loadPipelineJiraCredentialsFromStore();
   loadCanarySettingsFromStore();
   loadPipelineSettingsFromStore();
-  const pmLoaded = await loadPmAnalysesFromStore();
-  if (pmLoaded > 0) {
-    logger.info({ count: pmLoaded }, "restored PM analyses from store");
-  }
 
   await recoverPipelineStateOnBoot().catch((err) => {
     logger.warn({ err }, "startup pipeline queue recovery failed");
@@ -76,9 +70,6 @@ async function bootstrap(): Promise<void> {
 }
 
 async function runDeferredStartupTasks(): Promise<void> {
-  await backfillEngineeringHandoffRecords().catch((err) => {
-    logger.warn({ err }, "engineering handoff backfill failed");
-  });
   await restoreGitCredentialsFromPostgres().catch((err) => {
     logger.warn({ err }, "startup git credential restore failed");
   });

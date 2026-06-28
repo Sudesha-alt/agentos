@@ -1,6 +1,6 @@
 import { estimateAnalysisCost } from "./orchestrator";
 import type { PmAnalysisRecord } from "./types";
-import { pmAnalysisStore } from "./store";
+import { pmAnalysisStore, ensurePmAnalysisRecordLoaded } from "./store";
 import {
   batchInferHandoffsFromPipeline,
   isAwaitingAnanta,
@@ -94,8 +94,10 @@ export async function buildPrdSummary(
   completedAt: string | null;
   handoff: PmAnalysisListItem["engineeringHandoff"];
 } | null> {
-  const records = await listPmAnalysesForOrg(organizationId, { limit: 200 });
-  const record = records.find((r) => r.jiraKey === jiraKey.trim().toUpperCase());
+  const record = await ensurePmAnalysisRecordLoaded(
+    organizationId,
+    jiraKey.trim().toUpperCase()
+  );
   if (!record?.generatedPrd) return null;
 
   const handoff = await resolveHandoffForRecord(record, organizationId);
