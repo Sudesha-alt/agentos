@@ -82,12 +82,13 @@ router.get("/prds/:ticketId/summary", async (req, res, next) => {
 router.get("/analysis/:ticketId", async (req, res, next) => {
   try {
     const user = requireOrganizationUser(req, res);
-    if (!user?.organizationId) return;
+    const organizationId = user?.organizationId;
+    if (!organizationId) return;
 
-    await withOrganizationContext(user.organizationId, async () => {
+    await withOrganizationContext(organizationId, async () => {
       const jiraKey = req.params.ticketId.trim().toUpperCase();
       const record =
-        (await ensurePmAnalysisRecordLoaded(user.organizationId, jiraKey)) ??
+        (await ensurePmAnalysisRecordLoaded(organizationId, jiraKey)) ??
         pmAnalysisStore.get(jiraKey);
       if (!record) throw new NotFoundError("PM analysis not found");
       res.json({
