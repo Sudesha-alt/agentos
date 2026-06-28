@@ -5,14 +5,14 @@ import {
   useState,
 } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
-import { authAdapter, AUTH_SESSION_STORAGE_KEY } from "../../entities/auth";
+import { authAdapter, hasStoredAuthToken, readStoredSession } from "../../entities/auth";
 import AppPreloader from "../ui/AppPreloader";
 import { AuthContext, useAuth } from "./useAuth";
 import { sessionHomePath, migrateAppPath } from "../routing/orgPaths";
 
 export function AuthProvider({ children }) {
   const navigate = useNavigate();
-  const [session, setSession] = useState(null);
+  const [session, setSession] = useState(() => readStoredSession());
   const [loading, setLoading] = useState(() => hasStoredAuthToken());
 
   const refresh = useCallback(async () => {

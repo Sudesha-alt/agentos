@@ -1,12 +1,13 @@
 import { randomUUID } from "crypto";
 import { getDb } from "../../jira-intake/sqliteStore";
-import { upsertPmAnalysisRecord, loadAllPmAnalysisRecords } from "../../db/repositories/pmAnalysisRepo";
+import { upsertPmAnalysisRecord } from "../../db/repositories/pmAnalysisRepo";
 import { getActiveOrganizationId } from "../../organization/context";
 import { logger } from "../../utils/logger";
 import type { PmAnalysisRecord, PmAnalysisStatus, PmStageId, PmStageMeta } from "./types";
 
 /** Composite cache key when org is known; falls back to jiraKey-only for legacy rows. */
 const analyses = new Map<string, PmAnalysisRecord>();
+const hydratedOrgs = new Set<string>();
 
 function normalizeKey(jiraKey: string): string {
   return jiraKey.trim().toUpperCase();
@@ -54,7 +55,7 @@ function persistRecord(record: PmAnalysisRecord): void {
   });
 }
 
-function loadPmAnalysesFromSqlite(): number {
+function loadPmAnalysesFromSqliteForOrg(organizationId: string, limit: number): number {
   try {
     const rows = getDb()
       .prepare(`SELECT jira_key, record_json FROM pm_analysis_records`)
@@ -62,8 +63,10 @@ function loadPmAnalysesFromSqlite(): number {
 
     let loaded = 0;
     for (const row of rows) {
+      if (loaded >= limit) break;
       try {
         const record = JSON.parse(row.record_json) as PmAnalysisRecord;
+        if (record.organizationId && record.organizationId !== organizationId) continue;
         putInCache(record);
         loaded += 1;
       } catch (err) {
@@ -77,40 +80,57 @@ function loadPmAnalysesFromSqlite(): number {
   }
 }
 
-export async function loadPmAnalysesFromStore(): Promise<number> {
-  analyses.clear();
+export async function ensurePmAnalysesHydratedForOrg(
+  organizationId: string,
+  limit = 100
+): Promise<void> {
+  if (hydratedOrgs.has(organizationId)) return;
+  hydratedOrgs.add(organizationId);
+
+  if (!process.env.DATABASE_URL?.trim()) {
+    loadPmAnalysesFromSqliteForOrg(organizationId, limit);
+    return;
+  }
 
   try {
-    const rows = await loadAllPmAnalysisRecords();
-    for (const { record } of rows) {
-      putInCache(record);
-    }
-    if (rows.length > 0) {
-      return new Set(rows.map((r) => r.record.id)).size;
+    const { listPmAnalysisRecordsForOrg } = await import("../../db/repositories/pmAnalysisRepo");
+    const rows = await listPmAnalysisRecordsForOrg(organizationId, limit);
+    for (const record of rows) {
+      putInCache({ ...record, organizationId });
     }
   } catch (err) {
-    logger.warn({ err }, "pm analysis postgres load failed — falling back to sqlite");
+    logger.warn({ err, organizationId }, "pm analysis org hydrate failed");
+    hydratedOrgs.delete(organizationId);
+  }
+}
+
+export async function ensurePmAnalysisRecordLoaded(
+  organizationId: string,
+  jiraKey: string
+): Promise<PmAnalysisRecord | null> {
+  const key = normalizeKey(jiraKey);
+  const cached = getFromCache(key, organizationId);
+  if (cached) return cached;
+
+  if (!process.env.DATABASE_URL?.trim()) {
+    await ensurePmAnalysesHydratedForOrg(organizationId);
+    return getFromCache(key, organizationId);
   }
 
-  const sqliteCount = loadPmAnalysesFromSqlite();
-  if (sqliteCount > 0) {
-    logger.info({ count: sqliteCount }, "hydrated PM analyses from sqlite — migrating to postgres");
-    const migrated = new Set<string>();
-    for (const record of analyses.values()) {
-      if (migrated.has(record.id)) continue;
-      migrated.add(record.id);
-      const orgId = record.organizationId ?? getActiveOrganizationId();
-      if (orgId) {
-        void upsertPmAnalysisRecord(orgId, normalizeKey(record.jiraKey), {
-          ...record,
-          organizationId: orgId,
-        }).catch((err) => {
-          logger.warn({ err, jiraKey: record.jiraKey }, "pm analysis sqlite migration failed");
-        });
-      }
-    }
-    return migrated.size;
+  try {
+    const { getPmAnalysisRecordForOrg } = await import("../../db/repositories/pmAnalysisRepo");
+    const record = await getPmAnalysisRecordForOrg(organizationId, key);
+    if (!record) return null;
+    putInCache({ ...record, organizationId });
+    return getFromCache(key, organizationId);
+  } catch (err) {
+    logger.warn({ err, organizationId, jiraKey: key }, "pm analysis record load failed");
+    return null;
   }
+}
+
+/** @deprecated Startup no longer loads all orgs — use ensurePmAnalysesHydratedForOrg per request. */
+export async function loadPmAnalysesFromStore(): Promise<number> {
   return 0;
 }
 

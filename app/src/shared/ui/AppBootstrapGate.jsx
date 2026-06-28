@@ -2,18 +2,6 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../providers/useAuth";
 import AppPreloader from "./AppPreloader";
 
-function hasStoredAuthToken() {
-  if (typeof window === "undefined") return false;
-  try {
-    const raw = window.localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
-    if (!raw) return false;
-    const parsed = JSON.parse(raw);
-    return Boolean(parsed?.token);
-  } catch {
-    return false;
-  }
-}
-
 const MIN_BOOT_MS = 0;
 
 function removeInitialLoader() {

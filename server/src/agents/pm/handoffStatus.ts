@@ -1,6 +1,5 @@
 import { prisma } from "../../db/client";
-import { listPmAnalysisRecordsForOrg } from "../../db/repositories/pmAnalysisRepo";
-import { pmAnalysisStore } from "./store";
+import { pmAnalysisStore, ensurePmAnalysesHydratedForOrg } from "./store";
 import type { EngineeringHandoff, EngineeringHandoffStatus, PmAnalysisRecord } from "./types";
 import { logger } from "../../utils/logger";
 
@@ -214,17 +213,27 @@ export async function syncEngineeringHandoffFromPipelineState(
   patchEngineeringHandoff(pipeline.ticket.jiraKey, handoff);
 }
 
-export async function backfillEngineeringHandoffRecords(): Promise<number> {
-  if (!process.env.DATABASE_URL?.trim()) return 0;
+const handoffBackfilledOrgs = new Set<string>();
 
-  const rows = await prisma.pmAnalysisRecord.findMany();
+export async function backfillEngineeringHandoffForOrg(
+  organizationId: string
+): Promise<number> {
+  if (!process.env.DATABASE_URL?.trim()) return 0;
+  if (handoffBackfilledOrgs.has(organizationId)) return 0;
+  handoffBackfilledOrgs.add(organizationId);
+
+  const rows = await prisma.pmAnalysisRecord.findMany({
+    where: { organizationId },
+    orderBy: { updatedAt: "desc" },
+    take: 200,
+  });
   let updated = 0;
 
   for (const row of rows) {
     const record = row.recordJson as unknown as PmAnalysisRecord;
     if (record.status !== "COMPLETED" || !record.generatedPrd) continue;
 
-    const inferred = await inferHandoffFromPipeline(row.jiraKey, row.organizationId);
+    const inferred = await inferHandoffFromPipeline(row.jiraKey, organizationId);
     if (!inferred) continue;
 
     const current = record.engineeringHandoff?.status ?? "not_started";
@@ -237,16 +246,21 @@ export async function backfillEngineeringHandoffRecords(): Promise<number> {
     if (!shouldUpdate) continue;
 
     pmAnalysisStore.update(row.jiraKey, {
-      organizationId: row.organizationId,
+      organizationId,
       engineeringHandoff: inferred,
     });
     updated += 1;
   }
 
   if (updated > 0) {
-    logger.info({ updated }, "backfilled engineering handoff status on PM records");
+    logger.info({ updated, organizationId }, "backfilled engineering handoff status on PM records");
   }
   return updated;
+}
+
+/** @deprecated Use backfillEngineeringHandoffForOrg per organization instead. */
+export async function backfillEngineeringHandoffRecords(): Promise<number> {
+  return 0;
 }
 
 export type PmAnalysisListFilter = "all" | "awaiting_ananta" | "has_prd";
@@ -277,10 +291,8 @@ export async function listPmAnalysesForOrg(
   options: { limit?: number; filter?: PmAnalysisListFilter } = {}
 ): Promise<PmAnalysisRecord[]> {
   const limit = options.limit ?? 100;
-  const fromDb = await listPmAnalysisRecordsForOrg(organizationId, limit);
-  for (const record of fromDb) {
-    pmAnalysisStore.hydrate({ ...record, organizationId });
-  }
+  await ensurePmAnalysesHydratedForOrg(organizationId, limit);
+  await backfillEngineeringHandoffForOrg(organizationId);
   const cached = pmAnalysisStore.list(limit);
   return cached.filter((r) => !r.organizationId || r.organizationId === organizationId);
 }

@@ -127,7 +127,7 @@ export function usePipelineList(status, options = {}) {
   const query = useResource(
     () => pipelineAdapter.list(status),
     [status],
-    { pollMs: options.pollMs ?? 10000 }
+    { pollMs: options.pollMs ?? 10000, skip: options.skip }
   );
 
   return {

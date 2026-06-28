@@ -26,7 +26,7 @@ function persistSession(session) {
   }
 }
 
-function readStoredSession() {
+export function readStoredSession() {
   if (typeof window === "undefined") return null;
   const raw = window.localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
   if (!raw) return null;
@@ -35,6 +35,18 @@ function readStoredSession() {
   } catch {
     window.localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
     return null;
+  }
+}
+
+export function hasStoredAuthToken() {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = window.localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw);
+    return Boolean(parsed?.token);
+  } catch {
+    return false;
   }
 }
 

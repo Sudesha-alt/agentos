@@ -31,7 +31,7 @@ export default function IntakeAssignmentListener() {
   const mountedAt = useRef(new Date().toISOString());
   const seenIds = useRef(loadSeenIds());
   const [toast, setToast] = useState(null);
-  const { data } = useActivityEvents({ pollMs: 8000 });
+  const { data } = useActivityEvents({ pollMs: 15_000 });
 
   useEffect(() => {
     const events = data?.events ?? [];

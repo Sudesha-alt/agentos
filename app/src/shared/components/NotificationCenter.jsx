@@ -34,9 +34,18 @@ export default function NotificationCenter() {
   const [clearing, setClearing] = useState(false);
   const [dismissedLocal, setDismissedLocal] = useState(() => new Set());
   const panelRef = useRef(null);
-  const { items: pipelines } = usePipelineList(undefined, { pollMs: 30_000 });
-  const { active: liveActive } = usePipelineLive({ pollMs: 3000 });
-  const { data: eventsData, refetch } = useActivityEvents({ pollMs: 12_000 });
+  const { items: pipelines } = usePipelineList(undefined, {
+    pollMs: open ? 15_000 : undefined,
+    skip: !open,
+  });
+  const { active: liveActive } = usePipelineLive({
+    pollMs: open ? 3000 : undefined,
+    skip: !open,
+  });
+  const { data: eventsData, refetch } = useActivityEvents({
+    pollMs: open ? 12_000 : undefined,
+    skip: !open,
+  });
   const reviewItems = deriveReviewQueueItems(pipelines);
   const events = (eventsData?.events ?? []).filter((event) => !dismissedLocal.has(event.id));
   const intakeEvents = events.filter(

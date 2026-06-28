@@ -55,7 +55,10 @@ export function useResource(fetcher, deps = [], { pollMs, skip = false } = {}) {
       };
     }
 
-    const id = window.setInterval(() => run(false), pollMs);
+    const id = window.setInterval(() => {
+      if (document.visibilityState === "hidden") return;
+      run(false);
+    }, pollMs);
     return () => {
       cancelled = true;
       window.clearInterval(id);
