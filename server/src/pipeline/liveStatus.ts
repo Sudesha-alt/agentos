@@ -31,6 +31,7 @@ const AUDIT_LABELS: Record<string, string> = {
   ENGINEERING_CODING_COMPLETED: "Code changes complete",
   ENGINEERING_SANDBOX_COMPILE: "Compiling in sandbox",
   ENGINEERING_PUSHED_TO_BRANCH: "Pushed changes to branch",
+  ENGINEERING_PUSH_FAILED: "Failed to push changes to GitHub",
   AGENTIC_LOOP_STARTED: "Agent reasoning loop started",
   AGENTIC_LOOP_COMPLETED: "Agent reasoning loop finished",
   LLM_RESPONSE_RECEIVED: "Received model response",

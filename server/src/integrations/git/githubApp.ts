@@ -1,5 +1,18 @@
 import crypto from "node:crypto";
 import { createOAuthState } from "../../git-integration/oauthState";
+import {
+  buildGithubAppManifest,
+  evaluateGithubAppPermissions,
+  githubAppPermissionsSummary,
+  GITHUB_APP_EVENTS,
+} from "./githubAppPermissions";
+
+export {
+  evaluateGithubAppPermissions,
+  githubAppPermissionsSummary,
+  GITHUB_APP_REPOSITORY_PERMISSIONS,
+} from "./githubAppPermissions";
+export type { GithubAppPermissionCheck } from "./githubAppPermissions";
 
 const API_BASE = "https://api.github.com";
 
@@ -207,19 +220,48 @@ export function githubAppPublicConfig() {
   return {
     configured: Boolean(config),
     appSlug: config?.appSlug ?? null,
-    permissions: [
-      "Contents (read & write)",
-      "Pull requests (read & write)",
-      "Metadata (read)",
-      "Webhooks (read & write)",
-      "Actions (read)",
-    ],
-    events: ["push", "pull_request"],
+    permissions: githubAppPermissionsSummary(),
+    events: [...GITHUB_APP_EVENTS],
     capabilities: [
       "Codebase index & visualization",
       "Semantic search & Ask",
       "Branch push & pull requests",
       "QA sandbox clone",
     ],
+    permissionsFixUrl: config?.appSlug
+      ? `https://github.com/settings/apps/${encodeURIComponent(config.appSlug)}/permissions`
+      : null,
   };
+}
+
+export async function checkInstallationPermissions(
+  installationId: string
+): Promise<ReturnType<typeof evaluateGithubAppPermissions>> {
+  const config = appConfig();
+  const meta = await getInstallation(installationId);
+  return evaluateGithubAppPermissions(meta.permissions, config?.appSlug ?? null);
+}
+
+/** Build GitHub manifest URL to register a new app with correct permissions. */
+export function githubAppManifestCreateUrl(input: {
+  webhookUrl: string;
+  setupUrl: string;
+  callbackUrl: string;
+  appUrl?: string;
+}): string | null {
+  const config = appConfig();
+  if (!config?.appSlug) return null;
+
+  const manifest = buildGithubAppManifest({
+    name: "AgentOS",
+    url: input.appUrl ?? input.setupUrl,
+    webhookUrl: input.webhookUrl,
+    setupUrl: input.setupUrl,
+    callbackUrl: input.callbackUrl,
+  });
+
+  const params = new URLSearchParams({
+    state: createOAuthState(),
+  });
+  return `https://github.com/settings/apps/new?manifest=${encodeURIComponent(JSON.stringify(manifest))}&${params.toString()}`;
 }

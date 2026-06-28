@@ -28,6 +28,7 @@ import { resolveCodingBranchName } from "../engineeringCodingAgent/inputBuilder"
 import { gitClient } from "../integrations/gitProvider";
 import { getKnowledge } from "../codebaseIntelligence/knowledgeService";
 import { runQaAgentic } from "../qaAgent";
+import { resolveImplementationBranchForQa } from "../qa/resolveImplementationBranch";
 import { completeTicketInJira } from "../jira/writeback/completeTicketInJira";
 import {
   persistBranchState,
@@ -1078,6 +1079,7 @@ export class PipelineOrchestrator {
     }
 
     let codingResult: Awaited<ReturnType<typeof runEngineeringCodingAgentic>> | null = null;
+    let implementationBranch: string | null = null;
 
     try {
       // Run the agentic loop (one attempt — agent handles its own verify/fix loop in Phase 2)
@@ -1169,7 +1171,7 @@ export class PipelineOrchestrator {
         }
       }
 
-      // ── Commit + push via local git ──────────────────────────────────────
+      // ── Commit + push via local git (required — QA reads this branch) ───
       let pushResult: { sha: string; pushedBranch: string } | null = null;
       let openedPr: import("../integrations/gitProvider").GitPullRequest | null = null;
 
@@ -1178,63 +1180,74 @@ export class PipelineOrchestrator {
         try {
           pushResult = await workspaceCommitAndPush(workspace.workspaceDir, commitMessage);
 
-          if (pushResult) {
-            await auditRepo.log(pipelineId, "ENGINEERING_PUSHED_TO_BRANCH", {
+          if (!pushResult) {
+            throw new Error(
+              "git commit returned nothing after Ananta made file changes"
+            );
+          }
+
+          implementationBranch = pushResult.pushedBranch;
+          await auditRepo.log(pipelineId, "ENGINEERING_PUSHED_TO_BRANCH", {
+            jiraKey: ticket.jiraKey,
+            targetBranch: pushResult.pushedBranch,
+            commitSha: pushResult.sha,
+          });
+          logger.info(
+            { pipelineId, branch: pushResult.pushedBranch, sha: pushResult.sha },
+            "engineering workspace committed and pushed"
+          );
+
+          // Phase 3: open a draft PR
+          try {
+            const prTitle = `[${ticket.jiraKey}] ${prd.title}`;
+            const prBody = buildPrBody(ticket.jiraKey, prd, codingResult?.codingSummary ?? "");
+            openedPr = await gitClient.createPullRequest(
+              pushResult.pushedBranch,
+              sourceBranch,
+              prTitle,
+              prBody,
+              true // draft
+            );
+            await auditRepo.log(pipelineId, "ENGINEERING_PR_OPENED", {
               jiraKey: ticket.jiraKey,
-              targetBranch: pushResult.pushedBranch,
-              commitSha: pushResult.sha,
+              prUrl: openedPr.url,
+              prNumber: openedPr.number,
             });
             logger.info(
-              { pipelineId, branch: pushResult.pushedBranch, sha: pushResult.sha },
-              "engineering workspace committed and pushed"
+              { pipelineId, prUrl: openedPr.url },
+              "engineering draft PR opened"
             );
-
-            // Phase 3: open a draft PR
-            try {
-              const prTitle = `[${ticket.jiraKey}] ${prd.title}`;
-              const prBody = buildPrBody(ticket.jiraKey, prd, codingResult?.codingSummary ?? "");
-              openedPr = await gitClient.createPullRequest(
-                pushResult.pushedBranch,
-                sourceBranch,
-                prTitle,
-                prBody,
-                true // draft
-              );
-              await auditRepo.log(pipelineId, "ENGINEERING_PR_OPENED", {
-                jiraKey: ticket.jiraKey,
-                prUrl: openedPr.url,
-                prNumber: openedPr.number,
-              });
-              logger.info(
-                { pipelineId, prUrl: openedPr.url },
-                "engineering draft PR opened"
-              );
-            } catch (prErr) {
-              logger.warn({ pipelineId, prErr }, "PR creation failed — continuing pipeline");
-            }
-
-            // Persist BranchState + Jira writeback
-            const changedFiles = await workspaceGetChangedFiles(workspace.workspaceDir).catch(
-              () => []
-            );
-            await persistBranchState(
-              ticket.jiraKey,
-              pushResult.pushedBranch,
-              pushResult.sha,
-              changedFiles.map((f) => f.path),
-              openedPr
-            );
-
-            await writeGitPushToTicket(ticket.jiraKey, {
-              targetBranch: pushResult.pushedBranch,
-              commitSha: pushResult.sha,
-              sourceBranch,
-              prUrl: openedPr?.url,
-              prNumber: openedPr?.number,
-            });
+          } catch (prErr) {
+            logger.warn({ pipelineId, prErr }, "PR creation failed — continuing pipeline");
           }
+
+          // Persist BranchState + Jira writeback
+          const changedFiles = await workspaceGetChangedFiles(workspace.workspaceDir).catch(
+            () => []
+          );
+          await persistBranchState(
+            ticket.jiraKey,
+            pushResult.pushedBranch,
+            pushResult.sha,
+            changedFiles.map((f) => f.path),
+            openedPr
+          );
+
+          await writeGitPushToTicket(ticket.jiraKey, {
+            targetBranch: pushResult.pushedBranch,
+            commitSha: pushResult.sha,
+            sourceBranch,
+            prUrl: openedPr?.url,
+            prNumber: openedPr?.number,
+          });
         } catch (pushErr) {
-          logger.warn({ pipelineId, pushErr }, "workspace push failed — continuing pipeline");
+          const message = pushErr instanceof Error ? pushErr.message : String(pushErr);
+          await auditRepo.log(pipelineId, "ENGINEERING_PUSH_FAILED", {
+            jiraKey: ticket.jiraKey,
+            error: message,
+          });
+          logger.error({ pipelineId, pushErr }, "engineering workspace push failed");
+          throw new Error(`Engineering push failed for ${ticket.jiraKey}: ${message}`);
         }
       } else {
         // Fallback: Git Data API push (legacy in-memory path)
@@ -1248,6 +1261,8 @@ export class PipelineOrchestrator {
               finalStaged.map((f) => ({ filePath: f.filePath, content: f.content })),
               `[${ticket.jiraKey}] ${codingResult?.codingSummary ?? "Engineering agent changes"}`
             );
+            implementationBranch = targetBranch;
+            pushResult = { sha: apiPush.sha, pushedBranch: targetBranch };
             await auditRepo.log(pipelineId, "ENGINEERING_PUSHED_TO_BRANCH", {
               jiraKey: ticket.jiraKey,
               targetBranch,
@@ -1260,9 +1275,22 @@ export class PipelineOrchestrator {
               sourceBranch,
             });
           } catch (err) {
-            logger.warn({ pipelineId, err }, "fallback API push failed — continuing pipeline");
+            const message = err instanceof Error ? err.message : String(err);
+            await auditRepo.log(pipelineId, "ENGINEERING_PUSH_FAILED", {
+              jiraKey: ticket.jiraKey,
+              targetBranch,
+              error: message,
+            });
+            logger.error({ pipelineId, err }, "fallback API push failed");
+            throw new Error(`Engineering push failed for ${ticket.jiraKey}: ${message}`);
           }
         }
+      }
+
+      if (!implementationBranch || !pushResult) {
+        throw new Error(
+          `Engineering push failed for ${ticket.jiraKey}: no branch was pushed to GitHub`
+        );
       }
 
       snapshotCodingArtifacts(pipelineId);
@@ -1319,6 +1347,7 @@ export class PipelineOrchestrator {
       jiraKey: ticket.jiraKey,
       filesChanged: codingResult.codeChanges.length,
       toolCalls: codingResult.toolCallLog.length,
+      implementationBranch,
     });
     emitEngineeringCodingEvent({
       type: "coding_completed",
@@ -1468,13 +1497,19 @@ export class PipelineOrchestrator {
     pipelineId: string,
     jiraKey: string,
     prd: PrdOutput,
-    implementation: ImplementationOutput
+    implementation: ImplementationOutput,
+    implementationBranch?: string
   ) {
+    const branchName =
+      implementationBranch?.trim() ||
+      (await resolveImplementationBranchForQa(pipelineId, jiraKey));
+
     const retrieved = await retriever.retrieveForQAAgent(prd, jiraKey);
     const input = {
       prd,
       implementation,
       retrievedContext: retrieved,
+      implementationBranch: branchName,
       instruction:
         "Four-phase QA: understand code, write tests, run tests, report findings.",
     };
@@ -1490,6 +1525,7 @@ export class PipelineOrchestrator {
       implementation,
       retrievedContext: retrieved,
       implementationMode: implementation.implementationMode,
+      implementationBranch: branchName,
     });
     const output = result.agentOutput;
     await pipelineRepo.completeStage({

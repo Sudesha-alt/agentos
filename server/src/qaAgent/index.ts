@@ -8,8 +8,10 @@ import { QA_TOOL_DEFINITIONS } from "../tools/qaToolDefinitions";
 import {
   clearQaArtifacts,
   getQaArtifacts,
+  setQaImplementationBranch,
 } from "../qa/qaArtifactStore";
 import type { QaExecutionReport } from "../qa/report/reportGenerator";
+import { resolveImplementationBranchForQa } from "../qa/resolveImplementationBranch";
 import { buildQaInitialUserMessage, resolveQaBranchName } from "./inputBuilder";
 import { buildQaSystemPrompt } from "./systemPrompt";
 
@@ -24,6 +26,8 @@ export interface QaAgentRunInput {
   implementation: ImplementationOutput;
   retrievedContext: RetrievedContext[];
   implementationMode?: ImplementationMode;
+  /** Ananta push branch — when omitted, resolved from pipeline audit log. */
+  implementationBranch?: string;
 }
 
 export interface QaAgentRunResult {
@@ -39,9 +43,13 @@ export interface QaAgentRunResult {
 export async function runQaAgentic(
   input: QaAgentRunInput
 ): Promise<QaAgentRunResult> {
-  const branchName = resolveQaBranchName();
+  const branchName = resolveQaBranchName(
+    input.implementationBranch ??
+      (await resolveImplementationBranchForQa(input.pipelineId, input.jiraKey))
+  );
   const mode = input.implementationMode ?? input.implementation.implementationMode ?? "code";
   clearQaArtifacts(input.pipelineId);
+  setQaImplementationBranch(input.pipelineId, branchName);
 
   try {
     const loop = await runAgenticLoop({
@@ -65,6 +73,7 @@ export async function runQaAgentic(
       {
         pipelineId: input.pipelineId,
         jiraKey: input.jiraKey,
+        implementationBranch: branchName,
         toolCalls: loop.toolCallCount,
         testCases: qaOutput.testCases?.length ?? 0,
         recommendation: artifacts.executionReport?.overallRecommendation,

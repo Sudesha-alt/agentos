@@ -10,6 +10,7 @@ export interface StagedTestFile {
 
 export interface QaPipelineArtifacts {
   stagedTestFiles: StagedTestFile[];
+  implementationBranch?: string;
   lastTestRun?: TestRunResult;
   securityScan?: import("./testing/securityScanner").SecurityScanResult;
   executionReport?: QaExecutionReport;
@@ -22,6 +23,10 @@ export function getQaArtifacts(pipelineId: string): QaPipelineArtifacts {
     store.set(pipelineId, { stagedTestFiles: [] });
   }
   return store.get(pipelineId)!;
+}
+
+export function setQaImplementationBranch(pipelineId: string, branchName: string): void {
+  getQaArtifacts(pipelineId).implementationBranch = branchName;
 }
 
 export function clearQaArtifacts(pipelineId: string): void {

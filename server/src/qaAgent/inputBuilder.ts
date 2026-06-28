@@ -3,6 +3,8 @@ import type {
   PrdOutput,
 } from "../types/agents";
 import type { RetrievedContext } from "../types/pipeline";
+import { resolveRepoScope } from "../codebaseIntelligence/repoScope";
+import { resolveCodingBranchName } from "../engineeringCodingAgent/inputBuilder";
 import { buildQaAgentContext } from "../pipeline/contextBuilder";
 
 export interface QaAgenticInput {
@@ -42,6 +44,15 @@ final JSON test plan.
   `.trim();
 }
 
-export function resolveQaBranchName(): string {
-  return process.env.QA_DEFAULT_BRANCH || process.env.GITHUB_DEFAULT_BRANCH || "main";
+export function resolveQaBranchName(implementationBranch?: string): string {
+  if (implementationBranch?.trim()) {
+    return implementationBranch.trim();
+  }
+  const scope = resolveRepoScope();
+  return (
+    process.env.QA_DEFAULT_BRANCH?.trim() ||
+    process.env.GITHUB_DEFAULT_BRANCH?.trim() ||
+    scope?.defaultBranch ||
+    resolveCodingBranchName()
+  );
 }
