@@ -53,6 +53,25 @@ async function configureGitUser(workspaceDir: string): Promise<void> {
   await execAsync('git config user.name "AgentOS"', { cwd: workspaceDir, timeout: 10_000 });
 }
 
+/** Strip PATs and embedded credentials from git shell errors before surfacing to users/logs. */
+export function sanitizeGitShellError(err: unknown): string {
+  const message = err instanceof Error ? err.message : String(err);
+  return message
+    .replace(/https:\/\/x-access-token:[^@\s]+@/gi, "https://x-access-token:***@")
+    .replace(/https:\/\/[^@\s]+:[^@\s]+@github\.com/gi, "https://***:***@github.com")
+    .replace(/github_pat_[A-Za-z0-9_]+/g, "github_pat_***")
+    .replace(/gh[pousr]_[A-Za-z0-9_]+/g, "gh***");
+}
+
+/** Remove leftover workspace dir from a prior failed run or process restart. */
+export function resetEngWorkspaceDir(pipelineId: string, workspaceDir: string): void {
+  destroyEngWorkspace(pipelineId);
+  if (existsSync(workspaceDir)) {
+    rmSync(workspaceDir, { recursive: true, force: true });
+    logger.info({ pipelineId, workspaceDir }, "cleared stale engineering workspace directory");
+  }
+}
+
 /**
  * Create a persistent workspace for an engineering run.
  * Clones the source branch, creates the per-ticket work branch, and installs deps.
@@ -65,14 +84,20 @@ export async function createEngWorkspace(
   const runId = `${pipelineId}-eng`;
   const workspaceDir = join(SANDBOX_BASE, runId);
 
+  resetEngWorkspaceDir(pipelineId, workspaceDir);
   mkdirSync(workspaceDir, { recursive: true });
 
   // Clone source branch (shallow)
   const repoUrl = await gitClient.cloneUrl();
-  await execAsync(
-    `git clone --depth 1 --branch ${sourceBranch} ${repoUrl} .`,
-    { cwd: workspaceDir, timeout: 120_000 }
-  );
+  try {
+    await execAsync(
+      `git clone --depth 1 --branch ${sourceBranch} ${repoUrl} .`,
+      { cwd: workspaceDir, timeout: 120_000 }
+    );
+  } catch (err) {
+    rmSync(workspaceDir, { recursive: true, force: true });
+    throw new Error(sanitizeGitShellError(err));
+  }
 
   await configureGitUser(workspaceDir);
 
