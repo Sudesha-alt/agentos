@@ -8,6 +8,7 @@ import { resolveCodingBranchName } from "../engineeringCodingAgent/inputBuilder"
 import {
   clearCodingArtifacts,
   getCodingArtifacts,
+  setCodingDeliverablePaths,
   snapshotCodingArtifacts,
 } from "../engineering/codingArtifactStore";
 import {
@@ -1077,6 +1078,14 @@ export class PipelineOrchestrator {
         ? implementationOutput.parsed.targetFiles
         : targetFilePaths;
 
+    const codingDeliverablePaths = [
+      ...new Set([
+        ...deliverableFiles.map((f) => f.path),
+        ...targetFilePaths,
+        ...(implementationOutput.parsed.targetFiles ?? []),
+      ]),
+    ].filter(Boolean);
+
     // Load cached repo knowledge for conventions injection (non-blocking)
     let repoKnowledge = null;
     try {
@@ -1123,6 +1132,7 @@ export class PipelineOrchestrator {
 
     try {
       // Run the agentic loop (one attempt — agent handles its own verify/fix loop in Phase 2)
+      setCodingDeliverablePaths(pipelineId, codingDeliverablePaths);
       codingResult = await runEngineeringCodingAgentic({
         pipelineId,
         jiraKey: ticket.jiraKey,
@@ -1133,6 +1143,7 @@ export class PipelineOrchestrator {
         retainArtifacts: true,
         implementationMode,
         deliverableFiles,
+        requiredDeliverablePaths: codingDeliverablePaths,
         repoKnowledge,
       });
 

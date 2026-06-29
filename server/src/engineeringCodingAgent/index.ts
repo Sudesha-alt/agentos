@@ -46,6 +46,8 @@ export interface EngineeringCodingAgentRunInput {
   retainArtifacts?: boolean;
   implementationMode?: ImplementationMode;
   deliverableFiles?: Array<{ path: string; format: string; purpose: string }>;
+  /** Authoritative deliverable paths from orchestrator (merged with PRD/targetFiles). */
+  requiredDeliverablePaths?: string[];
   /** Injected from CodebaseKnowledgeCache for repo conventions */
   repoKnowledge?: CodebaseKnowledge | null;
 }
@@ -82,6 +84,7 @@ export async function runEngineeringCodingAgentic(
 
   const requiredPaths = [
     ...new Set([
+      ...(input.requiredDeliverablePaths ?? []),
       ...(input.deliverableFiles?.map((f) => f.path) ?? []),
       ...(input.implementation.targetFiles ?? []),
     ]),

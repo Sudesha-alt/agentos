@@ -1,3 +1,5 @@
+import { resolveToolFilePath } from "../integrations/git/normalizePushFiles";
+
 export interface StagedSourceFile {
   filePath: string;
   content: string;
@@ -42,6 +44,27 @@ export function markCodingFileWritten(pipelineId: string, filePath: string): voi
   if (!artifacts.writtenPaths.includes(filePath)) {
     artifacts.writtenPaths.push(filePath);
   }
+}
+
+/** Resolve write_file target: explicit tool input, else next PRD deliverable path. */
+export function resolveWriteTargetPath(
+  pipelineId: string,
+  input: Record<string, unknown>
+): { filePath: string; inferred: boolean } | null {
+  const explicit = resolveToolFilePath(input);
+  if (explicit) {
+    return { filePath: explicit, inferred: false };
+  }
+
+  const artifacts = ensure(pipelineId);
+  const remaining = artifacts.requiredDeliverablePaths.filter(
+    (path) => !artifacts.writtenPaths.includes(path)
+  );
+  const pick = remaining[0] ?? artifacts.requiredDeliverablePaths[0];
+  if (pick) {
+    return { filePath: pick, inferred: true };
+  }
+  return null;
 }
 
 export function getCodingArtifacts(pipelineId: string): EngineeringCodingArtifacts {

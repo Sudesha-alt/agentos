@@ -19,6 +19,8 @@ import { resolveRepoScope } from "../codebaseIntelligence/repoScope";
 import {
   getCodingArtifacts,
   markCodingFileWritten,
+  resolveWriteTargetPath,
+  setCodingDeliverablePaths,
 } from "../engineering/codingArtifactStore";
 import { logger } from "../utils/logger";
 import type { ToolCallInput, ToolCallResult } from "./executor";
@@ -94,32 +96,24 @@ function resolveWriteFilePath(
   pipelineId: string,
   toolCall: ToolCallInput
 ): { filePath: string; inferred?: boolean } | { error: string } {
-  const input = toolCall.input as Record<string, unknown>;
-  const explicit = resolveToolFilePath(input);
-  if (explicit) {
-    return { filePath: explicit };
-  }
-
-  const artifacts = getCodingArtifacts(pipelineId);
-  const remaining = artifacts.requiredDeliverablePaths.filter(
-    (path) => !artifacts.writtenPaths.includes(path)
+  const resolved = resolveWriteTargetPath(
+    pipelineId,
+    toolCall.input as Record<string, unknown>
   );
-  if (remaining.length === 1) {
-    logger.info(
-      { pipelineId, inferredPath: remaining[0] },
-      "inferred write_file path from single remaining deliverable"
-    );
-    return { filePath: remaining[0]!, inferred: true };
+  if (resolved) {
+    if (resolved.inferred) {
+      logger.info(
+        { pipelineId, inferredPath: resolved.filePath },
+        "inferred write_file path from PRD deliverables"
+      );
+    }
+    return { filePath: resolved.filePath, inferred: resolved.inferred };
   }
 
-  const hint =
-    artifacts.requiredDeliverablePaths.length > 0
-      ? ` Required deliverable paths: ${artifacts.requiredDeliverablePaths.join(", ")}.`
-      : "";
   return {
     error:
-      `file_path is required and must be a non-empty repo-relative path ` +
-      `(e.g. docs/curriculum/guide.md).${hint}`,
+      "file_path is required and must be a non-empty repo-relative path " +
+      "(e.g. docs/curriculum/guide.md).",
   };
 }
 
