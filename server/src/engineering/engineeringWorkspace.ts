@@ -11,6 +11,7 @@ import {
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { promisify } from "node:util";
 import { gitClient } from "../integrations/gitProvider";
+import { normalizeRepoPath } from "../integrations/git/normalizePushFiles";
 import { SANDBOX_BASE, sandboxManager } from "../qa/testing/sandboxManager";
 import { logger } from "../utils/logger";
 
@@ -213,7 +214,8 @@ function assertInsideWorkspaceRoot(root: string, target: string, label: string):
 
 function guardPath(workspaceDir: string, filePath: string): string {
   const root = resolve(workspaceDir);
-  const abs = resolve(root, filePath);
+  const normalized = normalizeRepoPath(filePath);
+  const abs = resolve(root, ...normalized.split("/"));
   assertInsideWorkspaceRoot(root, abs, filePath);
   return abs;
 }
@@ -350,7 +352,12 @@ export async function workspaceGetChangedFiles(
     .split("\n")
     .map((line) => {
       const code = line.slice(0, 2).trim();
-      const path = line.slice(3).trim();
+      let rawPath = line.slice(3).trim();
+      if (rawPath.includes(" -> ")) {
+        rawPath = rawPath.split(" -> ").pop()?.trim() ?? rawPath;
+      }
+      rawPath = rawPath.replace(/^"|"$/g, "");
+      const path = normalizeRepoPath(rawPath);
       let status: WorkspaceChangedFile["status"] = "modified";
       if (code === "A" || code === "??") status = "added";
       else if (code === "D") status = "deleted";

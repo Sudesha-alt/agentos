@@ -18,10 +18,17 @@ export function normalizeImplementationOutput(
       ? parsed.totalEstimateDays
       : Math.max(0.25, componentSum);
 
+  const authoritativeTargetFiles =
+    mode === "content" && targetFiles.length > 0
+      ? targetFiles
+      : parsed.targetFiles?.length
+        ? parsed.targetFiles
+        : targetFiles;
+
   return {
     ...parsed,
     implementationMode: parsed.implementationMode ?? mode,
-    targetFiles: parsed.targetFiles?.length ? parsed.targetFiles : targetFiles,
+    targetFiles: authoritativeTargetFiles,
     apiChanges: mode === "content" ? [] : parsed.apiChanges ?? [],
     databaseChanges: mode === "content" ? [] : parsed.databaseChanges ?? [],
     components: components.length

@@ -1,4 +1,5 @@
 import type { PmPipelineContext } from "../agents/pm/pmPipelineContext";
+import { resolveContentDeliverablePaths } from "../engineering/contentDeliverables";
 import { resolveRepoScope } from "../codebaseIntelligence/repoScope";
 import type { GeneratedPRD } from "../prd/prdGenerator";
 import type {
@@ -77,13 +78,23 @@ export function buildEngineeringCodingInitialUserMessage(
     [];
 
   const taskFilePaths = [...new Set((tasks ?? []).flatMap((t) => t.files ?? []))];
-  const requiredPaths = [
-    ...new Set([
-      ...deliverableFiles.map((f) => f.path),
-      ...taskFilePaths,
-      ...(input.implementation.targetFiles ?? []),
-    ]),
-  ].filter(Boolean);
+  const requiredPaths =
+    mode === "content"
+      ? resolveContentDeliverablePaths({
+          deliverableFiles,
+          targetFilePaths: [
+            ...deliverableFiles.map((f) => f.path),
+            ...taskFilePaths,
+          ],
+          implementationTargetFiles: input.implementation.targetFiles,
+        })
+      : [
+          ...new Set([
+            ...deliverableFiles.map((f) => f.path),
+            ...taskFilePaths,
+            ...(input.implementation.targetFiles ?? []),
+          ]),
+        ].filter(Boolean);
 
   const requiredFilesBlock =
     mode === "content" && requiredPaths.length

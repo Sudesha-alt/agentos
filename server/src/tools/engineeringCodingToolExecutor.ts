@@ -100,15 +100,22 @@ function resolveWriteFilePath(
     pipelineId,
     toolCall.input as Record<string, unknown>
   );
-  if (resolved) {
-    if (resolved.inferred) {
-      logger.info(
-        { pipelineId, inferredPath: resolved.filePath },
-        "inferred write_file path from PRD deliverables"
-      );
+    if (resolved) {
+      if (resolved.inferred || resolved.redirected) {
+        logger.info(
+          {
+            pipelineId,
+            inferredPath: resolved.filePath,
+            redirected: resolved.redirected ?? false,
+          },
+          "resolved write_file path from PRD deliverables"
+        );
+      }
+      return {
+        filePath: resolved.filePath,
+        inferred: resolved.inferred || resolved.redirected,
+      };
     }
-    return { filePath: resolved.filePath, inferred: resolved.inferred };
-  }
 
   return {
     error:
@@ -291,12 +298,21 @@ export async function executeEngineeringCodingToolCall(
 
       // ── Incremental edit ────────────────────────────────────────────────────
       case "edit_file": {
-        const resolved = requireFilePath(toolCall);
-        if ("error" in resolved) {
-          result = { error: resolved.error };
-          break;
+        const writeResolved = resolveWriteTargetPath(
+          pipelineId,
+          toolCall.input as Record<string, unknown>
+        );
+        let filePath: string;
+        if (writeResolved) {
+          filePath = writeResolved.filePath;
+        } else {
+          const required = requireFilePath(toolCall);
+          if ("error" in required) {
+            result = { error: required.error };
+            break;
+          }
+          filePath = required.filePath;
         }
-        const filePath = resolved.filePath;
         const oldString = stringValue(toolCall.input.old_string);
         const newString = stringValue(toolCall.input.new_string);
         const summary = stringValue(toolCall.input.summary);
@@ -306,6 +322,31 @@ export async function executeEngineeringCodingToolCall(
           result = { error: "No workspace available — edit_file requires a local workspace." };
           break;
         }
+        if (
+          !workspaceFileExists(workspace.workspaceDir, filePath) &&
+          newString.trim()
+        ) {
+          workspaceWriteFile(workspace.workspaceDir, filePath, newString);
+          markCodingFileWritten(pipelineId, filePath);
+          emitEngineeringCodingEvent({
+            type: "file_staged",
+            pipelineId,
+            filePath,
+            action: "create",
+            summary,
+            contentLength: newString.length,
+            timestamp: new Date().toISOString(),
+          });
+          result = {
+            filePath,
+            summary,
+            replaced: true,
+            occurrences: 1,
+            note: "File did not exist — created via write fallback.",
+          };
+          resultsFound = 1;
+          break;
+        }
         const editResult = workspaceApplyEdit(
           workspace.workspaceDir,
           filePath,
@@ -313,6 +354,7 @@ export async function executeEngineeringCodingToolCall(
           newString
         );
         if (editResult.replaced) {
+          markCodingFileWritten(pipelineId, filePath);
           emitEngineeringCodingEvent({
             type: "file_staged",
             pipelineId,

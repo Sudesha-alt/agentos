@@ -5,6 +5,11 @@ function readPathCandidate(value: unknown): string {
   return "";
 }
 
+/** Normalize repo-relative paths for consistent comparison across OS and git output. */
+export function normalizeRepoPath(path: string): string {
+  return path.trim().replace(/\\/g, "/").replace(/^\/+/, "");
+}
+
 /** Normalize repo-relative paths from tool/agent payloads. */
 export function resolveToolFilePath(input: Record<string, unknown>): string {
   for (const key of [
@@ -20,7 +25,7 @@ export function resolveToolFilePath(input: Record<string, unknown>): string {
   ] as const) {
     const candidate = readPathCandidate(input[key]);
     if (candidate) {
-      return candidate.replace(/\\/g, "/").replace(/^\/+/, "");
+      return normalizeRepoPath(candidate);
     }
   }
   return "";

@@ -18,6 +18,11 @@ import {
 } from "../engineering/resolveImplementationMode";
 import { emitEngineeringCodingEvent } from "../engineering/codingEventsHub";
 import {
+  findMissingContentDeliverables,
+  reconcileContentDeliverables,
+  resolveContentDeliverablePaths,
+} from "../engineering/contentDeliverables";
+import {
   createEngWorkspace,
   destroyEngWorkspace,
   getEngWorkspace,
@@ -27,6 +32,7 @@ import {
   workspaceCommitAndPush,
   workspaceGetChangedFiles,
 } from "../engineering/engineeringWorkspace";
+import { normalizeRepoPath } from "../integrations/git/normalizePushFiles";
 import { runWorkspaceSafetyCompile } from "../engineering/workspaceCompile";
 import { publishPipelineArtifact, mirrorPmContextArtifacts } from "./artifacts";
 import { resolveRepoIndexBranch } from "../git-integration/resolveRepoBranch";
@@ -1074,17 +1080,26 @@ export class PipelineOrchestrator {
     const { implementationMode, deliverableFiles, targetFilePaths } =
       this.resolveImplementationContext(ticket, enrichedPrdDocument);
     const requiredPaths =
-      implementationOutput.parsed.targetFiles?.length
-        ? implementationOutput.parsed.targetFiles
-        : targetFilePaths;
+      implementationMode === "content"
+        ? resolveContentDeliverablePaths({
+            deliverableFiles,
+            targetFilePaths,
+            implementationTargetFiles: implementationOutput.parsed.targetFiles,
+          })
+        : implementationOutput.parsed.targetFiles?.length
+          ? implementationOutput.parsed.targetFiles
+          : targetFilePaths;
 
-    const codingDeliverablePaths = [
-      ...new Set([
-        ...deliverableFiles.map((f) => f.path),
-        ...targetFilePaths,
-        ...(implementationOutput.parsed.targetFiles ?? []),
-      ]),
-    ].filter(Boolean);
+    const codingDeliverablePaths =
+      implementationMode === "content"
+        ? requiredPaths
+        : [
+            ...new Set([
+              ...deliverableFiles.map((f) => f.path),
+              ...targetFilePaths,
+              ...(implementationOutput.parsed.targetFiles ?? []),
+            ]),
+          ].filter(Boolean);
 
     // Load cached repo knowledge for conventions injection (non-blocking)
     let repoKnowledge = null;
@@ -1157,11 +1172,27 @@ export class PipelineOrchestrator {
             );
           }
           if (requiredPaths.length > 0) {
-            const changedPaths = new Set(changedFiles.map((f) => f.path));
-            const missing = requiredPaths.filter((p) => !changedPaths.has(p));
+            reconcileContentDeliverables(
+              workspace.workspaceDir,
+              requiredPaths,
+              changedFiles
+            );
+            const refreshedChanged = await workspaceGetChangedFiles(workspace.workspaceDir);
+            const changedPaths = new Set(
+              refreshedChanged.map((f) => normalizeRepoPath(f.path))
+            );
+            const writtenPaths = getCodingArtifacts(pipelineId).writtenPaths;
+            const missing = findMissingContentDeliverables(
+              requiredPaths,
+              changedPaths,
+              writtenPaths,
+              workspace.workspaceDir
+            );
             if (missing.length > 0) {
               throw new Error(
-                `Content deliverable missing files: ${missing.join(", ")}. Changed ${changedFiles.length} of ${requiredPaths.length} required path(s).`
+                `Content deliverable missing files: ${missing.join(", ")}. ` +
+                  `Changed ${refreshedChanged.length} of ${requiredPaths.length} required path(s). ` +
+                  `Actual changes: ${[...changedPaths].join(", ") || "(none)"}.`
               );
             }
           }

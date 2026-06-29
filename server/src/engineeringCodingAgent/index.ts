@@ -2,6 +2,9 @@ import { runAgenticLoop } from "../agenticLoop/loop";
 import type { PmPipelineContext } from "../agents/pm/pmPipelineContext";
 import type { CodebaseKnowledge } from "../codebaseIntelligence/knowledgeService";
 import {
+  resolveContentDeliverablePaths,
+} from "../engineering/contentDeliverables";
+import {
   clearCodingArtifacts,
   getCodingArtifacts,
   markCodingFileWritten,
@@ -82,13 +85,20 @@ export async function runEngineeringCodingAgentic(
 
   clearCodingArtifacts(input.pipelineId);
 
-  const requiredPaths = [
-    ...new Set([
-      ...(input.requiredDeliverablePaths ?? []),
-      ...(input.deliverableFiles?.map((f) => f.path) ?? []),
-      ...(input.implementation.targetFiles ?? []),
-    ]),
-  ].filter(Boolean);
+  const requiredPaths =
+    mode === "content"
+      ? resolveContentDeliverablePaths({
+          deliverableFiles: input.deliverableFiles ?? [],
+          targetFilePaths: (input.deliverableFiles ?? []).map((f) => f.path),
+          implementationTargetFiles: input.implementation.targetFiles,
+        })
+      : [
+          ...new Set([
+            ...(input.requiredDeliverablePaths ?? []),
+            ...(input.deliverableFiles?.map((f) => f.path) ?? []),
+            ...(input.implementation.targetFiles ?? []),
+          ]),
+        ].filter(Boolean);
   if (requiredPaths.length > 0) {
     setCodingDeliverablePaths(input.pipelineId, requiredPaths);
   }
