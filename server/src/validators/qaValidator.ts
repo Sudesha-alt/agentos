@@ -67,14 +67,12 @@ export function validateQa(qa: unknown, prd: PrdOutput): ValidationResult {
 
   const data: QaOutput = schemaResult.data;
 
-  const linkedCriteria = new Set(
-    data.testCases.map((tc) => normalize(tc.linkedCriterion))
-  );
+  const linkedCriteria = data.testCases.map((tc) => tc.linkedCriterion);
   const trulyCovered = prd.acceptanceCriteria.filter((c) =>
-    linkedCriteria.has(normalize(c))
+    linkedCriteria.some((linked) => criterionIsCovered(linked, c))
   );
   const trulyUncovered = prd.acceptanceCriteria.filter(
-    (c) => !linkedCriteria.has(normalize(c))
+    (c) => !linkedCriteria.some((linked) => criterionIsCovered(linked, c))
   );
 
   if (data.coverageReport.totalCriteria !== prd.acceptanceCriteria.length) {
@@ -150,6 +148,24 @@ export function validateQa(qa: unknown, prd: PrdOutput): ValidationResult {
   };
 }
 
-function normalize(s: string): string {
-  return s.toLowerCase().replace(/\s+/g, " ").trim();
+/** Normalize acceptance criterion text for PRD ↔ QA linkedCriterion comparison. */
+export function normalizeCriterion(s: string): string {
+  return s
+    .trim()
+    .replace(/^\d+\.\s*/, "")
+    .replace(/^[-*•]\s*/, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function criterionIsCovered(linkedCriterion: string, prdCriterion: string): boolean {
+  const linked = normalizeCriterion(linkedCriterion);
+  const prd = normalizeCriterion(prdCriterion);
+  if (!linked || !prd) return false;
+  if (linked === prd) return true;
+  // Allow minor truncation when the model shortens the criterion slightly.
+  if (linked.length >= 24 && prd.startsWith(linked)) return true;
+  if (prd.length >= 24 && linked.startsWith(prd)) return true;
+  return false;
 }
