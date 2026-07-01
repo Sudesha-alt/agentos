@@ -6,6 +6,9 @@ export const RETRIEVAL_WORK_FILES_TOP_N = 10;
 /** Min similarity when fetching chunks from pgvector RPC */
 export const CHUNK_FETCH_THRESHOLD = 0.55;
 
+/** Looser threshold for engineering agent semantic search (returns more candidates) */
+export const ENGINEERING_CHUNK_FETCH_THRESHOLD = 0.45;
+
 /** Include file in work list when aggregated score meets this */
 export const FILE_PRESENT_THRESHOLD = 0.62;
 

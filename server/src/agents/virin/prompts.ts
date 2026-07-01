@@ -391,8 +391,13 @@ Output JSON:
 
 export const PROMPT_TASK_PLANNING = `Stage — Task planning (Project Manager capability)
 
-Break the system design into ordered engineering tasks. Each task must map to files and dependencies.
-For content-mode tickets (documentation, curriculum, policy): every task files[] entry MUST be a doc path (.md).
+Break the system design into ordered engineering tasks with clear dependencies.
+
+PATH RULES (critical):
+- For code-mode tickets: only put a path in files[] if it appears verbatim in codebase_analysis_json.relevantModules[].path or suggestedFirstFile.
+- Do NOT invent generic paths (e.g. server/auth/..., web/pages/...) unless they appear in codebase analysis.
+- If no verified path applies to a task, use files: [] and describe the target area in description (Ananta will discover paths via list_dir/grep).
+- For content-mode tickets: files[] must be document paths (.md); prefer paths from relevantModules, gapsToBuild, or suggestedFirstFile.
 
 System design JSON:
 {{system_design_json}}
@@ -409,7 +414,7 @@ Output JSON:
     {
       "id": "TASK-1",
       "title": "short actionable title",
-      "files": ["paths to touch"],
+      "files": ["only verified repo paths, or empty array"],
       "dependsOn": ["TASK-0 or empty"],
       "description": "what to implement and why"
     }

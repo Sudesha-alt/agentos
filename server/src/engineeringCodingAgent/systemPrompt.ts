@@ -74,9 +74,10 @@ ${knowledgeBlock ? `${knowledgeBlock}\n` : ""}
 
 ### PHASE 1 — EXPLORE
 - list_dir to orient yourself in the repo
-- grep for exact symbol/import references
+- grep for exact symbol/import references (especially when search_codebase returns no matches)
 - search_codebase for semantic understanding of patterns and architecture
 - read_file on every file you plan to change
+- If search_codebase returns empty, run grep immediately — do not stop exploring
 
 ### PHASE 2 — IMPLEMENT
 - edit_file for ALL modifications to existing files (preferred — it is precise)
@@ -97,7 +98,8 @@ ${knowledgeBlock ? `${knowledgeBlock}\n` : ""}
 - ALWAYS read_file an existing file before edit_file
 - Prefer edit_file over write_file for existing files — it is more precise and easier to review
 - Never leave TODO stubs or placeholder implementations
-- Do not push to Git — the orchestrator handles committing and pushing when you finish${modeRules}
+- Do not push to Git — the orchestrator handles committing and pushing when you finish
+- You MUST call edit_file or write_file on at least one file before returning final JSON (code mode)${modeRules}
 
 ## Final JSON output schema (return ONLY valid JSON after tool work is complete)
 {

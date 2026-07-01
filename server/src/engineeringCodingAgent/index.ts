@@ -118,7 +118,14 @@ export async function runEngineeringCodingAgentic(
       maxToolCalls: mode === "content" ? MAX_CONTENT_CODING_TOOL_CALLS : MAX_CODING_TOOL_CALLS,
       tools: ENGINEERING_CODING_TOOL_DEFINITIONS,
       executeToolCall: executeEngineeringCodingToolCall,
-      forcedWrapUpMessage: `You have used the maximum number of coding tool calls. Produce the final JSON summary now using all changes made so far. Do not call more tools.`,
+      requireMutatingToolCalls: mode === "code",
+      maxMutatingToolRetries: 2,
+      mutatingToolRetryMessage:
+        "You must edit or create at least one source file with edit_file or write_file before finishing. Use grep/list_dir to find auth/API/UI paths in this repo if needed, then implement.",
+      forcedWrapUpMessage:
+        mode === "content"
+          ? `You have used the maximum number of coding tool calls. Produce the final JSON summary now using all changes made so far. Do not call more tools.`
+          : `You have used the maximum number of coding tool calls. Return final JSON only if you already called edit_file/write_file on real files; otherwise use remaining calls to implement.`,
     });
 
     const parsed = parseDiscoveryJson<CodingAgentJsonOutput>(

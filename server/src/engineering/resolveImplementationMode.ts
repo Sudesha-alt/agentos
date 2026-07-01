@@ -1,4 +1,7 @@
-import type { PmPipelineContext } from "../agents/pm/pmPipelineContext";
+import {
+  collectVerifiedRepoPaths,
+  filterToVerifiedPaths,
+} from "../agents/pm/verifiedRepoPaths";
 import type { GeneratedPRD } from "../prd/prdGenerator";
 import type { ImplementationMode } from "../types/agents";
 import type { NormalizedTicket } from "../types/ticket";
@@ -66,8 +69,10 @@ export function resolveDeliverableFiles(input: ResolveImplementationModeInput): 
     | null
     | undefined;
   const taskPaths = [...new Set((tasks ?? []).flatMap((t) => t.files ?? []))].filter(Boolean);
-  if (taskPaths.length && resolveImplementationMode(input) === "content") {
-    return taskPaths.map((path) => ({
+  const verified = collectVerifiedRepoPaths(input.pmContext ?? null);
+  const authoritativeTaskPaths = filterToVerifiedPaths(taskPaths, verified);
+  if (authoritativeTaskPaths.length && resolveImplementationMode(input) === "content") {
+    return authoritativeTaskPaths.map((path) => ({
       path,
       format: path.endsWith(".md") ? "markdown" : "document",
       purpose: "Required deliverable from task breakdown",

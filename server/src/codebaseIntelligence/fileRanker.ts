@@ -3,6 +3,7 @@ import { logger } from "../utils/logger";
 import { codebaseQueryService } from "./queryService";
 import {
   CHUNK_FETCH_THRESHOLD,
+  ENGINEERING_CHUNK_FETCH_THRESHOLD,
   FILE_WORK_THRESHOLD,
   RETRIEVAL_CHUNK_TOP_K,
   RETRIEVAL_WORK_FILES_TOP_N,
@@ -188,6 +189,46 @@ async function loadFileMetadata(
     });
   }
   return map;
+}
+
+/** Semantic search for the engineering coding agent — no work-threshold filter. */
+export async function searchCodebaseForEngineering(input: {
+  query: string;
+  branchName: string;
+  topN?: number;
+}): Promise<WorkFileHit[]> {
+  const query = input.query.trim();
+  if (!query) return [];
+
+  let chunks: ChunkSearchRow[] = [];
+  try {
+    chunks = await codebaseQueryService.searchCodebaseSemantically({
+      query,
+      branchName: input.branchName,
+      topK: RETRIEVAL_CHUNK_TOP_K,
+      similarityThreshold: ENGINEERING_CHUNK_FETCH_THRESHOLD,
+    });
+  } catch (err) {
+    logger.warn({ err }, "searchCodebaseForEngineering failed");
+    return [];
+  }
+
+  const aggregated = aggregateChunksToFiles(chunks, query);
+  aggregated.sort((a, b) => b.score - a.score);
+
+  const paths = aggregated.map((a) => a.path);
+  const meta = await loadFileMetadata(paths, input.branchName);
+
+  return aggregated.slice(0, input.topN ?? RETRIEVAL_WORK_FILES_TOP_N).map(
+    (hit): WorkFileHit => ({
+      path: hit.path,
+      changeScope: meta.get(hit.path)?.indexed ? "modify" : "create_new",
+      score: hit.score,
+      matchReasons: hit.matchReasons,
+      bestChunk: hit.bestChunk,
+      summary: meta.get(hit.path)?.summary ?? undefined,
+    })
+  );
 }
 
 export async function searchWorkFiles(input: {

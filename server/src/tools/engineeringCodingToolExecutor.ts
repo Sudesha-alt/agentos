@@ -250,7 +250,8 @@ export async function executeEngineeringCodingToolCall(
           query,
           branchName,
           topN: 10,
-          fetchFreshContent: !workspace, // fetch fresh only when no local workspace
+          fetchFreshContent: !workspace,
+          forEngineering: true,
         });
 
         const filters = arrayOfStrings(toolCall.input.filter_patterns);

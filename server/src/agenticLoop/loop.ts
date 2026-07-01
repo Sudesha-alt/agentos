@@ -17,6 +17,13 @@ const INPUT_COST_PER_TOKEN = 0.00000125;
 const OUTPUT_COST_PER_TOKEN = 0.00001;
 const MAX_TOOL_CALLS = 12;
 
+export const MUTATING_CODING_TOOLS = new Set([
+  "write_file",
+  "write_source_file",
+  "edit_file",
+  "delete_file",
+]);
+
 export interface AgenticLoopConfig {
   systemPrompt: string;
   initialUserMessage: string;
@@ -25,6 +32,11 @@ export interface AgenticLoopConfig {
   maxToolCalls?: number;
   tools?: typeof TOOL_DEFINITIONS;
   forcedWrapUpMessage?: string;
+  /** Require at least one mutating tool call before the loop may finish */
+  requireMutatingToolCalls?: boolean;
+  mutatingToolNames?: Set<string>;
+  maxMutatingToolRetries?: number;
+  mutatingToolRetryMessage?: string;
   executeToolCall?: (
     toolCall: ToolCallInput,
     pipelineId: string,
@@ -57,6 +69,10 @@ export async function runAgenticLoop(
     maxToolCalls = MAX_TOOL_CALLS,
     tools = TOOL_DEFINITIONS,
     forcedWrapUpMessage,
+    requireMutatingToolCalls = false,
+    mutatingToolNames = MUTATING_CODING_TOOLS,
+    maxMutatingToolRetries = 2,
+    mutatingToolRetryMessage,
     executeToolCall: executeToolCallFn = executeToolCall,
   } = config;
 
@@ -68,6 +84,11 @@ export async function runAgenticLoop(
   let totalInputTokens = 0;
   let totalOutputTokens = 0;
   let forcedWrapUp = false;
+  let mutatingRetryCount = 0;
+
+  function hasMutatingToolCall(): boolean {
+    return toolCallLog.some((entry) => mutatingToolNames.has(entry.tool));
+  }
 
   await auditRepo.log(pipelineId, "AGENTIC_LOOP_STARTED", {
     jiraKey,
@@ -120,6 +141,22 @@ export async function runAgenticLoop(
     const toolCalls = choice.message.tool_calls ?? [];
 
     if (choice.finish_reason === "stop" || toolCalls.length === 0) {
+      if (
+        requireMutatingToolCalls &&
+        !hasMutatingToolCall() &&
+        mutatingRetryCount < maxMutatingToolRetries
+      ) {
+        mutatingRetryCount += 1;
+        forcedWrapUp = false;
+        messages.push({
+          role: "user",
+          content:
+            mutatingToolRetryMessage ??
+            "You have not modified any files yet. You MUST call edit_file or write_file on at least one repo file before returning your final JSON. Use grep or list_dir if you still need to locate the right paths, then implement.",
+        });
+        continue;
+      }
+
       const finalResponse = extractTextContent(choice.message);
       if (!finalResponse) {
         throw new Error("Agentic loop ended without a text response.");

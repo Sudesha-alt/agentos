@@ -1,5 +1,10 @@
 import type { PmPipelineContext } from "../agents/pm/pmPipelineContext";
 import { resolveContentDeliverablePaths } from "../engineering/contentDeliverables";
+import {
+  collectVerifiedRepoPaths,
+  formatVerifiedPathsBlock,
+  filterToVerifiedPaths,
+} from "../agents/pm/verifiedRepoPaths";
 import { resolveRepoScope } from "../codebaseIntelligence/repoScope";
 import type { GeneratedPRD } from "../prd/prdGenerator";
 import type {
@@ -77,7 +82,11 @@ export function buildEngineeringCodingInitialUserMessage(
     })) ??
     [];
 
-  const taskFilePaths = [...new Set((tasks ?? []).flatMap((t) => t.files ?? []))];
+  const taskFilePaths = filterToVerifiedPaths(
+    [...new Set((tasks ?? []).flatMap((t) => t.files ?? []))],
+    collectVerifiedRepoPaths(input.pmContext ?? null)
+  );
+  const verifiedPaths = collectVerifiedRepoPaths(input.pmContext ?? null);
   const requiredPaths =
     mode === "content"
       ? resolveContentDeliverablePaths({
@@ -112,6 +121,8 @@ Pipeline: ${input.pipelineId}
 Working branch: ${input.branchName}
 Implementation mode: ${mode}
 PM context attached: ${input.pmContext ? "yes" : "no"}
+
+${formatVerifiedPathsBlock(verifiedPaths)}
 
 ${requiredFilesBlock}
 
@@ -148,7 +159,7 @@ ${pmHandoff?.approachSummary ? `PM implementation approach:\n${String(pmHandoff.
 
 ${design ? `System design package:\n${JSON.stringify(design, null, 2)}` : ""}
 
-${tasks?.length ? `Task breakdown:\n${tasks.map((t) => `- ${t.id}: ${t.title} (${t.files.join(", ")})`).join("\n")}` : ""}
+${tasks?.length ? `Task breakdown (file paths omitted unless verified in codebase analysis):\n${tasks.map((t) => `- ${t.id}: ${t.title}${t.files?.length ? ` (${t.files.join(", ")})` : ""}${t.description ? ` — ${t.description}` : ""}`).join("\n")}` : ""}
 
 ${generatedPrd ? `Full PM-generated PRD (authoritative — implement every feature, user story, and requirement described here):\n${JSON.stringify(generatedPrd, null, 2)}` : ""}
 

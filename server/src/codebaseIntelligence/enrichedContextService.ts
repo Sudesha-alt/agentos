@@ -8,7 +8,7 @@ import {
   type FileConnections,
   type ImportConnection,
 } from "./directoryService";
-import { searchWorkFiles, type WorkFileHit } from "./fileRanker";
+import { searchCodebaseForEngineering, searchWorkFiles, type WorkFileHit } from "./fileRanker";
 import { requireRepoScope } from "./repoScope";
 import {
   CONTEXT_CONTENT_PREVIEW_CHARS,
@@ -46,20 +46,31 @@ export async function buildEnrichedCodebaseContext(input: {
   components?: string[];
   topN?: number;
   fetchFreshContent?: boolean;
+  /** Engineering agent: looser semantic search, no work-threshold filter */
+  forEngineering?: boolean;
 }): Promise<CodebaseContextBundle> {
-  const workFiles = await searchWorkFiles({
-    query: input.query,
-    branchName: input.branchName,
-    ticketText: input.ticketText ?? input.query,
-    components: input.components ?? [],
-    topN: input.topN ?? CONTEXT_SQL_TOP_N,
-  });
+  const workFiles = input.forEngineering
+    ? await searchCodebaseForEngineering({
+        query: input.query,
+        branchName: input.branchName,
+        topN: input.topN ?? CONTEXT_SQL_TOP_N,
+      })
+    : await searchWorkFiles({
+        query: input.query,
+        branchName: input.branchName,
+        ticketText: input.ticketText ?? input.query,
+        components: input.components ?? [],
+        topN: input.topN ?? CONTEXT_SQL_TOP_N,
+      });
 
   if (workFiles.length === 0) {
+    const emptyMessage = input.forEngineering
+      ? "No semantic matches for this query. Use grep with concrete patterns (e.g. auth, OAuth, signIn, google) under src/ — do not rely on search_codebase alone."
+      : "No candidate files to change (index may be empty or query too narrow)";
     return {
       workFiles: [],
       files: [],
-      formatted: "No candidate files to change (index may be empty or query too narrow)",
+      formatted: emptyMessage,
     };
   }
 

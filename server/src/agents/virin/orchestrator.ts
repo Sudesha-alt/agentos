@@ -11,6 +11,10 @@ import { pmAnalysisStore } from "../pm/store";
 import { autoStartEngineeringFromVirin } from "../pm/autoStartEngineering";
 import { isPmAnalysisRunning, assertPmAnalysisNotCancelled, PmAnalysisCancelledError } from "../pm/backgroundRunner";
 import type { PmAnalysisRecord, PmTicketInput } from "../pm/types";
+import {
+  collectVerifiedRepoPaths,
+  sanitizeTaskBreakdownFiles,
+} from "../pm/verifiedRepoPaths";
 import { VIRIN_BEHAVIOR, VIRIN_SYSTEM_PROMPT } from "./persona";
 import {
   PROMPT_CODEBASE_ANALYSIS,
@@ -847,7 +851,9 @@ async function runTaskPlanning(
     }),
     STAGE_TOKENS.TASK_PLANNING
   );
-  pmAnalysisStore.update(jiraKey, { taskBreakdown: taskResult.tasks ?? [] });
+  const verified = collectVerifiedRepoPaths(undefined, record);
+  const tasks = sanitizeTaskBreakdownFiles(taskResult.tasks ?? [], verified);
+  pmAnalysisStore.update(jiraKey, { taskBreakdown: tasks });
 }
 
 async function runSolutioning(
