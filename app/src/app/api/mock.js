@@ -877,6 +877,24 @@ const MOCK_ENGINEERING_RUNS = {
       },
     ],
     liveSteps: null,
+    implementationMode: "code",
+    deliverableFiles: [],
+    implementationBranch: "feature/prod-1842-multi-currency",
+    pushCommitSha: "a1b2c3d4e5f6789012345678abcdef9012345678",
+    githubRepo: { workspace: "example", repoSlug: "repo" },
+    anantaStages: [
+      { id: "plan", label: "Implementation plan", status: "done" },
+      { id: "write", label: "Write files", status: "done" },
+      { id: "validate", label: "Implementation validation", status: "done" },
+      { id: "handoff", label: "Handoff to Neel", status: "done" },
+    ],
+    implementationValidation: {
+      passed: true,
+      score: 0.96,
+      issues: [],
+      amberFlags: ["One acceptance criterion has no mapped test file."],
+      checkedAt: new Date().toISOString(),
+    },
   },
   pl_01J7A1: {
     pipelineId: "pl_01J7A1",
@@ -915,6 +933,18 @@ const MOCK_ENGINEERING_RUNS = {
       { id: "s8", label: "Running implementation check…", status: "pending" },
       { id: "s9", label: "Creating pull request…", status: "pending" },
     ],
+    implementationMode: "code",
+    deliverableFiles: [],
+    implementationBranch: "feature/prod-1871-currency",
+    pushCommitSha: null,
+    githubRepo: { workspace: "example", repoSlug: "repo" },
+    anantaStages: [
+      { id: "plan", label: "Implementation plan", status: "done" },
+      { id: "write", label: "Write files", status: "active" },
+      { id: "validate", label: "Implementation validation", status: "pending" },
+      { id: "handoff", label: "Handoff to Neel", status: "pending" },
+    ],
+    implementationValidation: null,
   },
 };
 
