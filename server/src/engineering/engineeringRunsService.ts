@@ -9,6 +9,7 @@ import {
 import { pipelineStageLabel } from "../pipeline/liveStatus";
 import type { GeneratedPRD } from "../prd/prdGenerator";
 import type { ImplementationMode, ImplementationOutput } from "../types/agents";
+import type { ValidationResult } from "../types/pipeline";
 
 const ENGINEERING_STAGES: PipelineStage[] = [
   "ENGINEERING_AGENT",
@@ -75,10 +76,158 @@ export interface EngineeringRunDetail extends EngineeringRunListItem {
   qaPipelineStage: PipelineStage | null;
   implementationMode: ImplementationMode;
   deliverableFiles: Array<{ path: string; format: string; purpose: string }>;
+  implementationValidation: ValidationResult | null;
+  anantaStages: Array<{
+    id: "plan" | "write" | "validate" | "handoff";
+    label: string;
+    status: "pending" | "active" | "done" | "failed";
+  }>;
+  implementationBranch: string;
+  pushCommitSha: string | null;
+  githubRepo: { workspace: string; repoSlug: string } | null;
 }
 
-function resolveBranchName(): string {
+function resolveBranchName(jiraKey?: string): string {
+  if (jiraKey) {
+    return `agentos/${jiraKey.toLowerCase()}`;
+  }
   return process.env.ENGINEERING_CODING_BRANCH ?? "agentos/engineering";
+}
+
+function loadPushInfo(logs: AuditLog[]): {
+  implementationBranch: string | null;
+  pushCommitSha: string | null;
+} {
+  const pushLog = logs.find((l) => l.event === "ENGINEERING_PUSHED_TO_BRANCH");
+  if (!pushLog) return { implementationBranch: null, pushCommitSha: null };
+  const meta = (pushLog.metadata ?? {}) as { targetBranch?: string; commitSha?: string };
+  return {
+    implementationBranch: meta.targetBranch?.trim() || null,
+    pushCommitSha: meta.commitSha?.trim() || null,
+  };
+}
+
+async function loadImplementationValidation(
+  pipelineId: string
+): Promise<ValidationResult | null> {
+  const log = await pipelineRepo.getStageOutput(pipelineId, "IMPLEMENTATION_VALIDATION");
+  if (!log?.validationResult) return null;
+  return log.validationResult as unknown as ValidationResult;
+}
+
+async function loadGitHubRepo(
+  organizationId: string
+): Promise<{ workspace: string; repoSlug: string } | null> {
+  const config = await prisma.organizationGitConfig.findUnique({
+    where: { organizationId },
+    select: { workspace: true, repoSlug: true },
+  });
+  if (!config?.workspace?.trim() || !config?.repoSlug?.trim()) return null;
+  return { workspace: config.workspace.trim(), repoSlug: config.repoSlug.trim() };
+}
+
+function resolveAnantaStageStatus(
+  stepId: "plan" | "write" | "validate" | "handoff",
+  pipeline: Pipeline,
+  failure: FailureInfo,
+  flags: {
+    codingStarted: boolean;
+    codingDone: boolean;
+    engineeringDone: boolean;
+    validationDone: boolean;
+    qaStarted: boolean;
+  }
+): "pending" | "active" | "done" | "failed" {
+  const isRunning = pipeline.status === "RUNNING";
+  const failedStage = failure.failedStage;
+
+  if (failedStage) {
+    if (stepId === "plan" && failedStage === "ENGINEERING_AGENT" && !flags.codingStarted) {
+      return "failed";
+    }
+    if (stepId === "write" && failedStage === "ENGINEERING_AGENT") {
+      return "failed";
+    }
+    if (stepId === "validate" && failedStage === "IMPLEMENTATION_VALIDATION") {
+      return "failed";
+    }
+  }
+
+  const doneByStep: Record<typeof stepId, boolean> = {
+    plan: flags.codingStarted || flags.engineeringDone,
+    write: flags.codingDone || flags.engineeringDone,
+    validate: flags.validationDone,
+    handoff: flags.qaStarted || pipeline.status === "COMPLETED",
+  };
+
+  const activeByStep: Record<typeof stepId, boolean> = {
+    plan:
+      pipeline.currentStage === "ENGINEERING_AGENT" && !flags.codingStarted && isRunning,
+    write:
+      pipeline.currentStage === "ENGINEERING_AGENT" &&
+      flags.codingStarted &&
+      !flags.codingDone &&
+      isRunning,
+    validate: pipeline.currentStage === "IMPLEMENTATION_VALIDATION" && isRunning,
+    handoff:
+      (pipeline.currentStage === "QA_AGENT" || pipeline.currentStage === "QA_VALIDATION") &&
+      isRunning,
+  };
+
+  if (doneByStep[stepId]) return "done";
+  if (activeByStep[stepId]) return isRunning ? "active" : "failed";
+  return "pending";
+}
+
+async function buildAnantaStages(
+  pipeline: Pipeline,
+  logs: AuditLog[],
+  failure: FailureInfo
+): Promise<EngineeringRunDetail["anantaStages"]> {
+  const codingStarted = logs.some((l) => l.event === "ENGINEERING_CODING_STARTED");
+  const codingDone = logs.some((l) => l.event === "ENGINEERING_CODING_COMPLETED");
+  const engineeringDone = Boolean(
+    await pipelineRepo.getStageOutput(pipeline.id, "ENGINEERING_AGENT")
+  );
+  const validationDone = Boolean(
+    await pipelineRepo.getStageOutput(pipeline.id, "IMPLEMENTATION_VALIDATION")
+  );
+  const qaStarted =
+    Boolean(await pipelineRepo.getStageOutput(pipeline.id, "QA_AGENT")) ||
+    pipeline.currentStage === "QA_AGENT" ||
+    pipeline.currentStage === "QA_VALIDATION" ||
+    pipeline.currentStage === "OUTPUT";
+
+  const flags = {
+    codingStarted,
+    codingDone,
+    engineeringDone,
+    validationDone,
+    qaStarted,
+  };
+
+  return [
+    {
+      id: "plan",
+      label: "Implementation plan",
+      status: resolveAnantaStageStatus("plan", pipeline, failure, flags),
+    },
+    {
+      id: "write",
+      label: "Write files",
+      status: resolveAnantaStageStatus("write", pipeline, failure, flags),
+    },
+    {
+      id: "validate",
+      label: "Implementation validation",
+      status: resolveAnantaStageStatus("validate", pipeline, failure, flags),
+    },
+    {
+      id: "handoff",
+      label: "Handoff to Neel",
+      status: resolveAnantaStageStatus("handoff", pipeline, failure, flags),
+    },
+  ];
 }
 
 async function loadBranchPrForPipeline(jiraKey: string, pipelineId: string) {
@@ -462,6 +611,14 @@ async function buildDetail(
 
   // Load PR info from BranchState (written after push in orchestrator)
   const branchPr = await loadBranchPrForPipeline(pipeline.ticket.jiraKey, pipeline.id);
+  const pushInfo = loadPushInfo(logs);
+  const implementationBranch =
+    pushInfo.implementationBranch ?? resolveBranchName(pipeline.ticket.jiraKey);
+  const [implementationValidation, anantaStages, githubRepo] = await Promise.all([
+    loadImplementationValidation(pipeline.id),
+    buildAnantaStages(pipeline, logs, failure),
+    loadGitHubRepo(pipeline.organizationId),
+  ]);
 
   return {
     pipelineId: pipeline.id,
@@ -471,7 +628,7 @@ async function buildDetail(
     statusLabel: mapStatusLabel(mapRunStatus(pipeline)),
     currentStage: pipeline.currentStage,
     currentStageLabel: pipelineStageLabel(pipeline.currentStage),
-    branch: resolveBranchName(),
+    branch: implementationBranch,
     failureReason: failure.failureReason ?? undefined,
     failedStage: failure.failedStage,
     failedStageLabel: failure.failedStage
@@ -500,6 +657,11 @@ async function buildDetail(
     qaPipelineStage: isQaPhase(pipeline.currentStage) ? pipeline.currentStage : null,
     implementationMode,
     deliverableFiles,
+    implementationValidation,
+    anantaStages,
+    implementationBranch,
+    pushCommitSha: pushInfo.pushCommitSha,
+    githubRepo,
   };
 }
 
@@ -546,7 +708,7 @@ export async function listEngineeringRuns(
       statusLabel: mapStatusLabel(status),
       currentStage: p.currentStage,
       currentStageLabel: pipelineStageLabel(p.currentStage),
-      branch: resolveBranchName(),
+      branch: resolveBranchName(p.ticket.jiraKey),
       failureReason: failure?.failureReason ?? undefined,
     };
   });

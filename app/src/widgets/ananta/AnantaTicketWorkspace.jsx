@@ -9,6 +9,16 @@ import { AGENT_NAMES } from "../../shared/config/app";
 import { formatStageLabel, formatStatusLabel } from "../../shared/lib/format";
 import { useOrgPathBuilder } from "../../shared/providers/OrgRouteProvider";
 import { Panel } from "../../shared/ui/Panel";
+import ValidationPanelWidget from "../validation-panel/ValidationPanelWidget";
+import AnantaStageStepper from "./AnantaStageStepper";
+import DeliverableChecklist from "./DeliverableChecklist";
+import MarkdownPreview from "./MarkdownPreview";
+import {
+  buildGitHubBlobUrl,
+  buildGitHubBranchUrl,
+  buildGitHubCommitUrl,
+  isMarkdownPath,
+} from "./githubLinks";
 
 const SECTIONS = [
   { id: "plan", label: "Implementation Plan" },
@@ -66,9 +76,13 @@ export default function AnantaTicketWorkspace({
   const [costOpen, setCostOpen] = useState(false);
   const [resuming, setResuming] = useState(false);
   const [resumeError, setResumeError] = useState(null);
-  // Live SSE activity tracking
-  const [currentActivity, setCurrentActivity] = useState(null); // { tool, displayLabel, timestamp }
-  const [activityFeed, setActivityFeed] = useState([]); // last N completed tool calls
+  const [currentActivity, setCurrentActivity] = useState(null);
+  const [activityFeed, setActivityFeed] = useState([]);
+
+  const isContentMode = run?.implementationMode === "content";
+  const hasDeliverables = (run?.deliverableFiles?.length ?? 0) > 0;
+  const githubBranchUrl = buildGitHubBranchUrl(run?.githubRepo, run?.implementationBranch);
+  const githubCommitUrl = buildGitHubCommitUrl(run?.githubRepo, run?.pushCommitSha);
 
   const coverageLabel = useMemo(() => {
     if (!run) return null;
@@ -88,6 +102,17 @@ export default function AnantaTicketWorkspace({
       setSection("files");
     }
   }, [run?.files, run?.status]);
+
+  useEffect(() => {
+    if (!run || run.status === "RUNNING") return;
+    if (run.implementationMode !== "content" || !run.deliverableFiles?.length) return;
+    setSection("files");
+    setFileTab("preview");
+    const firstDeliverable = run.deliverableFiles[0]?.path;
+    const firstStaged =
+      run.files?.find((f) => f.path === firstDeliverable)?.path ?? run.files?.[0]?.path;
+    if (firstStaged) setSelectedFile(firstStaged);
+  }, [run?.pipelineId, run?.implementationMode, run?.deliverableFiles, run?.files, run?.status]);
 
   const activeFile = useMemo(() => {
     if (!run?.files?.length) return null;
@@ -254,7 +279,7 @@ export default function AnantaTicketWorkspace({
 
       <header className="app-card border border-app-border px-5 py-4 sm:px-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="type-kicker">{AGENT_NAMES.ANANTA} · Tech</p>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <h1 className="text-lg font-semibold text-app-ink">
@@ -262,17 +287,47 @@ export default function AnantaTicketWorkspace({
               </h1>
               <span
                 className={`rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${
-                  run.implementationMode === "content"
+                  isContentMode
                     ? "bg-warning/15 text-warning"
                     : "bg-indigo/10 text-indigo"
                 }`}
               >
-                {run.implementationMode === "content" ? "Content deliverable" : "Code change"}
+                {isContentMode ? "Content deliverable" : "Code change"}
               </span>
             </div>
             <p className="mt-2 text-sm text-app-ink-dim">
               Branch:{" "}
-              <span className="font-mono text-app-ink">{run.branch}</span>
+              {githubBranchUrl ? (
+                <a
+                  href={githubBranchUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-mono text-indigo hover:underline"
+                >
+                  {run.implementationBranch ?? run.branch}
+                </a>
+              ) : (
+                <span className="font-mono text-app-ink">{run.implementationBranch ?? run.branch}</span>
+              )}
+              {run.pushCommitSha ? (
+                <>
+                  {" · "}
+                  {githubCommitUrl ? (
+                    <a
+                      href={githubCommitUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-[11px] text-indigo hover:underline"
+                    >
+                      {run.pushCommitSha.slice(0, 12)}
+                    </a>
+                  ) : (
+                    <span className="font-mono text-[11px] text-app-ink">
+                      {run.pushCommitSha.slice(0, 12)}
+                    </span>
+                  )}
+                </>
+              ) : null}
               {run.prNumber ? (
                 <>
                   {" · "}
@@ -324,39 +379,8 @@ export default function AnantaTicketWorkspace({
               Files created: {run.filesCreated} · Modified: {run.filesModified} · Tests:{" "}
               {run.testsGenerated}
             </p>
-            {run.implementationMode === "content" && run.deliverableFiles?.length ? (
-              <div className="mt-3 rounded-app-sm border border-warning/25 bg-warning/5 px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-app-ink-mute">
-                  Required deliverable files
-                </p>
-                <ul className="mt-1 space-y-1">
-                  {run.deliverableFiles.map((file) => {
-                    const staged = run.files?.some((f) => f.path === file.path);
-                    return (
-                      <li
-                        key={file.path}
-                        className={`font-mono text-[11px] ${staged ? "text-success" : isFailed ? "text-danger" : "text-app-ink-dim"}`}
-                      >
-                        {staged ? "✓" : "○"} {file.path}
-                        {file.purpose ? (
-                          <span className="ml-1 font-sans text-app-ink-mute">— {file.purpose}</span>
-                        ) : null}
-                      </li>
-                    );
-                  })}
-                </ul>
-              </div>
-            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {isLive ? (
-              <button
-                type="button"
-                className="rounded-full border border-danger/40 px-3 py-1.5 text-xs font-medium text-danger"
-              >
-                Cancel run
-              </button>
-            ) : null}
             <button
               type="button"
               onClick={() => setHistoryOpen(true)}
@@ -364,7 +388,16 @@ export default function AnantaTicketWorkspace({
             >
               History
             </button>
-            {run.pr?.url ? (
+            {githubBranchUrl ? (
+              <a
+                href={githubBranchUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-full border border-app-border px-3 py-1.5 text-xs font-medium text-app-ink"
+              >
+                View branch on GitHub ↗
+              </a>
+            ) : run.pr?.url ? (
               <a
                 href={run.pr.url}
                 target="_blank"
@@ -388,7 +421,36 @@ export default function AnantaTicketWorkspace({
             </Link>
           </div>
         </div>
+
+        <div className="mt-4 border-t border-app-border pt-4">
+          <AnantaStageStepper stages={run.anantaStages} />
+        </div>
       </header>
+
+      {hasDeliverables ? (
+        <div className="mt-4">
+          <DeliverableChecklist
+            hero
+            deliverableFiles={run.deliverableFiles}
+            stagedFiles={run.files}
+            isFailed={isFailed}
+            githubRepo={run.githubRepo}
+            implementationBranch={run.implementationBranch ?? run.branch}
+            selectedPath={selectedFile}
+            onSelectFile={(path) => {
+              setSelectedFile(path);
+              setSection("files");
+              if (isMarkdownPath(path)) setFileTab("preview");
+            }}
+          />
+        </div>
+      ) : null}
+
+      {run.implementationValidation ? (
+        <div className="mt-4">
+          <ValidationPanelWidget validation={run.implementationValidation} />
+        </div>
+      ) : null}
 
       <div className="mt-4 flex flex-1 flex-col gap-4 lg:flex-row">
         <aside className="w-full shrink-0 lg:w-56">
@@ -462,6 +524,8 @@ export default function AnantaTicketWorkspace({
                   onTabChange={setFileTab}
                   defaultPlan={run.implementationPlan}
                   live
+                  githubRepo={run.githubRepo}
+                  implementationBranch={run.implementationBranch ?? run.branch}
                 />
               </div>
             ) : section === "plan" && !selectedFile ? (
@@ -472,6 +536,8 @@ export default function AnantaTicketWorkspace({
                 fileTab={fileTab}
                 onTabChange={setFileTab}
                 defaultPlan={run.implementationPlan}
+                githubRepo={run.githubRepo}
+                implementationBranch={run.implementationBranch ?? run.branch}
               />
             ) : section === "tools" ? (
               <ToolCallLogView calls={run.toolCalls} />
@@ -486,28 +552,34 @@ export default function AnantaTicketWorkspace({
 
       {!isLive ? (
         <footer className="sticky bottom-0 mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-app-border bg-app-surface/95 px-4 py-3 backdrop-blur">
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-3 text-sm text-app-ink-dim">
+            {githubBranchUrl ? (
+              <a
+                href={githubBranchUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-medium text-indigo hover:underline"
+              >
+                Review on GitHub ↗
+              </a>
+            ) : (
+              <Link
+                to={orgPath("pipelines", run.pipelineId)}
+                className="font-medium text-indigo hover:underline"
+              >
+                Open pipeline detail →
+              </Link>
+            )}
+            <span className="hidden sm:inline">·</span>
             <button
               type="button"
-              className="rounded-full bg-indigo px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo/90"
+              onClick={() => setCostOpen((v) => !v)}
+              className="hover:text-app-ink"
             >
-              Approve & Mark PR Ready
-            </button>
-            <button
-              type="button"
-              className="rounded-full border border-app-border px-4 py-2 text-sm font-medium text-app-ink"
-            >
-              Request Changes
+              ${run.costUsd?.toFixed(2)} — {run.toolCallCount} tool calls — {run.durationMinutes}{" "}
+              min
             </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setCostOpen((v) => !v)}
-            className="text-sm text-app-ink-dim hover:text-app-ink"
-          >
-            ${run.costUsd?.toFixed(2)} — {run.toolCallCount} tool calls — {run.durationMinutes}{" "}
-            min
-          </button>
           {costOpen ? (
             <div className="w-full rounded-app-sm border border-app-border bg-app-surface-muted px-4 py-3 text-xs text-app-ink-dim">
               Token breakdown by phase — engineering plan, coding loop, sandbox compile. Full
@@ -729,7 +801,15 @@ function ImplementationPlanView({ plan }) {
   );
 }
 
-function FileContentView({ file, fileTab, onTabChange, defaultPlan, live = false }) {
+function FileContentView({
+  file,
+  fileTab,
+  onTabChange,
+  defaultPlan,
+  live = false,
+  githubRepo,
+  implementationBranch,
+}) {
   if (!file) {
     return (
       <div className="px-5 py-8 sm:px-6">
@@ -743,13 +823,32 @@ function FileContentView({ file, fileTab, onTabChange, defaultPlan, live = false
       </div>
     );
   }
+
+  const markdown = isMarkdownPath(file.path);
+  const githubUrl = buildGitHubBlobUrl(githubRepo, implementationBranch, file.path);
+  const tabs = markdown
+    ? ["preview", "raw", "diff"]
+    : file.diff
+      ? ["raw", "diff"]
+      : ["raw"];
+
   return (
     <div className="px-5 py-4 sm:px-6">
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {live ? (
           <span className="size-2 animate-pulse rounded-full bg-indigo" />
         ) : null}
         <p className="font-mono text-xs text-violet-700">{file.path}</p>
+        {githubUrl ? (
+          <a
+            href={githubUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[11px] font-medium text-indigo hover:underline"
+          >
+            Open on GitHub ↗
+          </a>
+        ) : null}
       </div>
       <p className="mt-2 text-sm text-app-ink-dim">{file.summary}</p>
       {file.humanModified ? (
@@ -757,8 +856,8 @@ function FileContentView({ file, fileTab, onTabChange, defaultPlan, live = false
           Modified by human after agent wrote this file
         </p>
       ) : null}
-      <div className="mt-4 flex gap-2">
-        {["raw", "diff"].map((tab) => (
+      <div className="mt-4 flex flex-wrap gap-2">
+        {tabs.map((tab) => (
           <button
             key={tab}
             type="button"
@@ -769,13 +868,19 @@ function FileContentView({ file, fileTab, onTabChange, defaultPlan, live = false
                 : "border border-app-border text-app-ink-dim"
             }`}
           >
-            {tab === "raw" ? "Raw file" : "Diff"}
+            {tab === "raw" ? "Raw file" : tab === "preview" ? "Preview" : "Diff"}
           </button>
         ))}
       </div>
-      <pre className="mt-4 overflow-x-auto rounded-app-sm border border-app-border bg-app-surface-muted p-4 font-mono text-xs text-app-ink">
-        {fileTab === "diff" && file.diff ? file.diff : file.content}
-      </pre>
+      {fileTab === "preview" && markdown ? (
+        <div className="mt-4 max-h-[32rem] overflow-y-auto rounded-app-sm border border-app-border bg-app-surface p-4">
+          <MarkdownPreview content={file.content} />
+        </div>
+      ) : (
+        <pre className="mt-4 overflow-x-auto rounded-app-sm border border-app-border bg-app-surface-muted p-4 font-mono text-xs text-app-ink">
+          {fileTab === "diff" && file.diff ? file.diff : file.content}
+        </pre>
+      )}
     </div>
   );
 }
